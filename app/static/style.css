@@ -671,7 +671,7 @@ body {
 .comparison-table td {
   padding: 0.5rem 0.75rem;
   text-align: right;
-  border-bottom: 1px solid var(----border, #2a2a2a);
+  border-bottom: 1px solid var(--border, #2a2a2a);
 }
 
 .comparison-table th {
@@ -685,6 +685,13 @@ body {
   font-size: 0.75rem;
   color: var(--text-dim, #888);
   margin-top: 0.5rem;
+}
+
+.benchmark-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-dim, #888);
+  font-size: 0.875rem;
 }
 
 /* Attribution Section */
@@ -705,7 +712,7 @@ body {
 .attribution-table td {
   padding: 0.5rem 0.75rem;
   text-align: right;
-  border-bottom: 1px solid var(----border, #2a2a2a);
+  border-bottom: 1px solid var(--border, #2a2a2a);
 }
 
 .attribution-table th {
