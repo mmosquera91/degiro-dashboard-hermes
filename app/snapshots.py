@@ -113,8 +113,8 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
 
     _yf_throttle()
     try:
-        data = yf.download(ticker, start=start_date, end=end_date, progress=False)
-    except Exception as e:
+        data = yf.download(ticker, start=start_date, end=end_date, progress=False, timeout=10)
+    except (Exception, OSError) as e:
         logger.warning("yfinance benchmark fetch failed: %s", e)
         return []
 

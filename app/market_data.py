@@ -62,7 +62,11 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         _yf_throttle()
         ticker = yf.Ticker(yf_symbol)
         _yf_throttle()
-        hist = ticker.history(period="1d")
+        try:
+            hist = ticker.history(period="1d", timeout=10)
+        except (Exception, OSError) as e:
+            logger.warning("yfinance history fetch failed for %s: %s", yf_symbol, e)
+            hist = None
         if not hist.empty:
             rate = float(hist["Close"].iloc[-1])
             with _fx_lock:
@@ -75,8 +79,12 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         _yf_throttle()
         ticker_inv = yf.Ticker(yf_inverse)
         _yf_throttle()
-        hist_inv = ticker_inv.history(period="1d")
-        if not hist_inv.empty:
+        try:
+            hist_inv = ticker_inv.history(period="1d", timeout=10)
+        except (Exception, OSError) as e:
+            logger.warning("yfinance inverse history fetch failed for %s: %s", yf_inverse, e)
+            hist_inv = None
+        if hist_inv is not None and not hist_inv.empty:
             rate = 1.0 / float(hist_inv["Close"].iloc[-1])
             with _fx_lock:
                 _fx_cache[key] = rate
