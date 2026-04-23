@@ -148,10 +148,8 @@ def compute_attribution(positions: list[dict], benchmark_return: float) -> list[
     for pos in positions:
         position_return = pos.get("perf_ytd") if pos.get("perf_ytd") is not None else 0.0
         weight = (pos.get("weight") or 0.0) / 100.0
-        direction = 1 if position_return >= 0 else -1
-
         relative_contribution = round(
-            (position_return - benchmark_return) * weight * direction,
+            (position_return - benchmark_return) * weight,
             4,
         )
         absolute_contribution = round(position_return * weight, 4)
