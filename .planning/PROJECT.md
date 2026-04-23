@@ -24,14 +24,18 @@ Reliable portfolio health visibility — seeing risk and performance signals at 
 - ✓ Dashboard with Chart.js visualizations (allocation, performance) — existing
 - ✓ Docker deployment with healthcheck — existing
 - ✓ FX rate conversion for multi-currency positions — existing
+- ✓ SEC-01: Debug endpoint removed (`/api/debug-login`)
+- ✓ SEC-02: Debug scripts excluded from Docker image (`scripts/`, `app/debug_*.py`, `app/test_*.py`)
+- ✓ SEC-03: API authentication on all `/api/*` routes via `BROKR_AUTH_TOKEN` bearer token with hmac.compare_digest
+- ✓ SEC-04: FastAPI binds to `127.0.0.1` by default (network exposure prevented)
+- ✓ SEC-05: Debug scripts excluded from Docker build context
+- ✓ SEC-06: Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, CSP) + CORS middleware on all responses
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Secure the app — fix credential exposure in debug endpoint, add API auth token, remove debug scripts from production image
 - [ ] Fix blocking I/O — run yfinance enrichment in thread pool so the event loop stays responsive
-- [ ] Add security headers and CORS policy
 - [ ] Health indicators — concentration risk, sector weightings, drawdown alerts, rebalancing signals
 - [ ] Performance tracking — benchmark comparison (e.g., S&P 500 / MSCI World), performance over time
 - [ ] Dashboard polish — toast notifications replacing alerts, better error states, responsive improvements
@@ -100,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-23 after initialization*
+*Last updated: 2026-04-23 after phase 01 completion (security hardening)*
