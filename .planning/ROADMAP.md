@@ -94,12 +94,13 @@
 - Store historical snapshots (could use simple JSON file, not full database)
 - Attribution = position return x position weight x direction
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 04-01-PLAN.md — Backend: snapshot module + /api/benchmark endpoint + snapshot-on-refresh (2026-04-23)
 - [x] 04-02-PLAN.md — Frontend: benchmark chart + attribution table UI (2026-04-23)
 - [x] 04-03-PLAN.md — Hermes context: extend build_hermes_context() with benchmark + attribution (2026-04-23)
+- [ ] 04-04-PLAN.md — Gap closure: hermes-context without portfolio + empty-state messages (pending)
 
 ---
 
@@ -118,6 +119,12 @@ Plans:
 - Toast library or simple custom implementation (no heavy dependency)
 - Error states should show last valid data with "stale" indicator
 - Test on actual mobile/tablet or use browser dev tools responsive mode
+
+**Plans:** 2 plans
+
+Plans:
+- [x] 05-01-PLAN.md — Toast notification system: CSS + JS ToastManager + integration (Wave 1)
+- [x] 05-02-PLAN.md — Error states + responsive: stale indicator, positions error state, mobile CSS (Wave 2)
 
 ---
 
@@ -167,4 +174,4 @@ Phase 1 (Security) ──┬──► Phase 2 (Performance)
 
 ---
 *Roadmap created: 2026-04-23*
-*Last updated: 2026-04-23 after research synthesis*
+*Last updated: 2026-04-23 — added 04-04 gap closure plan*
