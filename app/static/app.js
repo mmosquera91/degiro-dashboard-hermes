@@ -384,8 +384,8 @@
 
     // Sort by absolute_contribution descending
     const sorted = [...attribution].sort((a, b) => {
-      const av = Math.abs(a.absolute_contribution || 0);
-      const bv = Math.abs(b.absolute_contribution || 0);
+      const av = a.absolute_contribution || 0;
+      const bv = b.absolute_contribution || 0;
       return bv - av;
     });
 
