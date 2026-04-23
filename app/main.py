@@ -215,12 +215,42 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Brokr starting up")
-    yield
-    _clear_session()
-    logger.info("Brokr shutting down")
+    try:
+        yield
+    except Exception as e:
+        logger.error("Unhandled exception during request: %s", str(e))
+    finally:
+        _clear_session()
+        logger.info("Brokr shutting down")
 
 
 app = FastAPI(title="Brokr", lifespan=lifespan)
+
+
+@app.on_event("startup")
+async def on_startup():
+    logger.info("Startup event fired")
+    try:
+        import socket
+        socket.gethostbyname("google.com")
+        logger.info("DNS resolution: OK")
+    except Exception as e:
+        logger.error("DNS resolution failed: %s", e)
+    try:
+        import app.snapshots
+        logger.info("snapshots module: OK")
+    except Exception as e:
+        logger.error("snapshots import failed: %s", e)
+    try:
+        import app.market_data
+        logger.info("market_data module: OK")
+    except Exception as e:
+        logger.error("market_data import failed: %s", e)
+    try:
+        import app.degiro_client
+        logger.info("degiro_client module: OK")
+    except Exception as e:
+        logger.error("degiro_client import failed: %s", e)
 
 
 # ─── Security Headers Middleware (SEC-06, D-08) ───
