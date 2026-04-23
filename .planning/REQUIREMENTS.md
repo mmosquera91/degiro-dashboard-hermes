@@ -7,12 +7,16 @@
 
 ### Security (SEC)
 
-- [ ] **SEC-01**: Remove `request_payload` from debug endpoint responses — prevent plaintext password exposure
-- [ ] **SEC-02**: Redact or omit `session_id` from all debug/error responses
-- [ ] **SEC-03**: Add `BROKR_AUTH_TOKEN` environment variable and validate on all API endpoints
+- [x] **SEC-01
+**: Remove `request_payload` from debug endpoint responses — prevent plaintext password exposure
+- [x] **SEC-02
+**: Redact or omit `session_id` from all debug/error responses
+- [x] **SEC-03
+**: Add `BROKR_AUTH_TOKEN` environment variable and validate on all API endpoints
 - [ ] **SEC-04**: Bind FastAPI to 127.0.0.1 by default — prevent network exposure without TLS
 - [ ] **SEC-05**: Remove debug scripts (`debug_*.py`) from production Docker image
-- [ ] **SEC-06**: Add security headers (HSTS, X-Content-Type-Options, etc.) and CORS policy
+- [x] **SEC-06
+**: Add security headers (HSTS, X-Content-Type-Options, etc.) and CORS policy
 
 ### Performance (PERF)
 
