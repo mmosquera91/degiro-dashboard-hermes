@@ -74,6 +74,37 @@ body {
   margin-right: 4px;
 }
 
+/* ─── STALE DATA BADGE ─── */
+.stale-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(217,119,6,0.15);
+  border: 1px solid rgba(217,119,6,0.4);
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  color: #d97706;
+  margin-right: 8px;
+}
+.stale-badge i { color: #d97706; }
+.stale-badge.hidden { display: none; }
+
+/* ─── POSITIONS ERROR STATE ─── */
+.positions-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.positions-error .btn-sm {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
 /* ─── BUTTONS ─── */
 .btn {
   display: inline-flex;
