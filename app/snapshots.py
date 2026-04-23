@@ -100,6 +100,17 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
     """
     ticker = BENCHMARK_TICKER
 
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    except ValueError:
+        logger.warning("Invalid date format: %s or %s", start_date, end_date)
+        return []
+
+    if start_dt >= end_dt:
+        logger.warning("start_date %s must be before end_date %s", start_date, end_date)
+        return []
+
     _yf_throttle()
     try:
         data = yf.download(ticker, start=start_date, end=end_date, progress=False)
