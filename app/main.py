@@ -1,5 +1,6 @@
 """Brokr — FastAPI application with all routes."""
 
+import asyncio
 import hmac
 import logging
 import os
@@ -338,7 +339,7 @@ async def get_portfolio():
         raw = DeGiroClient.fetch_portfolio(trading_api)
 
         # Enrich with yfinance data
-        positions = await enrich_positions(raw)
+        positions = await asyncio.to_thread(enrich_positions, raw)
 
         # Compute portfolio weights
         positions = compute_portfolio_weights(positions)
