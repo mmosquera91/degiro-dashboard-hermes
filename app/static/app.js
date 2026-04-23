@@ -7,6 +7,7 @@
 
   // ─── State ───
   let portfolioData = null;
+  let benchmarkData = null;
   let currentFilter = "all";
   let sortKey = "current_value_eur";
   let sortDir = -1; // -1 = descending
@@ -208,6 +209,15 @@
       }
 
       portfolioData = await res.json();
+
+      // Fetch benchmark data
+      const bmData = await fetchBenchmarkData();
+      if (bmData) {
+        benchmarkData = bmData;
+        renderBenchmark(bmData);
+        renderAttribution(bmData);
+      }
+
       renderDashboard();
       showEnriching(false);
     } catch (err) {
@@ -261,6 +271,155 @@
     } else {
       banner.classList.add("hidden");
     }
+  }
+
+  // ─── Benchmark Data ───
+  async function fetchBenchmarkData() {
+    try {
+      const res = await fetch("/api/benchmark");
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.error("Benchmark fetch error:", err);
+      return null;
+    }
+  }
+
+  function renderBenchmark(data) {
+    const container = $(".benchmark-section");
+    if (!container) return;
+
+    const snapshots = data?.snapshots || [];
+    const benchmarkSeries = data?.benchmark_series || [];
+
+    // D-18: If only one snapshot, show comparison table instead of chart
+    if (snapshots.length === 1) {
+      const snap = snapshots[0];
+      const comparisonDiv = $("#benchmark-comparison-table");
+      if (comparisonDiv) {
+        comparisonDiv.classList.remove("hidden");
+        const chartWrap = $(".benchmark-chart-wrap");
+        if (chartWrap) chartWrap.classList.add("hidden");
+        comparisonDiv.innerHTML = `
+          <table class="comparison-table">
+            <tr><th>Metric</th><th>Portfolio</th><th>S&P 500</th></tr>
+            <tr><td>Value (Indexed)</td><td>100.00</td><td>${(snap.benchmark_value || 100).toFixed(2)}</td></tr>
+            <tr><td>Return</td><td>—</td><td>${(snap.benchmark_return_pct || 0).toFixed(2)}%</td></tr>
+          </table>
+          <p class="benchmark-note">Only one snapshot recorded. Chart will appear after next portfolio refresh.</p>
+        `;
+      }
+      return;
+    }
+
+    // Show chart (2+ snapshots)
+    const chartWrap = $(".benchmark-chart-wrap");
+    if (chartWrap) chartWrap.classList.remove("hidden");
+    const comparisonDiv = $("#benchmark-comparison-table");
+    if (comparisonDiv) comparisonDiv.classList.add("hidden");
+
+    // Compute indexed portfolio values (all relative to first snapshot = 100)
+    if (snapshots.length < 2) return;
+    const baseValue = snapshots[0].total_value_eur;
+    const indexedPortfolio = snapshots.map(s => ({
+      date: s.date,
+      value: baseValue > 0 ? (s.total_value_eur / baseValue) * 100 : 100
+    }));
+
+    // Build chart data — X-axis from snapshots, Y-axis indexed to 100
+    charts.benchmark = new Chart($("#chart-benchmark"), {
+      type: "line",
+      data: {
+        labels: indexedPortfolio.map(p => p.date),
+        datasets: [
+          {
+            label: "Portfolio",
+            data: indexedPortfolio.map(p => p.value),
+            borderColor: "#01696f",
+            backgroundColor: "transparent",
+            tension: 0.1,
+            spanGaps: true,  // D-17: allow gaps in data
+          },
+          {
+            label: "S&P 500",
+            data: benchmarkSeries.map(b => b.value),
+            borderColor: "#d97706",
+            backgroundColor: "transparent",
+            tension: 0.1,
+            spanGaps: true,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, labels: { color: "#888", font: { family: "Inter", size: 11 } } },
+        },
+        scales: {
+          x: {
+            ticks: { color: "#888", font: { family: "Inter", size: 10 } },
+            grid: { color: "#2a2a2a" },
+          },
+          y: {
+            ticks: { color: "#888", font: { family: "Inter", size: 10 }, callback: (v) => v.toFixed(0) },
+            grid: { color: "#2a2a2a" },
+            title: { display: true, text: "Indexed to 100", color: "#666" },
+          },
+        },
+      },
+    });
+  }
+
+  function renderAttribution(data) {
+    const container = $("#attribution-table-wrap");
+    if (!container) return;
+
+    const attribution = data?.attribution || [];
+
+    if (attribution.length === 0) {
+      container.innerHTML = '<p class="attribution-empty">Attribution data not available.</p>';
+      return;
+    }
+
+    // Sort by absolute_contribution descending
+    const sorted = [...attribution].sort((a, b) => {
+      const av = Math.abs(a.absolute_contribution || 0);
+      const bv = Math.abs(b.absolute_contribution || 0);
+      return bv - av;
+    });
+
+    const rows = sorted.map(a => {
+      const absVal = a.absolute_contribution || 0;
+      const relVal = a.relative_contribution || 0;
+      const signClass = absVal >= 0 ? "positive" : "negative";
+      return `
+        <tr>
+          <td class="col-name">${esc(a.name || "N/A")}</td>
+          <td>${a.symbol || "—"}</td>
+          <td class="${signClass}">${absVal >= 0 ? "+" : ""}${absVal.toFixed(4)}</td>
+          <td class="${signClass}">${relVal >= 0 ? "+" : ""}${relVal.toFixed(4)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    container.innerHTML = `
+      <table class="attribution-table">
+        <thead>
+          <tr>
+            <th class="col-name">Position</th>
+            <th>Symbol</th>
+            <th>Absolute Contribution</th>
+            <th>Relative Contribution</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="attribution-note">
+        <strong>Absolute:</strong> position_return × weight |
+        <strong>Relative:</strong> (position_return − benchmark_return) × weight × direction
+      </p>
+    `;
   }
 
   // ─── Render Dashboard ───
