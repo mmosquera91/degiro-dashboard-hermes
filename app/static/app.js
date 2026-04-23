@@ -13,6 +13,18 @@
   let sortDir = -1; // -1 = descending
   let charts = {};
 
+  // ─── Auth ───
+  const AUTH_TOKEN = "dev-secret-change-in-production";
+  const authHeaders = { "Authorization": `Bearer ${AUTH_TOKEN}` };
+
+  // ─── API Helper ───
+  async function apiFetch(url, options = {}) {
+    return fetch(url, {
+      ...options,
+      headers: { ...authHeaders, ...(options.headers || {}) },
+    });
+  }
+
   // ─── DOM refs ───
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -125,7 +137,7 @@
     elCredError.classList.add("hidden");
 
     try {
-      const res = await fetch("/api/auth", {
+      const res = await apiFetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, otp }),
@@ -169,7 +181,7 @@
     err.classList.add("hidden");
 
     try {
-      const res = await fetch("/api/session", {
+      const res = await apiFetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, int_account: intAccount }),
@@ -195,7 +207,7 @@
   // ─── Load Portfolio ───
   async function loadPortfolio() {
     try {
-      const res = await fetch("/api/portfolio");
+      const res = await apiFetch("/api/portfolio");
 
       if (res.status === 401) {
         showEnriching(false);
@@ -230,7 +242,7 @@
   async function loadPortfolioRaw() {
     showLoading(true);
     try {
-      const res = await fetch("/api/portfolio-raw");
+      const res = await apiFetch("/api/portfolio-raw");
 
       if (res.status === 401) {
         showLoading(false);
@@ -276,7 +288,7 @@
   // ─── Benchmark Data ───
   async function fetchBenchmarkData() {
     try {
-      const res = await fetch("/api/benchmark");
+      const res = await apiFetch("/api/benchmark");
       if (!res.ok) return null;
       return await res.json();
     } catch (err) {
@@ -760,7 +772,7 @@ function renderHealthAlerts() {
   // ─── Export Hermes Context ───
   async function exportHermesContext() {
     try {
-      const res = await fetch("/api/hermes-context");
+      const res = await apiFetch("/api/hermes-context");
 
       if (res.status === 401) {
         openModal();
