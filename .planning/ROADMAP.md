@@ -92,7 +92,14 @@
 **Implementation Notes:**
 - Use yfinance to fetch benchmark data (^GSPC for S&P 500)
 - Store historical snapshots (could use simple JSON file, not full database)
-- Attribution = position return × position weight × direction
+- Attribution = position return x position weight x direction
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Backend: snapshot module + /api/benchmark endpoint + snapshot-on-refresh
+- [ ] 04-02-PLAN.md — Frontend: benchmark chart + attribution table UI
+- [ ] 04-03-PLAN.md — Hermes context: extend build_hermes_context() with benchmark + attribution
 
 ---
 
