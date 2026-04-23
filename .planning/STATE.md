@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 03 UI-SPEC approved
-last_updated: "2026-04-23T18:48:57.030Z"
+stopped_at: Phase 03 health-indicators complete
+last_updated: "2026-04-23T19:00:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
+  percent: 50
 ---
 
 # State
@@ -23,17 +23,13 @@ progress:
 
 ## Current Position
 
-Phase: --phase (02) — EXECUTING
-Plan: 1 of --name
-
-- **Phase:** 3 of 6 (health indicators)
-- **Plan:** Not started
-- **Status:** Ready to plan
+- **Phase:** 4 of 6 (Benchmark Tracking) — Next
+- **Status:** Ready to discuss next phase
 
 ## Progress
 
 ```
-[░░░░░░░░░░] 0% — Research, requirements, and roadmap complete — ready to build
+[██████░░░░░░░░] 50% — Phase 3 (Health Indicators) complete — ready for Phase 4
 ```
 
 ## Recent Decisions
@@ -44,45 +40,34 @@ Plan: 1 of --name
 - Hermes integration via REST API — Hermes calls Brokr, not push
 - Fix security issues before adding features — critical credential exposure must be addressed first
 - 6-phase coarse roadmap: Security → Performance → Health → Benchmark → Dashboard → Testing
+- Health alerts: concentration, sector, drawdown, rebalancing alerts with env-configurable thresholds
+- TARGET_ETF_PCT/TARGET_STOCK_PCT now read from environment (not hardcoded 70/30)
 
 ## Phase Map
 
 | # | Phase | Requirements | Status |
 |---|-------|--------------|--------|
 | 1 | Security Hardening | SEC-01 through SEC-06 | Complete |
-| 2 | Performance | PERF-01 through PERF-03 | Ready to execute |
-| 3 | Health Indicators | HEALTH-01 through HEALTH-04 | Pending |
+| 2 | Performance | PERF-01 through PERF-03 | Complete |
+| 3 | Health Indicators | HEALTH-01 through HEALTH-04 | Complete |
 | 4 | Benchmark Tracking | TRACK-01 through TRACK-03 | Pending |
 | 5 | Dashboard Polish | DASH-01 through DASH-03 | Pending |
 | 6 | Testing | TEST-01 through TEST-03 | Pending |
 
-## Pending Todos
+## Completed Phases
 
-See `.planning/REQUIREMENTS.md` — no structured todo list yet.
+- Phase 1: Security Hardening — API auth, credential redaction, debug cleanup, security headers
+- Phase 2: Performance — async yfinance, thread-safe session/FX cache
+- Phase 3: Health Indicators — compute_health_alerts(), health_alerts UI, Hermes context integration
 
 ## Blockers/Concerns
 
-**Critical security issues (Phase 1 must address):**
-
-- C-01: Debug endpoint exposes user passwords in HTTP response
-- C-02: Debug endpoint exposes DeGiro session IDs in HTTP response
-- C-03: No authentication on any API endpoint
-- C-04: Plaintext credentials transmitted over HTTP
-
-**Tech issues:**
-
-- Blocking I/O in yfinance enrichment (event loop responsiveness)
-- Thread safety issues in session and FX cache management
 - No automated tests for scoring, market data, and portfolio parsing
 
 ## Session Continuity
 
-Last session: --stopped-at
-Stopped at: Phase 03 UI-SPEC approved
-Resume file: --resume-file
+Last session: Phase 03 health-indicators complete
+Stopped at: Phase 03 execution complete, verification passed
 
 ---
-
-*Last updated: 2026-04-23 after manual project completion*
-
-**Planned Phase:** 01 (Security Hardening) — 2 plans — 2026-04-23T17:42:04.904Z
+*Last updated: 2026-04-23 after phase 03 completion*

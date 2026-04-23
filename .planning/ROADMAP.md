@@ -10,7 +10,7 @@
 |---|-------|------|--------------|------------------|
 | 1 | Security Hardening | Fix critical credential exposure and API auth gaps | SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06 | 6/6 |
 | 2 | Performance | Fix blocking I/O and thread safety issues | PERF-01, PERF-02, PERF-03 | 3/3 |
-| 3 | Health Indicators | Add concentration, sector, drawdown alerts | HEALTH-01, HEALTH-02, HEALTH-03, HEALTH-04 | 4/4 |
+| 3 | Health Indicators | Add concentration, sector, drawdown alerts | HEALTH-01, HEALTH-02, HEALTH-03, HEALTH-04 | 4/4 [x] (2026-04-23) |
 | 4 | Benchmark Tracking | S&P 500 comparison, historical performance | TRACK-01, TRACK-02, TRACK-03 | 3/3 |
 | 5 | Dashboard Polish | Toasts, error states, responsive improvements | DASH-01, DASH-02, DASH-03 | 3/3 |
 | 6 | Testing | Automated tests for core logic | TEST-01, TEST-02, TEST-03 | 3/3 |
