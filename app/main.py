@@ -84,19 +84,22 @@ def _clear_session():
 
 def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict:
     """Build a minimal portfolio summary from raw DeGiro data (no yfinance)."""
-    total_value = sum(p.get("current_value", 0) or 0 for p in positions)
-    total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions)
+    # Work on a copy so the caller's list is not mutated
+    positions_copy = [p.copy() for p in positions]
+
+    total_value = sum(p.get("current_value", 0) or 0 for p in positions_copy)
+    total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions_copy)
     total_pl = total_value - total_invested
     total_pl_pct = (total_pl / total_invested * 100) if total_invested > 0 else 0
 
-    etf_value = sum(p.get("current_value", 0) or 0 for p in positions if p.get("asset_type") == "ETF")
-    stock_value = sum(p.get("current_value", 0) or 0 for p in positions if p.get("asset_type") == "STOCK")
+    etf_value = sum(p.get("current_value", 0) or 0 for p in positions_copy if p.get("asset_type") == "ETF")
+    stock_value = sum(p.get("current_value", 0) or 0 for p in positions_copy if p.get("asset_type") == "STOCK")
     etf_allocation_pct = (etf_value / total_value * 100) if total_value > 0 else 0
     stock_allocation_pct = (stock_value / total_value * 100) if total_value > 0 else 0
 
     # Basic winners/losers from raw data
     sorted_by_pl = sorted(
-        [p for p in positions if p.get("unrealized_pl_pct") is not None],
+        [p for p in positions_copy if p.get("unrealized_pl_pct") is not None],
         key=lambda x: x["unrealized_pl_pct"],
     )
     top_5_losers = [
@@ -109,7 +112,7 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
     ]
 
     # Add raw fields that yfinance would later fill
-    for p in positions:
+    for p in positions_copy:
         p["current_value_eur"] = p.get("current_value", 0)
         p["52w_high"] = None
         p["52w_low"] = None
@@ -134,13 +137,13 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         "total_pl_pct": round(total_pl_pct, 2),
         "etf_allocation_pct": round(etf_allocation_pct, 1),
         "stock_allocation_pct": round(stock_allocation_pct, 1),
-        "num_positions": len(positions),
+        "num_positions": len(positions_copy),
         "top_5_winners": top_5_winners,
         "top_5_losers": top_5_losers,
         "sector_breakdown": {},
         "cash_available": round(cash_available, 2),
         "daily_change_pct": None,
-        "positions": positions,
+        "positions": positions_copy,
         "top_candidates": {"etfs": [], "stocks": []},
     }
 
@@ -230,9 +233,11 @@ async def add_security_headers(request: Request, call_next):
 
 
 # ─── CORS Middleware (SEC-06, D-09) ───
+cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+allow_origins = cors_origins.split(",") if cors_origins else ["http://localhost:8000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if os.getenv("CORS_ALLOWED_ORIGINS") else ["http://localhost:8000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization"],
