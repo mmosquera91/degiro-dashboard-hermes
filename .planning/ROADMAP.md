@@ -97,9 +97,9 @@
 **Plans:** 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Backend: snapshot module + /api/benchmark endpoint + snapshot-on-refresh
-- [ ] 04-02-PLAN.md — Frontend: benchmark chart + attribution table UI
-- [ ] 04-03-PLAN.md — Hermes context: extend build_hermes_context() with benchmark + attribution
+- [x] 04-01-PLAN.md — Backend: snapshot module + /api/benchmark endpoint + snapshot-on-refresh (2026-04-23)
+- [x] 04-02-PLAN.md — Frontend: benchmark chart + attribution table UI (2026-04-23)
+- [x] 04-03-PLAN.md — Hermes context: extend build_hermes_context() with benchmark + attribution (2026-04-23)
 
 ---
 
