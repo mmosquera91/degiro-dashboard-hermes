@@ -1,0 +1,10 @@
+.git
+.env
+__pycache__
+*.pyc
+.DS_Store
+README.md
+.env.example
+scripts/
+app/debug_*.py
+app/test_*.py
