@@ -24,10 +24,11 @@ _last_yf_request = 0.0
 def _yf_throttle():
     """Sleep if needed to respect rate limits between yfinance calls."""
     global _last_yf_request
-    elapsed = time.time() - _last_yf_request
-    if elapsed < _YF_DELAY:
-        time.sleep(_YF_DELAY - elapsed)
-    _last_yf_request = time.time()
+    with _fx_lock:
+        elapsed = time.time() - _last_yf_request
+        if elapsed < _YF_DELAY:
+            time.sleep(_YF_DELAY - elapsed)
+        _last_yf_request = time.time()
 
 
 def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
@@ -52,7 +53,7 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
             "JPYEUR": "JPYEUR=X",
             "SEKEUR": "SEKEUR=X",
             "DKKEUR": "DKKEUR=X",
-            "NOK EUR": "NOKEUR=X",
+            "NOKEUR": "NOKEUR=X",
             "HKDEUR": "HKDEUR=X",
             "AUDEUR": "AUDEUR=X",
             "CADEUR": "CADEUR=X",
@@ -85,7 +86,7 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         logger.warning("FX rate lookup failed for %s->%s: %s", from_currency, to_currency, str(e))
 
     with _fx_lock:
-        _fx_cache[key] = 1.0
+        _fx_cache[key] = None  # None = lookup failed, do not use as rate
     return 1.0
 
 
@@ -128,6 +129,8 @@ def compute_rsi(hist_close: pd.Series, period: int = 14) -> Optional[float]:
             avg_gain.iloc[i] = (avg_gain.iloc[i - 1] * (period - 1) + gain.iloc[i]) / period
             avg_loss.iloc[i] = (avg_loss.iloc[i - 1] * (period - 1) + loss.iloc[i]) / period
 
+        if avg_loss.iloc[-1] == 0:
+            return 100.0  # No losses = RSI 100
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
 
@@ -278,7 +281,7 @@ def enrich_position(position: dict) -> dict:
             position["52w_high"] = round(float(wk52_high), 4)
         if wk52_low is not None:
             position["52w_low"] = round(float(wk52_low), 4)
-        if wk52_high is not None and position["current_price"] > 0:
+        if wk52_high is not None and position.get("current_price", 0) > 0:
             position["distance_from_52w_high_pct"] = round(
                 ((position["current_price"] - float(wk52_high)) / float(wk52_high)) * 100, 2
             )
