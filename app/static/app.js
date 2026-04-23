@@ -264,7 +264,7 @@
       loadPortfolio();
     } catch (err) {
       showLoading(false);
-      alert("Error: " + err.message);
+      ToastManager.show("Error: " + err.message, "error");
     }
   }
 
@@ -303,6 +303,18 @@
 
     const snapshots = data?.snapshots || [];
     const benchmarkSeries = data?.benchmark_series || [];
+
+    // No snapshots yet — show empty-state message
+    if (snapshots.length === 0) {
+      const chartWrap = $(".benchmark-chart-wrap");
+      if (chartWrap) {
+        chartWrap.classList.remove("hidden");
+        chartWrap.innerHTML = '<div class="benchmark-empty">No snapshots yet. Refresh your portfolio to record a baseline.</div>';
+      }
+      const comparisonDiv = $("#benchmark-comparison-table");
+      if (comparisonDiv) comparisonDiv.classList.add("hidden");
+      return;
+    }
 
     // D-18: If only one snapshot, show comparison table instead of chart
     if (snapshots.length === 1) {
@@ -387,10 +399,14 @@
     const container = $("#attribution-table-wrap");
     if (!container) return;
 
+    // Ensure section is visible
+    const section = $(".attribution-section");
+    if (section) section.classList.remove("hidden");
+
     const attribution = data?.attribution || [];
 
     if (attribution.length === 0) {
-      container.innerHTML = '<p class="attribution-empty">Attribution data not available.</p>';
+      container.innerHTML = '<p class="attribution-empty">No attribution data yet. Attribution requires portfolio snapshots and benchmark data.</p>';
       return;
     }
 
@@ -791,7 +807,7 @@ function renderHealthAlerts() {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(plaintext);
-          alert("Hermes context copied to clipboard!");
+          ToastManager.show("Hermes context copied to clipboard!", "success");
           return;
         } catch {
           // Fall through to download
@@ -801,7 +817,7 @@ function renderHealthAlerts() {
       // Fallback: download as .txt
       downloadText(plaintext, "brokr-hermes-context.txt");
     } catch (err) {
-      alert("Export failed: " + err.message);
+      ToastManager.show("Export failed: " + err.message, "error");
     }
   }
 
@@ -863,4 +879,92 @@ function renderHealthAlerts() {
     }
     return colors;
   }
+
+  // ─── Toast Manager ───
+  const ToastManager = (function () {
+    const MAX_VISIBLE = 3;
+    const AUTO_DISMISS_MS = 4000;
+    const containerId = "toast-container";
+
+    let queue = [];
+    let visible = 0;
+
+    function ensureContainer() {
+      let c = document.getElementById(containerId);
+      if (!c) {
+        c = document.createElement("div");
+        c.id = containerId;
+        c.setAttribute("aria-live", "polite");
+        c.style.cssText = [
+          "position:fixed",
+          "top:16px",
+          "right:16px",
+          "z-index:800",
+          "display:flex",
+          "flex-direction:column",
+          "gap:8px",
+          "pointer-events:none",
+        ].join(";");
+        document.body.appendChild(c);
+      }
+      return c;
+    }
+
+    function show(message, variant = "info") {
+      const container = ensureContainer();
+
+      // Dismiss oldest if at max
+      if (visible >= MAX_VISIBLE) {
+        dismiss(queue.shift());
+      }
+
+      const toast = document.createElement("div");
+      toast.className = "toast toast-" + variant;
+      toast.setAttribute("role", "alert");
+
+      // Icon per variant
+      var icons = {
+        success: "check-circle",
+        error: "alert-circle",
+        info: "info",
+      };
+
+      toast.innerHTML = '<i data-lucide="' + icons[variant] + '" class="toast-icon"></i>' +
+        '<span class="toast-message">' + esc(message) + '</span>' +
+        '<button class="toast-close" aria-label="Dismiss">' +
+        '<i data-lucide="x" class="icon-sm"></i></button>';
+
+      // Dismiss on click
+      toast.querySelector(".toast-close").addEventListener("click", function() { dismiss(toast); });
+
+      container.appendChild(toast);
+      lucide.createIcons({ nodes: [toast] });
+
+      // Trigger enter animation
+      requestAnimationFrame(function() { toast.classList.add("toast-enter"); });
+
+      queue.push(toast);
+      visible++;
+
+      // Auto-dismiss
+      var timer = setTimeout(function() { dismiss(toast); }, AUTO_DISMISS_MS);
+      toast._dismissTimer = timer;
+
+      return toast;
+    }
+
+    function dismiss(toast) {
+      if (!toast || !toast.parentNode) return;
+      clearTimeout(toast._dismissTimer);
+      toast.classList.add("toast-exit");
+      toast.addEventListener("animationend", function() {
+        toast.remove();
+        visible--;
+        var idx = queue.indexOf(toast);
+        if (idx > -1) queue.splice(idx, 1);
+      }, { once: true });
+    }
+
+    return { show: show, dismiss: dismiss };
+  })();
 })();
