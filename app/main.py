@@ -1,0 +1,430 @@
+"""Brokr — FastAPI application with all routes."""
+
+import hmac
+import logging
+import os
+import threading
+from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from .degiro_client import DeGiroClient
+from .market_data import enrich_positions, get_fx_rate
+from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
+from .context_builder import build_hermes_context
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+# In-memory session cache
+_session = {
+    "trading_api": None,
+    "session_time": None,
+    "portfolio": None,
+    "portfolio_time": None,
+}
+_session_lock = threading.Lock()
+
+
+async def verify_brok_token(request: Request):
+    """Validate BROKR_AUTH_TOKEN bearer token on /api/* routes.
+
+    D-01: Static bearer token — random string via env var, no signature, no expiry.
+    D-02: Applied via FastAPI dependency middleware on all /api/* routes.
+    D-03: /health and /static/* remain open (no Depends applied to those routes).
+    """
+    token = os.getenv("BROKR_AUTH_TOKEN", "")
+
+    if not token:
+        logger.warning("BROKR_AUTH_TOKEN not configured — blocking API request")
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid auth format")
+
+    provided = auth_header[7:]
+    if not hmac.compare_digest(provided, token):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+SESSION_TTL = timedelta(minutes=30)
+PORTFOLIO_TTL = timedelta(minutes=5)
+
+
+def _is_session_valid() -> bool:
+    """Check if the current session is still valid."""
+    if _session["trading_api"] is None:
+        return False
+    if _session["session_time"] and datetime.now() - _session["session_time"] > SESSION_TTL:
+        return False
+    return True
+
+
+def _is_portfolio_fresh() -> bool:
+    """Check if cached portfolio data is still fresh."""
+    if _session["portfolio"] is None or _session["portfolio_time"] is None:
+        return False
+    return datetime.now() - _session["portfolio_time"] < PORTFOLIO_TTL
+
+
+def _clear_session():
+    """Clear all session data."""
+    _session["trading_api"] = None
+    _session["session_time"] = None
+    _session["portfolio"] = None
+    _session["portfolio_time"] = None
+
+
+def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict:
+    """Build a minimal portfolio summary from raw DeGiro data (no yfinance)."""
+    total_value = sum(p.get("current_value", 0) or 0 for p in positions)
+    total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions)
+    total_pl = total_value - total_invested
+    total_pl_pct = (total_pl / total_invested * 100) if total_invested > 0 else 0
+
+    etf_value = sum(p.get("current_value", 0) or 0 for p in positions if p.get("asset_type") == "ETF")
+    stock_value = sum(p.get("current_value", 0) or 0 for p in positions if p.get("asset_type") == "STOCK")
+    etf_allocation_pct = (etf_value / total_value * 100) if total_value > 0 else 0
+    stock_allocation_pct = (stock_value / total_value * 100) if total_value > 0 else 0
+
+    # Basic winners/losers from raw data
+    sorted_by_pl = sorted(
+        [p for p in positions if p.get("unrealized_pl_pct") is not None],
+        key=lambda x: x["unrealized_pl_pct"],
+    )
+    top_5_losers = [
+        {"name": p["name"], "symbol": p.get("symbol", ""), "pl_pct": p["unrealized_pl_pct"]}
+        for p in sorted_by_pl[:5]
+    ]
+    top_5_winners = [
+        {"name": p["name"], "symbol": p.get("symbol", ""), "pl_pct": p["unrealized_pl_pct"]}
+        for p in sorted_by_pl[-5:][::-1]
+    ]
+
+    # Add raw fields that yfinance would later fill
+    for p in positions:
+        p["current_value_eur"] = p.get("current_value", 0)
+        p["52w_high"] = None
+        p["52w_low"] = None
+        p["distance_from_52w_high_pct"] = None
+        p["rsi"] = None
+        p["perf_30d"] = None
+        p["perf_90d"] = None
+        p["perf_ytd"] = None
+        p["pe_ratio"] = None
+        p["sector"] = None
+        p["country"] = None
+        p["value_score"] = None
+        p["momentum_score"] = None
+        p["buy_priority_score"] = None
+        p["weight"] = None
+
+    return {
+        "date": datetime.now().isoformat(),
+        "total_value": round(total_value, 2),
+        "total_invested": round(total_invested, 2),
+        "total_pl": round(total_pl, 2),
+        "total_pl_pct": round(total_pl_pct, 2),
+        "etf_allocation_pct": round(etf_allocation_pct, 1),
+        "stock_allocation_pct": round(stock_allocation_pct, 1),
+        "num_positions": len(positions),
+        "top_5_winners": top_5_winners,
+        "top_5_losers": top_5_losers,
+        "sector_breakdown": {},
+        "cash_available": round(cash_available, 2),
+        "daily_change_pct": None,
+        "positions": positions,
+        "top_candidates": {"etfs": [], "stocks": []},
+    }
+
+
+def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
+    """Build the full portfolio summary from enriched, scored positions."""
+    total_value = sum(p.get("current_value_eur", 0) or 0 for p in positions)
+    total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions)
+    total_pl = total_value - total_invested
+    total_pl_pct = (total_pl / total_invested * 100) if total_invested > 0 else 0
+
+    etf_value = sum(p.get("current_value_eur", 0) or 0 for p in positions if p.get("asset_type") == "ETF")
+    stock_value = sum(p.get("current_value_eur", 0) or 0 for p in positions if p.get("asset_type") == "STOCK")
+    etf_allocation_pct = (etf_value / total_value * 100) if total_value > 0 else 0
+    stock_allocation_pct = (stock_value / total_value * 100) if total_value > 0 else 0
+
+    # Top 5 winners and losers by P&L%
+    sorted_by_pl = sorted(
+        [p for p in positions if p.get("unrealized_pl_pct") is not None],
+        key=lambda x: x["unrealized_pl_pct"],
+    )
+    top_5_losers = [
+        {"name": p["name"], "symbol": p.get("symbol", ""), "pl_pct": p["unrealized_pl_pct"]}
+        for p in sorted_by_pl[:5]
+    ]
+    top_5_winners = [
+        {"name": p["name"], "symbol": p.get("symbol", ""), "pl_pct": p["unrealized_pl_pct"]}
+        for p in sorted_by_pl[-5:][::-1]
+    ]
+
+    # Sector breakdown
+    sector_map = {}
+    for p in positions:
+        sector = p.get("sector") or "Unknown"
+        val = p.get("current_value_eur", 0) or 0
+        sector_map[sector] = sector_map.get(sector, 0) + val
+
+    total_for_sector = sum(sector_map.values()) or 1
+    sector_breakdown = {k: round(v / total_for_sector * 100, 1) for k, v in sector_map.items()}
+
+    # Top candidates
+    top_candidates = get_top_candidates(positions, n=3)
+
+    # Daily change (approximation from yfinance — not directly from DeGiro)
+    daily_change_pct = None
+
+    return {
+        "date": datetime.now().isoformat(),
+        "total_value": round(total_value, 2),
+        "total_invested": round(total_invested, 2),
+        "total_pl": round(total_pl, 2),
+        "total_pl_pct": round(total_pl_pct, 2),
+        "etf_allocation_pct": round(etf_allocation_pct, 1),
+        "stock_allocation_pct": round(stock_allocation_pct, 1),
+        "num_positions": len(positions),
+        "top_5_winners": top_5_winners,
+        "top_5_losers": top_5_losers,
+        "sector_breakdown": sector_breakdown,
+        "cash_available": round(cash_available, 2),
+        "daily_change_pct": daily_change_pct,
+        "positions": positions,
+        "top_candidates": top_candidates,
+    }
+
+
+# Lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Brokr starting up")
+    yield
+    _clear_session()
+    logger.info("Brokr shutting down")
+
+
+app = FastAPI(title="Brokr", lifespan=lifespan)
+
+
+# ─── Security Headers Middleware (SEC-06, D-08) ───
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src https://fonts.gstatic.com"
+    return response
+
+
+# ─── CORS Middleware (SEC-06, D-09) ───
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if os.getenv("CORS_ALLOWED_ORIGINS") else ["http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization"],
+)
+
+
+# ─── API Models ───
+
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+    otp: str | None = None
+
+
+class SessionRequest(BaseModel):
+    session_id: str
+    int_account: int | None = None
+
+
+# ─── Health ───
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# ─── Auth ───
+
+@app.post("/api/auth", dependencies=[Depends(verify_brok_token)])
+async def auth(request: AuthRequest):
+    """Authenticate with DeGiro. Credentials are discarded immediately after session establishment."""
+    try:
+        trading_api = DeGiroClient.authenticate(
+            username=request.username,
+            password=request.password,
+            otp=request.otp,
+        )
+        with _session_lock:
+            _session["trading_api"] = trading_api
+            _session["session_time"] = datetime.now()
+            _session["portfolio"] = None
+            _session["portfolio_time"] = None
+
+        return {"status": "authenticated"}
+
+    except ConnectionError as e:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    except Exception as e:
+        logger.error("Auth error: %s", str(e))
+        raise HTTPException(status_code=500, detail="Authentication failed")
+
+
+@app.post("/api/session", dependencies=[Depends(verify_brok_token)])
+async def session_auth(request: SessionRequest):
+    """Authenticate using an existing DeGiro session ID from browser cookies.
+
+    Useful when DeGiro blocks programmatic login and you extract the session
+    manually from your browser (DevTools → Application → Cookies).
+    """
+    try:
+        trading_api = DeGiroClient.from_session_id(
+            request.session_id,
+            int_account=request.int_account,
+        )
+        with _session_lock:
+            _session["trading_api"] = trading_api
+            _session["session_time"] = datetime.now()
+            _session["portfolio"] = None
+            _session["portfolio_time"] = None
+
+        return {"status": "authenticated"}
+
+    except ConnectionError as e:
+        raise HTTPException(status_code=401, detail="Session authentication failed")
+    except Exception as e:
+        logger.error("Session auth error: %s", str(e))
+        raise HTTPException(status_code=500, detail="Session authentication failed")
+
+
+# ─── Portfolio ───
+
+@app.get("/api/portfolio", dependencies=[Depends(verify_brok_token)])
+async def get_portfolio():
+    """Return full portfolio with all computed metrics.
+
+    Serves cached portfolio even if the DeGiro session has expired.
+    Only requires a live session for the initial fetch.
+    """
+    with _session_lock:
+        portfolio = _session["portfolio"]
+        if portfolio is not None:
+            return portfolio
+
+        # No cached portfolio — need active session to fetch
+        if not _is_session_valid():
+            raise HTTPException(
+                status_code=401,
+                detail="Session expired or not authenticated. Please reconnect via the UI.",
+            )
+        trading_api = _session["trading_api"]
+
+    try:
+        # Fetch raw portfolio from DeGiro
+        raw = DeGiroClient.fetch_portfolio(trading_api)
+
+        # Enrich with yfinance data
+        positions = await enrich_positions(raw)
+
+        # Compute portfolio weights
+        positions = compute_portfolio_weights(positions)
+
+        # Compute scores
+        positions = compute_scores(positions)
+
+        # Build summary
+        portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0))
+
+        with _session_lock:
+            _session["portfolio"] = portfolio
+            _session["portfolio_time"] = datetime.now()
+
+        return portfolio
+
+    except Exception as e:
+        logger.error("Portfolio fetch error: %s", str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+
+
+@app.get("/api/portfolio-raw", dependencies=[Depends(verify_brok_token)])
+async def get_portfolio_raw():
+    """Return raw portfolio from DeGiro without yfinance enrichment.
+
+    Fast (~2-3s) — useful for showing basic data immediately while
+    the full enrichment happens in the background.
+    """
+    with _session_lock:
+        # If we already have enriched data, return that
+        portfolio = _session["portfolio"]
+        if portfolio is not None:
+            return portfolio
+
+        if not _is_session_valid():
+            raise HTTPException(
+                status_code=401,
+                detail="Session expired or not authenticated. Please reconnect via the UI.",
+            )
+        trading_api = _session["trading_api"]
+
+    try:
+        raw = DeGiroClient.fetch_portfolio(trading_api)
+        portfolio = _build_raw_portfolio_summary(
+            raw.get("positions", []),
+            raw.get("cash_available", 0),
+        )
+        return portfolio
+
+    except Exception as e:
+        logger.error("Raw portfolio fetch error: %s", str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+
+
+# ─── Hermes Context ───
+
+@app.get("/api/hermes-context", dependencies=[Depends(verify_brok_token)])
+async def hermes_context():
+    """Return structured context for Hermes AI agent.
+
+    Works with cached portfolio even if the DeGiro session has expired.
+    """
+    with _session_lock:
+        portfolio = _session["portfolio"]
+
+    if portfolio is None:
+        raise HTTPException(status_code=404, detail="No portfolio data loaded. Refresh your portfolio first.")
+
+    return build_hermes_context(portfolio)
+
+
+# ─── Logout ───
+
+@app.post("/api/logout", dependencies=[Depends(verify_brok_token)])
+async def logout():
+    """Clear in-memory session and portfolio data."""
+    with _session_lock:
+        _clear_session()
+    return {"status": "logged_out"}
+
+
+# ─── Static Files ───
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.get("/")
+async def root():
+    return FileResponse("app/static/index.html")
