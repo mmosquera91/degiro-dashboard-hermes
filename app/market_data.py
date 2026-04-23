@@ -36,9 +36,13 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         return 1.0
 
     key = f"{from_currency}{to_currency}"
-    if key in _fx_cache:
-        return _fx_cache[key]
 
+    # Read from cache under lock
+    with _fx_lock:
+        if key in _fx_cache:
+            return _fx_cache[key]
+
+    # Fetch outside lock (rate limiting happens inside yfinance calls)
     try:
         # yfinance uses X suffix for currency pairs
         ticker_map = {
@@ -60,7 +64,8 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         hist = ticker.history(period="1d")
         if not hist.empty:
             rate = float(hist["Close"].iloc[-1])
-            _fx_cache[key] = rate
+            with _fx_lock:
+                _fx_cache[key] = rate
             return rate
 
         # Fallback: try inverse
@@ -72,13 +77,15 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         hist_inv = ticker_inv.history(period="1d")
         if not hist_inv.empty:
             rate = 1.0 / float(hist_inv["Close"].iloc[-1])
-            _fx_cache[key] = rate
+            with _fx_lock:
+                _fx_cache[key] = rate
             return rate
 
     except Exception as e:
         logger.warning("FX rate lookup failed for %s->%s: %s", from_currency, to_currency, str(e))
 
-    _fx_cache[key] = 1.0
+    with _fx_lock:
+        _fx_cache[key] = 1.0
     return 1.0
 
 
