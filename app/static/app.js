@@ -578,8 +578,8 @@ function renderHealthAlerts() {
 
     container.innerHTML = alerts
         .map((alert) => {
-            const severity = alert.severity || "warn";
-            const typeLabel = alert.type.toUpperCase().replace("_", " ");
+            const severity = (alert.severity || "warn").toLowerCase();
+            const typeLabel = (alert.type || "unknown").toUpperCase().replace("_", " ");
             return `
                 <div class="alert-card ${esc(severity)}">
                     <div class="alert-header">
