@@ -15,4 +15,5 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "${HOST:-127.0.0.1}", "--port", "8000"]
+COPY start.py /start.py
+CMD ["python", "/start.py"]
