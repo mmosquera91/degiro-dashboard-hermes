@@ -19,6 +19,7 @@ from .market_data import enrich_positions, get_fx_rate
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
+from .snapshots import save_snapshot, load_snapshots, fetch_benchmark_series, compute_attribution
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -365,6 +366,37 @@ async def get_portfolio():
         })
         portfolio["health_alerts"] = health_alerts
 
+        # Save snapshot as side effect — benchmark indexed to 100 at portfolio start (D-04)
+        try:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            snapshots = load_snapshots()
+
+            if snapshots:
+                # Compute benchmark return relative to first snapshot date
+                first_date = snapshots[0]["date"]
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                series = fetch_benchmark_series(first_date, today_str)
+                if series:
+                    # benchmark_value is indexed to 100 at first snapshot
+                    benchmark_value = series[-1]["value"]
+                    benchmark_return_pct = benchmark_value - 100.0
+                else:
+                    benchmark_value = snapshots[-1].get("benchmark_value", 100.0)
+                    benchmark_return_pct = snapshots[-1].get("benchmark_return_pct", 0.0)
+            else:
+                # First snapshot — benchmark starts at 100
+                benchmark_value = 100.0
+                benchmark_return_pct = 0.0
+
+            save_snapshot(
+                date_str,
+                portfolio["total_value"],
+                benchmark_value,
+                benchmark_return_pct,
+            )
+        except Exception as e:
+            logger.warning("Snapshot save failed (non-blocking): %s", str(e))
+
         with _session_lock:
             _session["portfolio"] = portfolio
             _session["portfolio_time"] = datetime.now()
@@ -434,6 +466,48 @@ async def logout():
     with _session_lock:
         _clear_session()
     return {"status": "logged_out"}
+
+
+# ─── Benchmark ───
+
+@app.get("/api/benchmark", dependencies=[Depends(verify_brok_token)])
+async def get_benchmark():
+    """Return benchmark comparison data: snapshots, indexed series, and attribution.
+
+    Benchmark data is fetched fresh from yfinance — NOT stored in snapshots (D-07).
+    """
+    snapshots = load_snapshots()
+    if not snapshots:
+        return {"snapshots": [], "benchmark_series": [], "attribution": [], "message": "No snapshots yet"}
+
+    # Get date range from snapshots
+    first_date = snapshots[0]["date"]
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Fetch benchmark series (fresh, not stored)
+    benchmark_series = fetch_benchmark_series(first_date, today)
+
+    # Get current portfolio for attribution
+    with _session_lock:
+        portfolio = _session["portfolio"]
+
+    if portfolio is None:
+        return {
+            "snapshots": snapshots,
+            "benchmark_series": benchmark_series,
+            "attribution": [],
+            "message": "No portfolio loaded",
+        }
+
+    # Compute attribution using current benchmark return (from last snapshot)
+    latest_benchmark_return = snapshots[-1].get("benchmark_return_pct", 0) if snapshots else 0
+    attribution = compute_attribution(portfolio.get("positions", []), latest_benchmark_return)
+
+    return {
+        "snapshots": snapshots,
+        "benchmark_series": benchmark_series,
+        "attribution": attribution,
+    }
 
 
 # ─── Static Files ───
