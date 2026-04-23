@@ -139,9 +139,8 @@ def compute_attribution(positions: list[dict], benchmark_return: float) -> list[
     """Compute attribution for each position relative to benchmark.
 
     Attribution formula (D-11):
-        relative_contribution = (position_return - benchmark_return) * weight * direction
+        relative_contribution = (position_return - benchmark_return) * weight
         absolute_contribution = position_return * weight
-        direction = 1 if position_return >= 0 else -1
         weight = position weight as decimal (e.g., 0.20 for 20%)
 
     Args:
