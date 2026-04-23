@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brokr — Portfolio Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="logo" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="28" height="28" rx="6" fill="#01696f"/>
+        <path d="M7 19V9h3l3 6 3-6h3v10h-2.5v-6l-2.5 5h-2l-2.5-5v6H7z" fill="#fff"/>
+      </svg>
+      <span class="app-name">Brokr</span>
+    </div>
+    <div class="header-right">
+      <span id="last-refresh" class="last-refresh"></span>
+      <button id="btn-refresh" class="btn btn-outline" title="Refresh Portfolio">
+        <i data-lucide="refresh-cw" class="icon-sm"></i>
+        <span class="btn-label">Refresh</span>
+      </button>
+      <button id="btn-export" class="btn btn-outline" title="Export for Hermes" style="display:none;">
+        <i data-lucide="clipboard-copy" class="icon-sm"></i>
+        <span class="btn-label">Export for Hermes</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- EMPTY STATE -->
+    <div id="empty-state" class="empty-state">
+      <i data-lucide="bar-chart-3" class="empty-icon"></i>
+      <h2>No Portfolio Loaded</h2>
+      <p>Connect to DeGiro to load your portfolio and see analytics, scores, and buy recommendations.</p>
+      <button id="btn-empty-connect" class="btn btn-primary">
+        <i data-lucide="log-in" class="icon-sm"></i>
+        Connect to DeGiro
+      </button>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="dashboard hidden">
+
+      <!-- SUMMARY CARDS -->
+      <section class="summary-cards">
+        <div class="card card-value">
+          <span class="card-label">Total Value</span>
+          <span id="total-value" class="card-value-main">—</span>
+        </div>
+        <div class="card card-pl">
+          <span class="card-label">Total P&L</span>
+          <span id="total-pl" class="card-value-main">—</span>
+          <span id="total-pl-pct" class="card-sub">—</span>
+        </div>
+        <div class="card card-daily">
+          <span class="card-label">Daily Change</span>
+          <span id="daily-change" class="card-value-main">—</span>
+        </div>
+        <div class="card card-allocation">
+          <span class="card-label">ETF / Stock Split</span>
+          <div class="allocation-bar-wrap">
+            <div id="allocation-bar" class="allocation-bar">
+              <div id="etf-bar" class="allocation-bar-etf" style="width:0%"></div>
+              <div id="stock-bar" class="allocation-bar-stock" style="width:0%"></div>
+            </div>
+            <div class="allocation-labels">
+              <span id="etf-pct" class="alloc-label">ETF —</span>
+              <span id="stock-pct" class="alloc-label">Stock —</span>
+            </div>
+            <div class="allocation-target">Target: 70% ETF / 30% Stock</div>
+          </div>
+        </div>
+        <div class="card card-cash">
+          <span class="card-label">Cash Available</span>
+          <span id="cash-available" class="card-value-main">—</span>
+        </div>
+        <div class="card card-positions">
+          <span class="card-label">Positions</span>
+          <span id="num-positions" class="card-value-main">—</span>
+        </div>
+      </section>
+
+      <!-- ALLOCATION CHARTS -->
+      <section class="charts-section">
+        <div class="card chart-card">
+          <h3 class="chart-title">ETF vs Stocks</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-etf-stock"></canvas>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="chart-title">Top 10 by Weight</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-top-weight"></canvas>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="chart-title">Sector Breakdown</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-sector"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- POSITIONS TABLE -->
+      <section class="positions-section">
+        <div class="card">
+          <div class="positions-header">
+            <h3 class="chart-title">Positions</h3>
+            <div class="filter-tabs">
+              <button class="filter-tab active" data-filter="all">All</button>
+              <button class="filter-tab" data-filter="ETF">ETFs</button>
+              <button class="filter-tab" data-filter="STOCK">Stocks</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="positions-table" class="positions-table">
+              <thead>
+                <tr>
+                  <th class="col-name" data-sort="name">Name <span class="sort-icon"></span></th>
+                  <th data-sort="asset_type">Type</th>
+                  <th data-sort="current_value_eur">Value</th>
+                  <th data-sort="quantity">Qty</th>
+                  <th data-sort="avg_buy_price">Avg Buy</th>
+                  <th data-sort="current_price">Price</th>
+                  <th data-sort="unrealized_pl_pct">P&L%</th>
+                  <th data-sort="weight">Weight%</th>
+                  <th data-sort="rsi">RSI</th>
+                  <th data-sort="momentum_score">Momentum</th>
+                  <th data-sort="buy_priority_score">Buy Priority</th>
+                </tr>
+              </thead>
+              <tbody id="positions-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- BUY RADAR -->
+      <section class="buy-radar-section">
+        <h3 class="section-title">Buy Radar</h3>
+        <div class="radar-panels">
+          <div class="card radar-panel">
+            <h4 class="radar-title">Top ETF Candidates</h4>
+            <div id="radar-etfs" class="radar-list"></div>
+          </div>
+          <div class="card radar-panel">
+            <h4 class="radar-title">Top Stock Candidates</h4>
+            <div id="radar-stocks" class="radar-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HEALTH ALERTS -->
+      <section class="health-alerts-section">
+        <h3 class="section-title">Health Alerts</h3>
+        <div id="health-alerts-list" class="alerts-list"></div>
+      </section>
+
+      <!-- WINNERS / LOSERS -->
+      <section class="winners-losers-section">
+        <div class="card wl-card">
+          <h4 class="wl-title wl-win">Top 5 Winners</h4>
+          <div id="top-winners" class="wl-list"></div>
+        </div>
+        <div class="card wl-card">
+          <h4 class="wl-title wl-lose">Top 5 Losers</h4>
+          <div id="top-losers" class="wl-list"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- CREDENTIAL MODAL -->
+  <div id="cred-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <button id="modal-close" class="modal-close" title="Close">
+        <i data-lucide="x" class="icon-sm"></i>
+      </button>
+      <h2 class="modal-title">Connect to DeGiro</h2>
+      <div class="security-notice">
+        <i data-lucide="shield" class="icon-sm"></i>
+        Your credentials are used only for this session and are never stored.
+      </div>
+
+      <!-- Tabs -->
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="creds-tab">Credentials</button>
+        <button class="modal-tab" data-tab="session-tab">Browser Session</button>
+      </div>
+
+      <!-- Credentials tab -->
+      <div id="creds-tab" class="tab-panel active">
+        <form id="cred-form" class="cred-form">
+          <div class="form-group">
+            <label for="cred-user">Username (email)</label>
+            <input type="email" id="cred-user" required autocomplete="off" placeholder="user@example.com">
+          </div>
+          <div class="form-group">
+            <label for="cred-pass">Password</label>
+            <input type="password" id="cred-pass" required autocomplete="off" placeholder="Your DeGiro password">
+          </div>
+          <div class="form-group">
+            <label for="cred-otp">2FA code <span class="optional-label">(optional)</span></label>
+            <input type="text" id="cred-otp" autocomplete="off" placeholder="One-time code" inputmode="numeric" pattern="[0-9]*">
+          </div>
+          <button type="submit" id="btn-connect" class="btn btn-primary btn-block">
+            <span id="connect-text">Connect & Refresh</span>
+            <span id="connect-spinner" class="spinner hidden"></span>
+          </button>
+          <div id="cred-error" class="cred-error hidden"></div>
+        </form>
+      </div>
+
+      <!-- Browser Session tab -->
+      <div id="session-tab" class="tab-panel">
+        <form id="session-form" class="cred-form">
+          <div class="form-group">
+            <label for="session-id">JSESSIONID <span class="hint">(from browser cookies)</span></label>
+            <input type="text" id="session-id" required autocomplete="off" placeholder="e.g. A1B2C3...prod_dcv_ch61_4">
+          </div>
+          <div class="form-group">
+            <label for="int-account">intAccount <span class="optional-label">(optional)</span></label>
+            <input type="text" id="int-account" autocomplete="off" placeholder="e.g. 51152239" inputmode="numeric" pattern="[0-9]*">
+          </div>
+          <div class="session-instructions">
+            <p><strong>How to get your session ID:</strong></p>
+            <ol>
+              <li>Log in to <a href="https://trader.degiro.nl" target="_blank" rel="noopener">trader.degiro.nl</a> in your browser</li>
+              <li>Open DevTools → Application → Cookies</li>
+              <li>Copy the value of <code>JSESSIONID</code></li>
+              <li>Paste it here</li>
+            </ol>
+          </div>
+          <button type="submit" id="btn-session-connect" class="btn btn-primary btn-block">
+            <span id="session-connect-text">Load Portfolio</span>
+            <span id="session-connect-spinner" class="spinner hidden"></span>
+          </button>
+          <div id="session-error" class="cred-error hidden"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOADING OVERLAY -->
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="spinner-lg"></div>
+    <p id="loading-text">Fetching portfolio data…</p>
+  </div>
+
+  <!-- ENRICHING BANNER -->
+  <div id="enriching-banner" class="enriching-banner hidden">
+    <div class="enriching-spinner"></div>
+    <span>Enriching with market data…</span>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
