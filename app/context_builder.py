@@ -5,6 +5,8 @@ import os
 from datetime import datetime
 from typing import Optional
 
+from .snapshots import load_snapshots, fetch_benchmark_series, compute_attribution
+
 logger = logging.getLogger(__name__)
 
 TARGET_ETF_PCT   = int(os.getenv("TARGET_ETF_PCT", "70"))
@@ -46,6 +48,30 @@ def build_hermes_context(portfolio: dict) -> dict:
         "top_candidates": top_candidates,
         "health_alerts": portfolio.get("health_alerts", []),
     }
+
+    # Load snapshot data for benchmark comparison
+    snapshots = load_snapshots()
+    benchmark_data = {"snapshots": [], "benchmark_series": [], "latest_benchmark_return_pct": None}
+
+    if snapshots:
+        first_date = snapshots[0]["date"]
+        today = datetime.now().strftime("%Y-%m-%d")
+        benchmark_series = fetch_benchmark_series(first_date, today)
+        latest_benchmark_return_pct = snapshots[-1].get("benchmark_return_pct") if snapshots else None
+        benchmark_data = {
+            "snapshots": snapshots,
+            "benchmark_series": benchmark_series,
+            "latest_benchmark_return_pct": latest_benchmark_return_pct,
+        }
+
+    # Compute attribution if portfolio is available
+    attribution = []
+    if positions and snapshots:
+        latest_benchmark_return = snapshots[-1].get("benchmark_return_pct", 0)
+        attribution = compute_attribution(positions, latest_benchmark_return)
+
+    json_context["benchmark"] = benchmark_data
+    json_context["attribution"] = attribution
 
     # Build plaintext
     plaintext = _build_plaintext(json_context, date_str)
@@ -154,6 +180,49 @@ def _build_plaintext(context: dict, date_str: str) -> str:
         lines.append(f"       Buy Priority: {c.get('buy_priority_score', 'N/A')}  —  {c.get('reason', 'N/A')}")
     if not candidates.get("stocks"):
         lines.append("    No stock candidates available.")
+
+    lines.append("")
+
+    # Benchmark section
+    benchmark = context.get("benchmark", {})
+    snapshots = benchmark.get("snapshots", [])
+    if snapshots:
+        first_date = snapshots[0]["date"]
+        today = datetime.now().strftime("%Y-%m-%d")
+        benchmark_series = fetch_benchmark_series(first_date, today)
+
+        lines.append("═══ BENCHMARK COMPARISON (S&P 500) ═══")
+        lines.append("")
+        lines.append(f"  Latest Snapshot: {snapshots[-1]['date']}")
+        lines.append(f"  Portfolio Value: €{snapshots[-1]['total_value_eur']:,.2f}")
+        benchmark_return = snapshots[-1].get('benchmark_return_pct')
+        if benchmark_return is not None:
+            lines.append(f"  Benchmark Return: {benchmark_return:+.2f}%")
+        else:
+            lines.append("  Benchmark Return: N/A")
+        lines.append(f"  Indexed to 100 at: {first_date}")
+        lines.append("")
+        lines.append("  Historical Snapshots:")
+        for s in snapshots:
+            bv = s.get('benchmark_value', 100)
+            br = s.get('benchmark_return_pct', 0)
+            lines.append(f"    {s['date']}: Portfolio €{s['total_value_eur']:,.2f} | Benchmark {bv:.2f} | Return {br:+.2f}%")
+
+        # Attribution section
+        attribution = context.get("attribution", [])
+        if attribution:
+            lines.append("")
+            lines.append("═══ POSITION ATTRIBUTION ═══")
+            lines.append("")
+            lines.append(f"  {'Position':<30} {'Abs Cont':>12} {'Rel Cont':>12}")
+            lines.append("  " + "─" * 56)
+            for a in attribution[:15]:  # Top 15 positions
+                name = (a.get('name', 'N/A')[:28]).ljust(30)
+                abs_c = f"{a.get('absolute_contribution', 0):+.4f}".rjust(12)
+                rel_c = f"{a.get('relative_contribution', 0):+.4f}".rjust(12)
+                lines.append(f"  {name} {abs_c} {rel_c}")
+            lines.append("")
+            lines.append("  Absolute: position_return × weight | Relative: (position_return − benchmark_return) × weight × direction")
 
     lines.append("")
     lines.append(f"— End of context — {date_str}")
