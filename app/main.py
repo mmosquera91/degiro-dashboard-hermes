@@ -18,6 +18,7 @@ from .degiro_client import DeGiroClient
 from .market_data import enrich_positions, get_fx_rate
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
+from .health_checks import compute_health_alerts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -354,6 +355,15 @@ async def get_portfolio():
 
         # Build summary
         portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0))
+
+        # Compute health alerts from the portfolio summary data
+        health_alerts = compute_health_alerts({
+            "positions": portfolio["positions"],
+            "sector_breakdown": portfolio.get("sector_breakdown", {}),
+            "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
+            "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
+        })
+        portfolio["health_alerts"] = health_alerts
 
         with _session_lock:
             _session["portfolio"] = portfolio
