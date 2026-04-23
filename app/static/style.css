@@ -654,7 +654,7 @@ body {
 
 .loading-overlay p { color: var(--text-dim); font-size: 0.9rem; }
 
-/* ─── RESPONSIVE ─── */
+/* ─── RESPONSIVE — 768px tablet ─── */
 @media (max-width: 768px) {
   html { font-size: 13px; }
   .header { padding: 10px 14px; }
@@ -665,11 +665,30 @@ body {
   .winners-losers-section { grid-template-columns: 1fr; }
   .btn-label { display: none; }
   .last-refresh { display: none; }
+  .stale-badge { font-size: 0.65rem; padding: 3px 6px; }
 }
 
+/* ─── RESPONSIVE — 420px mobile ─── */
 @media (max-width: 420px) {
+  html { font-size: 12px; }
   .summary-cards { grid-template-columns: 1fr; }
-  .modal { padding: 20px; }
+  .modal {
+    padding: 16px;
+    width: calc(100vw - 32px);
+    max-width: none;
+    margin: 0 auto;
+  }
+  .card-value-main { font-size: 1.25rem; }
+  .chart-title { font-size: 0.78rem; }
+  .table-wrap { margin: 0 -14px; padding: 0 14px; }
+  .positions-table { font-size: 0.75rem; }
+  .col-name { min-width: 120px; position: sticky; left: 0; z-index: 3; background: var(--surface); }
+  .positions-table th.col-name {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--surface);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
