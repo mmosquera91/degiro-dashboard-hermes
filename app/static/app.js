@@ -12,6 +12,7 @@
   let sortKey = "current_value_eur";
   let sortDir = -1; // -1 = descending
   let charts = {};
+  let lastSuccessfulRefresh = null;
 
   // ─── Auth ───
   const AUTH_TOKEN = "dev-secret-change-in-production";
@@ -235,7 +236,9 @@
     } catch (err) {
       showEnriching(false);
       console.error("Portfolio load error:", err);
-      // Don't alert — raw data is already showing
+      markDataStale();
+      if (ToastManager) ToastManager.show("Failed to refresh: " + err.message, "error");
+      // Don't clear portfolioData — keep showing last valid data
     }
   }
 
@@ -264,6 +267,7 @@
       loadPortfolio();
     } catch (err) {
       showLoading(false);
+      markDataStale();
       ToastManager.show("Error: " + err.message, "error");
     }
   }
@@ -480,6 +484,7 @@
     // Health Alerts
     renderHealthAlerts();
 
+    lastSuccessfulRefresh = Date.now();
     lucide.createIcons();
   }
 
@@ -604,7 +609,11 @@
 
   // ─── Positions Table ───
   function renderPositions() {
-    if (!portfolioData) return;
+    if (!portfolioData || !portfolioData.positions) {
+      elPositionsBody.innerHTML = '<tr><td colspan="11"><div class="positions-error"><i data-lucide="alert-circle" class="icon-sm"></i><span>Failed to load positions</span><button class="btn btn-outline btn-sm" onclick="loadPortfolioRaw()">Retry</button></div></td></tr>';
+      lucide.createIcons();
+      return;
+    }
 
     let positions = portfolioData.positions || [];
 
@@ -878,6 +887,28 @@ function renderHealthAlerts() {
       colors.push(base[i % base.length]);
     }
     return colors;
+  }
+
+  // ─── Stale Data Indicator ───
+  function markDataStale() {
+    var badge = document.getElementById("stale-badge");
+    if (badge) {
+      badge.classList.remove("hidden");
+      var elapsed = lastSuccessfulRefresh ? formatTimeSince(lastSuccessfulRefresh) : "unknown";
+      badge.querySelector(".stale-text").textContent = "Data may be stale (updated " + elapsed + ")";
+    }
+  }
+
+  function clearStaleIndicator() {
+    var badge = document.getElementById("stale-badge");
+    if (badge) badge.classList.add("hidden");
+  }
+
+  function formatTimeSince(timestamp) {
+    var secs = Math.floor((Date.now() - timestamp) / 1000);
+    if (secs < 60) return "just now";
+    if (secs < 3600) return Math.floor(secs / 60) + "m ago";
+    return Math.floor(secs / 3600) + "h ago";
   }
 
   // ─── Toast Manager ───
