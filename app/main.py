@@ -259,7 +259,7 @@ async def on_startup():
     logger.info("Startup event fired")
     try:
         import socket
-        socket.gethostbyname("google.com")
+        await asyncio.to_thread(socket.gethostbyname, "google.com")
         logger.info("DNS resolution: OK")
     except Exception as e:
         logger.error("DNS resolution failed: %s", e)
@@ -393,10 +393,15 @@ async def get_portfolio():
             return portfolio
 
         # No cached portfolio — need active session to fetch
-        if not _is_session_valid():
+        if _session["trading_api"] is None:
             raise HTTPException(
                 status_code=401,
                 detail="Session expired or not authenticated. Please reconnect via the UI.",
+            )
+        if not _is_session_valid():
+            raise HTTPException(
+                status_code=401,
+                detail="Session expired. Please refresh your connection via the UI.",
             )
         trading_api = _session["trading_api"]
 
