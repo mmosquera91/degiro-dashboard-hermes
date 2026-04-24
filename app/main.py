@@ -423,20 +423,27 @@ async def get_portfolio():
         # Compute portfolio weights
         positions = compute_portfolio_weights(positions)
 
-        # Compute scores
-        positions = compute_scores(positions)
+        # Compute scores (defensive — scoring can fail on edge cases)
+        try:
+            positions = compute_scores(positions)
+        except Exception as e:
+            logger.warning("Score computation failed: %s", str(e))
 
         # Build summary
         portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0))
 
-        # Compute health alerts from the portfolio summary data
-        health_alerts = compute_health_alerts({
-            "positions": portfolio["positions"],
-            "sector_breakdown": portfolio.get("sector_breakdown", {}),
-            "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
-            "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
-        })
-        portfolio["health_alerts"] = health_alerts
+        # Compute health alerts from the portfolio summary data (defensive)
+        try:
+            health_alerts = compute_health_alerts({
+                "positions": portfolio["positions"],
+                "sector_breakdown": portfolio.get("sector_breakdown", {}),
+                "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
+                "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
+            })
+            portfolio["health_alerts"] = health_alerts
+        except Exception as e:
+            logger.warning("Health alerts computation failed: %s", str(e))
+            portfolio["health_alerts"] = []
 
         # Save snapshot as side effect — benchmark indexed to 100 at portfolio start (D-04)
         try:
