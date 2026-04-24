@@ -250,6 +250,8 @@ def _restore_portfolio_from_snapshot():
 async def lifespan(app: FastAPI):
     logger.info("Brokr starting up")
     try:
+        # REST-01: Restore portfolio from latest snapshot before accepting requests
+        _restore_portfolio_from_snapshot()
         yield
     except Exception as e:
         logger.error("Unhandled exception during request: %s", str(e))
@@ -285,8 +287,7 @@ async def on_startup():
         logger.info("degiro_client module: OK")
     except Exception as e:
         logger.error("degiro_client import failed: %s", e)
-    # REST-01: Restore portfolio from latest snapshot
-    _restore_portfolio_from_snapshot()
+    # Snapshot restore moved to lifespan.__aenter__() for FastAPI 0.100+ compatibility
 
 
 # ─── Security Headers Middleware (SEC-06, D-08) ───
