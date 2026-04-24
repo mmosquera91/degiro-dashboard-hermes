@@ -478,14 +478,12 @@ async def hermes_context():
     """Return structured context for Hermes AI agent.
 
     Works with cached portfolio even if the DeGiro session has expired.
+    Benchmark and attribution data can be served from snapshots alone.
     """
     with _session_lock:
         portfolio = _session["portfolio"]
 
-    if portfolio is None:
-        raise HTTPException(status_code=404, detail="No portfolio data loaded. Refresh your portfolio first.")
-
-    return build_hermes_context(portfolio)
+    return build_hermes_context(portfolio if portfolio is not None else {})
 
 
 # ─── Logout ───
