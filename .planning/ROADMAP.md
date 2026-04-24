@@ -42,7 +42,11 @@
   3. Snapshot writes use atomic rename (temp file + rename) to prevent corruption on crash
   4. `docker-compose.yml` has named volume or bind mount for `/data/snapshots`
   5. Snapshot directory survives `docker-compose down -v`
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 07-01-PLAN.md — Docker named volume configuration
+- [ ] 07-02-PLAN.md — Snapshot module extension (save_snapshot + load_latest_snapshot + atomic writes)
+- [ ] 07-03-PLAN.md — Integration into get_portfolio() and test scaffold
 **UI hint**: no
 
 ### Phase 8: Startup Portfolio Restoration
@@ -85,7 +89,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Snapshot Format Extension | 0/N | Not started | - |
+| 7. Snapshot Format Extension | 0/3 | Not started | - |
 | 8. Startup Portfolio Restoration | 0/N | Not started | - |
 | 9. Data Enrichment & Scoring Fixes | 0/N | Not started | - |
 | 10. Frontend Dashboard Verification | 0/N | Not started | - |
@@ -93,4 +97,4 @@
 ---
 
 *Roadmap created: 2026-04-23*
-*Last updated: 2026-04-24 — v1.1 milestone started*
+*Last updated: 2026-04-24 — Phase 7 plans created*
