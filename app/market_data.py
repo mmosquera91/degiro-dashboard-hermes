@@ -24,6 +24,10 @@ _symbol_cache_lock = threading.RLock()
 _YF_DELAY = 1.0
 _last_yf_request = 0.0
 
+# Global rate-limit flag: once 429 is hit, skip all suffix scanning for the session
+_yf_rate_limited: bool = False
+_yf_rate_limited_lock = threading.RLock()
+
 
 def _yf_throttle():
     """Sleep if needed to respect rate limits between yfinance calls."""
@@ -130,6 +134,12 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     # Common European exchanges — try suffixes in order
     suffixes_to_try = ["", ".AS", ".PA", ".DE", ".MI", ".MC", ".L", ".SW", ".TO", ".SI"]
     for suffix in suffixes_to_try:
+        with _yf_rate_limited_lock:
+            if _yf_rate_limited:
+                logger.warning(
+                    "Rate limited — skipping suffix scan for %s", symbol
+                )
+                return symbol
         candidate = symbol + suffix
         try:
             ticker = yf.Ticker(candidate)
@@ -142,11 +152,13 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "Too Many Requests" in err_str:
+                with _yf_rate_limited_lock:
+                    _yf_rate_limited = True
                 logger.warning(
-                    "Rate limited resolving %s — aborting suffix scan, "
-                    "will retry next portfolio fetch", symbol
+                    "Rate limit detected resolving %s — aborting all "
+                    "further symbol resolution this session", symbol
                 )
-                break
+                return symbol
             # other exceptions: continue to next suffix
 
     # Return base symbol as last resort; yfinance will try to resolve it
@@ -355,6 +367,10 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     Converts values to EUR using FX rates.
     Returns list of enriched position dicts.
     """
+    global _yf_rate_limited
+    with _yf_rate_limited_lock:
+        _yf_rate_limited = False
+
     positions = raw_portfolio.get("positions", [])
     base_currency = raw_portfolio.get("currency", "EUR")
 
