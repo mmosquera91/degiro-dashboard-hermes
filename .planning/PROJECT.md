@@ -39,12 +39,12 @@ Reliable portfolio health visibility — seeing risk and performance signals at 
 
 ### Active
 
-<!-- Current focus — not yet shipped. -->
+<!-- Current focus — not yet shipped. v1.1 -->
 
-- [ ] DeGiro session auto-reauth (session expiry causes 500 errors)
-- [ ] Dynamic FX rate refresh (on-demand, not cached stale)
-- [ ] Historical portfolio snapshots (trend analysis)
-- [ ] Export performance history to CSV/JSON
+- [ ] Persist portfolio snapshots to disk for container restart survival
+- [ ] Fix blank per-stock metrics in dashboard (RSI, Weight, Momentum, Buy Priority show "-")
+- [ ] Fix missing sector breakdown chart
+- [ ] Fix missing benchmark comparison chart
 
 ### Out of Scope
 
@@ -81,9 +81,19 @@ Reliable portfolio health visibility — seeing risk and performance signals at 
 | Fix security before features | Credential exposure and no auth unsafe to share | ✓ Good |
 | Async yfinance via thread pool | Event loop was blocking on network I/O | ✓ Good |
 
+## Current Milestone: v1.1 Dashboard & Persistence Fix
+
+**Goal:** Fix dashboard data visibility and persistent portfolio caching — make per-stock metrics visible, sector/benchmark charts render, and portfolio data survives container restarts.
+
+**Target features:**
+- Persist portfolio snapshots to disk so data survives container restarts
+- Fix blank per-stock metrics in dashboard (RSI, Weight, Momentum, Buy Priority show "-")
+- Fix missing sector breakdown chart
+- Fix missing benchmark comparison chart
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-24 after v1.0 milestone shipped*
+*Last updated: 2026-04-24 — v1.1 milestone started*
