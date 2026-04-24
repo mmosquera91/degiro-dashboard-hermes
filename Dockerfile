@@ -8,12 +8,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
+COPY start.py ./start.py
 
-RUN chown -R appuser:appgroup /app
+RUN mkdir -p /data/snapshots \
+    && chown -R appuser:appgroup /app /data
 
 USER appuser
 
 EXPOSE 8000
 
-COPY start.py /start.py
-CMD ["python", "/start.py"]
+CMD ["python", "/app/start.py"]
