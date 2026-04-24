@@ -108,8 +108,8 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
     except Exception as e:
         logger.warning("FX rate lookup failed for %s->%s: %s", from_currency, to_currency, str(e))
 
-    with _fx_lock:
-        _fx_cache[key] = None  # None = lookup failed, do not use as rate
+    logger.warning("FX rate lookup failed for %s->%s — using 1.0 fallback",
+                   from_currency, to_currency)
     return 1.0
 
 
@@ -118,6 +118,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
 
     DeGiro symbols sometimes lack exchange suffixes. We add common ones.
     """
+    global _yf_rate_limited
     if not symbol:
         return ""
 
@@ -404,6 +405,9 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             pos_currency = enriched_pos.get("currency", "EUR")
             if pos_currency != base_currency:
                 fx_rate = get_fx_rate(pos_currency, base_currency)
+                if fx_rate is None:
+                    logger.warning("fx_rate is None for %s — falling back to 1.0", pos_currency)
+                    fx_rate = 1.0
                 enriched_pos["fx_rate"] = fx_rate
                 enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
                 enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
