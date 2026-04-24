@@ -15,9 +15,9 @@ Requirements for v1.1 milestone — Dashboard Fix & Persistence.
 
 ### Snapshot Persistence
 
-- [ ] **SNAP-01**: `save_snapshot()` accepts full `portfolio_data` dict (positions, sector_breakdown, allocation)
-- [ ] **SNAP-02**: `load_latest_snapshot()` reads and returns the most recent snapshot with portfolio data
-- [ ] **SNAP-03**: Snapshot writes use atomic rename (write to temp, then rename) to prevent corruption on crash
+- [x] **SNAP-01**: `save_snapshot()` accepts full `portfolio_data` dict (positions, sector_breakdown, allocation)
+- [x] **SNAP-02**: `load_latest_snapshot()` reads and returns the most recent snapshot with portfolio data
+- [x] **SNAP-03**: Snapshot writes use atomic rename (write to temp, then rename) to prevent corruption on crash
 - [ ] **SNAP-04**: `docker-compose.yml` has `./snapshots:/data/snapshots` volume mount so snapshots survive container restarts
 
 ### Startup Restoration
@@ -36,8 +36,8 @@ Requirements for v1.1 milestone — Dashboard Fix & Persistence.
 
 ### Docker Configuration
 
-- [ ] **DOCK-01**: `docker-compose.yml` includes named volume or bind mount for `/data/snapshots`
-- [ ] **DOCK-02**: Snapshot directory survives `docker-compose down -v` (named volume preferred over anonymous)
+- [x] **DOCK-01**: `docker-compose.yml` includes named volume or bind mount for `/data/snapshots`
+- [x] **DOCK-02**: Snapshot directory survives `docker-compose down -v` (named volume preferred over anonymous)
 
 ## v2 Requirements
 
@@ -78,9 +78,9 @@ Deferred to future release.
 | ENR-01 | Phase 9 | Pending |
 | ENR-02 | Phase 9 | Pending |
 | ENR-03 | Phase 9 | Pending |
-| SNAP-01 | Phase 7 | Pending |
-| SNAP-02 | Phase 7 | Pending |
-| SNAP-03 | Phase 7 | Pending |
+| SNAP-01 | Phase 7 | Complete |
+| SNAP-02 | Phase 7 | Complete |
+| SNAP-03 | Phase 7 | Complete |
 | SNAP-04 | Phase 7 | Pending |
 | REST-01 | Phase 8 | Pending |
 | REST-02 | Phase 8 | Pending |
@@ -90,8 +90,8 @@ Deferred to future release.
 | DASH-03 | Phase 10 | Pending |
 | DASH-04 | Phase 10 | Pending |
 | DASH-05 | Phase 10 | Pending |
-| DOCK-01 | Phase 7 | Pending |
-| DOCK-02 | Phase 7 | Pending |
+| DOCK-01 | Phase 7 | Complete |
+| DOCK-02 | Phase 7 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 17 total

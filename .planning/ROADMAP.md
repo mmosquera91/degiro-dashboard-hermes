@@ -25,7 +25,7 @@
 
 ### v1.1 Dashboard & Persistence Fix (Phases 7-10)
 
-- [ ] **Phase 7: Snapshot Format Extension** — Persist full portfolio data in snapshots with atomic writes
+- [x] **Phase 7: Snapshot Format Extension** — Persist full portfolio data in snapshots with atomic writes (completed 2026-04-24)
 - [ ] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot
 - [ ] **Phase 9: Data Enrichment & Scoring Fixes** — Fix silent yfinance failures and scoring None pollution
 - [ ] **Phase 10: Frontend Dashboard Verification** — Verify charts render with real data and handle missing data gracefully
@@ -44,9 +44,9 @@
   5. Snapshot directory survives `docker-compose down -v`
 **Plans**: 3 plans
 Plans:
-- [ ] 07-01-PLAN.md — Docker named volume configuration
-- [ ] 07-02-PLAN.md — Snapshot module extension (save_snapshot + load_latest_snapshot + atomic writes)
-- [ ] 07-03-PLAN.md — Integration into get_portfolio() and test scaffold
+- [x] 07-01-PLAN.md — Docker named volume configuration
+- [x] 07-02-PLAN.md — Snapshot module extension (save_snapshot + load_latest_snapshot + atomic writes)
+- [x] 07-03-PLAN.md — Integration into get_portfolio() and test scaffold
 **UI hint**: no
 
 ### Phase 8: Startup Portfolio Restoration
@@ -89,7 +89,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Snapshot Format Extension | 0/3 | Not started | - |
+| 7. Snapshot Format Extension | 3/3 | Complete    | 2026-04-24 |
 | 8. Startup Portfolio Restoration | 0/N | Not started | - |
 | 9. Data Enrichment & Scoring Fixes | 0/N | Not started | - |
 | 10. Frontend Dashboard Verification | 0/N | Not started | - |
