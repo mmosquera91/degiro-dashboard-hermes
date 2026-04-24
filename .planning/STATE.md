@@ -69,6 +69,7 @@ progress:
 
 ## Quick Tasks Completed
 
+- **fix _yf_rate_limited race condition (2026-04-24):** Added `_yf_rate_limited_until` with 60s cooldown. `enrich_positions()` now conditionally resets flag only after cooldown expires. `_resolve_yf_symbol()` sets 60s cooldown on 429 detection and checks expiry before skipping. Prevents premature retry after rate limit hit. Commit: 68279c0
 - **fix 429 abort in _resolve_yf_symbol (2026-04-24):** Module-level `_yf_rate_limited` flag replaces broken string-based 429 detection. Loop was continuing suffixes because yfinance internally catches/re-raises 429 so str(e) doesn't contain "429". Flag is checked before each suffix and set on 429 detection. enrich_positions resets flag at start of each call. Commit: 98fa798
 - **yfinance symbol resolution (2026-04-24):** _resolve_yf_symbol had a dead suffixes_to_try list that was never used - just returned symbol unchanged. European stocks need exchange suffixes for yfinance. Now actively tries each suffix and returns first with valid market price. Commit: ae7e392
 - **portfolio enrichment error (2026-04-24):** Dashboard showed "Failed to fetch portfolio" after raw portfolio loaded — `compute_scores()` and `compute_health_alerts()` threw unhandled exceptions that propagated to the 500 error handler. Both are now wrapped in defensive try/except with warning-level logging. Commit: 28012c9. PR: [#1](https://github.com/mmosquera91/degiro-dashboard-hermes/pull/1).

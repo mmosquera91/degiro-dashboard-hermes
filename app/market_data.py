@@ -24,8 +24,9 @@ _symbol_cache_lock = threading.RLock()
 _YF_DELAY = 1.0
 _last_yf_request = 0.0
 
-# Global rate-limit flag: once 429 is hit, skip all suffix scanning for the session
+# Global rate-limit flag: once 429 is hit, skip all suffix scanning for 60 seconds
 _yf_rate_limited: bool = False
+_yf_rate_limited_until: float = 0.0
 _yf_rate_limited_lock = threading.RLock()
 
 
@@ -136,7 +137,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     suffixes_to_try = ["", ".AS", ".PA", ".DE", ".MI", ".MC", ".L", ".SW", ".TO", ".SI"]
     for suffix in suffixes_to_try:
         with _yf_rate_limited_lock:
-            if _yf_rate_limited:
+            if _yf_rate_limited and time.time() < _yf_rate_limited_until:
                 logger.warning(
                     "Rate limited — skipping suffix scan for %s", symbol
                 )
@@ -155,6 +156,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
             if "429" in err_str or "Too Many Requests" in err_str:
                 with _yf_rate_limited_lock:
                     _yf_rate_limited = True
+                    _yf_rate_limited_until = time.time() + 60.0
                 logger.warning(
                     "Rate limit detected resolving %s — aborting all "
                     "further symbol resolution this session", symbol
@@ -368,9 +370,10 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     Converts values to EUR using FX rates.
     Returns list of enriched position dicts.
     """
-    global _yf_rate_limited
+    global _yf_rate_limited, _yf_rate_limited_until
     with _yf_rate_limited_lock:
-        _yf_rate_limited = False
+        if time.time() >= _yf_rate_limited_until:
+            _yf_rate_limited = False
 
     positions = raw_portfolio.get("positions", [])
     base_currency = raw_portfolio.get("currency", "EUR")
