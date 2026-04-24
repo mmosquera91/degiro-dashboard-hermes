@@ -1,40 +1,73 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: milestone_complete
+milestone: v1.1
+milestone_name: Dashboard & Persistence Fix
+status: milestone_started
 stopped_at: null
-last_updated: "2026-04-24T11:45:00.000Z"
+last_updated: "2026-04-24"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # State
 
 ## Project Reference
 
-**Brokr** — Portfolio analytics dashboard for DeGiro stocks/ETFs. v1.0 MVP shipped.
+**Brokr** — Portfolio analytics dashboard for DeGiro stocks/ETFs.
 
 **Core Value:** Reliable portfolio health visibility — seeing risk and performance signals at a glance.
 
-**Current Focus:** Milestone v1.0 complete — ready for next milestone
+**Current Focus:** Phase 7 — Snapshot Format Extension
 
-## Milestone v1.0 Summary
+## Milestone v1.1 Goals
 
-- 6 phases, 17 plans, 89 commits
-- 3262 LOC Python
-- All v1 requirements shipped
+- Persist portfolio snapshots to disk for container restart survival
+- Fix blank per-stock metrics in dashboard (RSI, Weight, Momentum, Buy Priority show "-")
+- Fix missing sector breakdown chart
+- Fix missing benchmark comparison chart
 
-## Next Milestone Goals (Active)
+## Phase Progress
+
+| Phase | Name | Plans | Status |
+|-------|------|-------|--------|
+| 7 | Snapshot Format Extension | 0 | Not started |
+| 8 | Startup Portfolio Restoration | 0 | Not started |
+| 9 | Data Enrichment & Scoring Fixes | 0 | Not started |
+| 10 | Frontend Dashboard Verification | 0 | Not started |
+
+## Problems to Diagnose
+
+- Per-stock data shows "-" — likely yfinance enrichment failing or scoring not running
+- Sector breakdown chart missing — sector data not populated in positions
+- Benchmark comparison chart missing — benchmark series not being fetched/rendered
+- Portfolio snapshots exist but per-stock metrics remain blank after restart
+
+## Accumulated Context
+
+### Architecture Decisions
+
+- Snapshot format extends to store full `portfolio_data` dict
+- `load_latest_snapshot()` added to restore portfolio on startup
+- Atomic rename for snapshot writes (temp file + rename)
+- Docker volume mount `./snapshots:/data/snapshots` for persistence
+
+### Dependencies
+
+- Phase 7 before Phase 8 (snapshots must have portfolio data before restoration)
+- Phase 9 can parallelize with Phase 7-8 but must complete before Phase 10
+- Phase 10 depends on Phase 8 (portfolio must be in session)
+
+## Next Milestone Goals (Pending)
 
 - DeGiro session auto-reauth
 - Dynamic FX rate refresh
-- Historical portfolio snapshots
+- Historical portfolio snapshots (trend analysis)
 - Performance history export
 
 ---
-*Last updated: 2026-04-24 — v1.0 milestone complete*
+
+*Last updated: 2026-04-24 — v1.1 milestone started, Phase 7 next*
