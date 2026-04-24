@@ -211,6 +211,33 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
     }
 
 
+def _restore_portfolio_from_snapshot():
+    """Restore portfolio from latest snapshot on startup (REST-01).
+
+    Loads the most recent snapshot and populates _session["portfolio"] and
+    _session["portfolio_time"]. Handles:
+    - Missing snapshot (D-13): logs info, returns silently
+    - Old-format snapshot with portfolio_data=None (D-12): logs warning, skips restore
+    - Valid snapshot: restores portfolio under _session_lock
+    """
+    snapshot = load_latest_snapshot()
+    if snapshot is None:
+        logger.info("No snapshot found on startup — starting fresh")
+        return
+
+    portfolio_data = snapshot.get("portfolio_data")
+    if portfolio_data is None:
+        # D-12: Old-format snapshot without portfolio_data — treat as no snapshot
+        logger.warning("Snapshot dated %s has no portfolio_data — skipping restore", snapshot["date"])
+        return
+
+    with _session_lock:
+        _session["portfolio"] = portfolio_data
+        _session["portfolio_time"] = datetime.now()
+
+    logger.info("Portfolio restored from snapshot dated %s", snapshot["date"])
+
+
 # Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -251,6 +278,8 @@ async def on_startup():
         logger.info("degiro_client module: OK")
     except Exception as e:
         logger.error("degiro_client import failed: %s", e)
+    # REST-01: Restore portfolio from latest snapshot
+    _restore_portfolio_from_snapshot()
 
 
 # ─── Security Headers Middleware (SEC-06, D-08) ───
