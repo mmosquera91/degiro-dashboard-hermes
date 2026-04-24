@@ -62,7 +62,7 @@ Plans:
 Plans:
 - [x] 08-01-PLAN.md — Startup portfolio restoration via on_startup event
 - [x] 08-02-PLAN.md — Workspace-relative snapshot dir + WARNING log
-- [ ] 08-03-PLAN.md — Directory auto-creation + ERROR log + file existence check
+- [x] 08-03-PLAN.md — Directory auto-creation + ERROR log + file existence check
 **UI hint**: no
 
 ### Phase 9: Data Enrichment & Scoring Fixes
