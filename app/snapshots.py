@@ -94,7 +94,7 @@ def load_snapshots() -> list[dict]:
         return []
 
     snapshots = []
-    for file_path in snapshot_dir.glob("*.json"):
+    for file_path in snapshot_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json"):
         try:
             # Validate date in filename before parsing (T-04-01)
             date_str = file_path.stem
@@ -125,7 +125,7 @@ def load_latest_snapshot() -> Optional[dict]:
     snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     snapshots = []
-    for file_path in snapshot_dir.glob("*.json"):
+    for file_path in snapshot_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json"):
         try:
             date_str = file_path.stem
             datetime.strptime(date_str, "%Y-%m-%d")
@@ -194,12 +194,12 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
         return []
 
     # Get first price for indexing
-    first_price = float(data["Close"].iloc[0])
+    first_price = float(data["Close"].iloc[0].iloc[0]) if hasattr(data["Close"].iloc[0], 'iloc') else float(data["Close"].iloc[0])
 
     result = []
     for idx, row in data.iterrows():
         date_str = idx.strftime("%Y-%m-%d")
-        price = float(row["Close"])
+        price = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
         indexed_value = (price / first_price) * 100.0
         result.append({"date": date_str, "value": round(indexed_value, 4)})
 

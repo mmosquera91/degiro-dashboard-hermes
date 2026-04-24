@@ -674,7 +674,7 @@
             <div class="detail-item"><label>30d Perf</label><span>${p.perf_30d != null ? p.perf_30d.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>90d Perf</label><span>${p.perf_90d != null ? p.perf_90d.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>YTD Perf</label><span>${p.perf_ytd != null ? p.perf_ytd.toFixed(1) + "%" : "—"}</span></div>
-            <div class="detail-item"><label>P/E Ratio</label><span>${p.pe_ratio != null ? p.pe_ratio.toFixed(1) : "—"}</span></div>
+            <div class="detail-item"><label>P/E Ratio</label><span>${p.pe_ratio != null && isFinite(p.pe_ratio) ? Number(p.pe_ratio).toFixed(1) : "—"}</span></div>
             <div class="detail-item"><label>Value Score</label><span>${p.value_score != null ? p.value_score.toFixed(2) : "—"}</span></div>
           </div>
         </td>

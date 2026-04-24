@@ -76,6 +76,7 @@ progress:
 - **enrich_positions async def fix (2026-04-24):** enrich_positions was declared `async def` but contained zero await expressions — asyncio.to_thread() received a coroutine object instead of a callable. Changed to `def` in app/market_data.py line 313. Commit: 0c43209.
 - **yfinance rate limit back-off (2026-04-24):** Increase _YF_DELAY from 0.25s to 1.0s to avoid 429s on portfolios >5 positions. Detect 429/Too Many Requests in enrich_position and mark as rate_limited. Track _session_rate_limited in enrich_positions loop and short-circuit remaining positions. Commit: f2fef6a.
 - **FX rate prefetch before enrichment loop (2026-04-24):** Pre-warm FX cache for all unique non-base currencies before the position enrichment loop begins. Eliminates interleaved yfinance FX HTTP requests during the loop. Commit: b7e9227.
+- **fix Dockerfile ownership and /data/snapshots permissions (2026-04-24):** Move COPY start.py before USER appuser, copy to /app/start.py, create and chown /data/snapshots, update CMD to /app/start.py. Commit: d29863d.
 
 ---
 

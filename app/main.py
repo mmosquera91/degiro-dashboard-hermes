@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .degiro_client import DeGiroClient
-from .market_data import enrich_positions, get_fx_rate
+from .market_data import enrich_positions, get_fx_rate, _sanitize_floats
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
@@ -238,6 +238,9 @@ def _restore_portfolio_from_snapshot():
         logger.warning("Snapshot dated %s has no portfolio_data — skipping restore", snapshot["date"])
         return
 
+# Sanitize any inf/nan floats baked into old snapshots before restoring
+    if "positions" in portfolio_data:
+        portfolio_data["positions"] = [_sanitize_floats(p) for p in portfolio_data["positions"]]
     with _session_lock:
         _session["portfolio"] = portfolio_data
         _session["portfolio_time"] = datetime.now()
@@ -467,12 +470,16 @@ async def get_portfolio():
                 benchmark_value = 100.0
                 benchmark_return_pct = 0.0
 
+            safe_portfolio = {
+                **portfolio,
+                "positions": [_sanitize_floats(p) for p in portfolio.get("positions", [])],
+            }
             save_snapshot(
                 date_str,
-                portfolio["total_value"],
+                safe_portfolio["total_value"],
                 benchmark_value,
                 benchmark_return_pct,
-                portfolio,
+                safe_portfolio,
             )
         except Exception as e:
             logger.warning("Snapshot save failed (non-blocking): %s", str(e))

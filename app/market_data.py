@@ -1,6 +1,8 @@
 """yfinance enrichment — current prices, 52w range, RSI, performance, sector, FX rates."""
 
+import json
 import logging
+import os
 import threading
 import time
 from typing import Optional
@@ -19,15 +21,48 @@ _fx_lock = threading.RLock()
 # Cache for resolved yfinance symbols (symbol:isin -> resolved_yf_symbol)
 _symbol_cache: dict[str, str] = {}
 _symbol_cache_lock = threading.RLock()
+_SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
 
 # Rate limiting: min seconds between yfinance requests
-_YF_DELAY = 1.0
+_YF_DELAY = 0.2
 _last_yf_request = 0.0
 
 # Global rate-limit flag: once 429 is hit, skip all suffix scanning for 60 seconds
 _yf_rate_limited: bool = False
 _yf_rate_limited_until: float = 0.0
 _yf_rate_limited_lock = threading.RLock()
+
+def _load_symbol_cache() -> None:
+    """Load persisted symbol cache from disk into _symbol_cache."""
+    global _symbol_cache
+    try:
+        if os.path.exists(_SYMBOL_CACHE_PATH):
+            with open(_SYMBOL_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            with _symbol_cache_lock:
+                _symbol_cache.update(data)
+            logger.info("Loaded %d symbol cache entries from disk", len(data))
+    except Exception as e:
+        logger.warning("Could not load symbol cache: %s", e)
+
+
+def _save_symbol_cache() -> None:
+    """Persist current symbol cache to disk."""
+    try:
+        os.makedirs(os.path.dirname(_SYMBOL_CACHE_PATH), exist_ok=True)
+        with _symbol_cache_lock:
+            data = dict(_symbol_cache)
+        tmp_path = _SYMBOL_CACHE_PATH + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp_path, _SYMBOL_CACHE_PATH)
+    except Exception as e:
+        logger.warning("Could not save symbol cache: %s", e)
+
+
+# Load persisted symbol cache from previous runs
+_load_symbol_cache()
+
 
 
 def _yf_throttle():
@@ -117,12 +152,15 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
 def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     """Resolve a DeGiro symbol to a yfinance-compatible ticker.
 
-    DeGiro symbols sometimes lack exchange suffixes. We add common ones.
+    DeGiro symbols sometimes lack exchange suffixes. We try common ones.
+    Results are cached in memory and persisted to disk.
     """
-    global _yf_rate_limited
-    global _yf_rate_limited_until
+    global _yf_rate_limited, _yf_rate_limited_until
+
     if not symbol:
         return ""
+
+    symbol = symbol.strip()
 
     # Already has an exchange suffix
     if "." in symbol:
@@ -139,47 +177,36 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     for suffix in suffixes_to_try:
         with _yf_rate_limited_lock:
             if _yf_rate_limited and time.time() < _yf_rate_limited_until:
-                logger.warning(
-                    "Rate limited — skipping suffix scan for %s", symbol
-                )
+                logger.warning("Rate limited — skipping suffix scan for %s", symbol)
                 return symbol
         candidate = symbol + suffix
         try:
             ticker = yf.Ticker(candidate)
             _yf_throttle()
-            info = ticker.info
-
-            # Detect 429 returned silently by yfinance (no exception raised)
-            if isinstance(info, dict):
-                err_val = info.get("error", "") or ""
-                if "429" in str(err_val) or "Too Many Requests" in str(err_val):
-                    with _yf_rate_limited_lock:
-                        _yf_rate_limited = True
-                        _yf_rate_limited_until = time.time() + 60.0
-                    logger.warning(
-                        "Rate limit detected (info dict) resolving %s — "
-                        "aborting suffix scan", symbol
-                    )
-                    return symbol
-
-            if info and info.get("regularMarketPrice"):
+            info = ticker.info or {}
+            if info.get("regularMarketPrice"):
                 with _symbol_cache_lock:
                     _symbol_cache[cache_key] = candidate
+                _save_symbol_cache()
                 return candidate
         except Exception as e:
             err_str = str(e)
-            if "429" in err_str or "Too Many Requests" in err_str:
+            if "429" in err_str or "Too Many Requests" in err_str \
+                    or "Rate limited" in err_str or "YFRateLimitError" in err_str:
                 with _yf_rate_limited_lock:
                     _yf_rate_limited = True
                     _yf_rate_limited_until = time.time() + 60.0
                 logger.warning(
-                    "Rate limit detected resolving %s — aborting all "
-                    "further symbol resolution this session", symbol
+                    "Rate limit detected resolving %s — aborting suffix scan", symbol
                 )
                 return symbol
-            # other exceptions: continue to next suffix
+            # 404 or other error — continue to next suffix
 
-    # Return base symbol as last resort; yfinance will try to resolve it
+    # All suffixes exhausted — cache as unresolvable so next run skips scan
+    with _symbol_cache_lock:
+        _symbol_cache[cache_key] = symbol
+    _save_symbol_cache()
+    logger.debug("Symbol %s exhausted all suffixes — cached as unresolvable", symbol)
     return symbol
 
 
@@ -247,7 +274,11 @@ def _compute_performance(hist_close: pd.Series) -> dict:
         # YTD performance
         now = datetime.now()
         year_start = datetime(now.year, 1, 1)
-        ytd_mask = hist_close.index >= pd.Timestamp(year_start)
+        # Make timestamp tz-aware if index is tz-aware (yfinance 1.0+)
+        ts_year_start = pd.Timestamp(year_start)
+        if hist_close.index.tz is not None:
+            ts_year_start = ts_year_start.tz_localize(hist_close.index.tz)
+        ytd_mask = hist_close.index >= ts_year_start
         ytd_data = hist_close[ytd_mask]
         if len(ytd_data) >= 2:
             price_ytd = float(ytd_data.iloc[0])
@@ -296,7 +327,17 @@ def enrich_position(position: dict) -> dict:
 
         # Get info dict for fundamental data
         _yf_throttle()
-        info = ticker.info or {}
+        try:
+            info = ticker.info or {}
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str \
+                    or "Rate limited" in err_str:
+                position["_enrichment_error"] = "rate_limited"
+                logger.warning("Rate limited fetching info for %s", symbol)
+                return position
+            logger.warning("ticker.info failed for %s: %s", symbol, e)
+            info = {}
 
         # Sector
         position["sector"] = info.get("sector", info.get("industry", None))
@@ -306,7 +347,11 @@ def enrich_position(position: dict) -> dict:
 
         # P/E ratio (stocks only)
         if position.get("asset_type") == "STOCK":
-            position["pe_ratio"] = info.get("trailingPE", info.get("forwardPE", None))
+            raw_pe = info.get("trailingPE", info.get("forwardPE", None))
+            try:
+                position["pe_ratio"] = float(raw_pe) if raw_pe is not None else None
+            except (ValueError, TypeError):
+                position["pe_ratio"] = None
 
         # 52-week high/low from info
         wk52_high = info.get("fiftyTwoWeekHigh", None)
@@ -378,6 +423,13 @@ def enrich_position(position: dict) -> dict:
 
     return position
 
+def _sanitize_floats(obj: dict) -> dict:
+    """Replace float inf/nan with None so json.dumps() doesn't crash."""
+    import math
+    return {
+        k: (None if isinstance(v, float) and not math.isfinite(v) else v)
+        for k, v in obj.items()
+    }
 
 def enrich_positions(raw_portfolio: dict) -> list[dict]:
     """Enrich all positions with yfinance market data.
@@ -411,7 +463,7 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             enriched_pos["current_value_eur"] = pos.get("current_value", 0)
             enriched_pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
             enriched_pos["fx_rate"] = 1.0
-            enriched.append(enriched_pos)
+            enriched.append(_sanitize_floats(enriched_pos))
             continue
 
         try:
@@ -434,13 +486,18 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                 enriched_pos["current_value_eur"] = enriched_pos["current_value"]
                 enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
 
-            enriched.append(enriched_pos)
+            enriched.append(_sanitize_floats(enriched_pos))
 
         except Exception as e:
             logger.warning("Failed to enrich position %s: %s", pos.get("name"), str(e))
-            pos["current_value_eur"] = pos["current_value"]
-            pos["unrealized_pl_eur"] = pos["unrealized_pl"]
+            pos["current_value_eur"] = pos.get("current_value", 0)
+            pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
             pos["fx_rate"] = 1.0
-            enriched.append(pos)
+            for field in ["52w_high", "52w_low", "distance_from_52w_high_pct",
+                          "rsi", "perf_30d", "perf_90d", "perf_ytd",
+                          "pe_ratio", "sector", "country",
+                          "value_score", "momentum_score", "buy_priority_score"]:
+                pos.setdefault(field, None)
+            enriched.append(_sanitize_floats(pos))
 
     return enriched

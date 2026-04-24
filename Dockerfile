@@ -10,11 +10,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY start.py ./start.py
 
-RUN mkdir -p /data/snapshots \
-    && chown -R appuser:appgroup /app /data
+RUN chown -R appuser:appgroup /app
 
-USER appuser
+RUN apt-get update && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+# Entrypoint runs as root to fix volume permissions, then drops to appuser
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["python", "/app/start.py"]
+ENTRYPOINT ["/app/entrypoint.sh"]
