@@ -49,18 +49,18 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
 
     # Fetch outside lock (rate limiting happens inside yfinance calls)
     try:
-        # yfinance uses X suffix for currency pairs
+        # Yahoo Finance uses quote currency as base for =X pairs (EUR is base)
         ticker_map = {
-            "USDEUR": "USDEUR=X",
-            "GBPEUR": "GBPEUR=X",
-            "CHFEUR": "CHFEUR=X",
-            "JPYEUR": "JPYEUR=X",
-            "SEKEUR": "SEKEUR=X",
-            "DKKEUR": "DKKEUR=X",
-            "NOKEUR": "NOKEUR=X",
-            "HKDEUR": "HKDEUR=X",
-            "AUDEUR": "AUDEUR=X",
-            "CADEUR": "CADEUR=X",
+            "USDEUR": "EURUSD=X",   # fetch EURUSD, then invert
+            "GBPEUR": "EURGBP=X",   # fetch EURGBP, then invert
+            "CHFEUR": "EURCHF=X",
+            "JPYEUR": "EURJPY=X",
+            "SEKEUR": "EURSEK=X",
+            "DKKEUR": "EURDKK=X",
+            "NOKEUR": "EURNOK=X",
+            "HKDEUR": "EURHKD=X",
+            "AUDEUR": "EURAUD=X",
+            "CADEUR": "EURCAD=X",
         }
         yf_symbol = ticker_map.get(key, f"{key}=X")
         _yf_throttle()
@@ -72,12 +72,19 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
             logger.warning("yfinance history fetch failed for %s: %s", yf_symbol, e)
             hist = None
         if not hist.empty:
-            rate = float(hist["Close"].iloc[-1])
+            rate_raw = float(hist["Close"].iloc[-1])
+            # Keys where EUR is numerator (must invert the fetched rate)
+            inverted_pairs = {
+                "USDEUR", "GBPEUR", "CHFEUR", "JPYEUR",
+                "SEKEUR", "DKKEUR", "NOKEUR", "HKDEUR",
+                "AUDEUR", "CADEUR",
+            }
+            rate = (1.0 / rate_raw) if key in inverted_pairs else rate_raw
             with _fx_lock:
                 _fx_cache[key] = rate
             return rate
 
-        # Fallback: try inverse
+        # Fallback: try inverse pair
         inverse_key = f"{to_currency}{from_currency}"
         yf_inverse = f"{inverse_key}=X"
         _yf_throttle()
