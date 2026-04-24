@@ -310,7 +310,7 @@ def enrich_position(position: dict) -> dict:
     return position
 
 
-async def enrich_positions(raw_portfolio: dict) -> list[dict]:
+def enrich_positions(raw_portfolio: dict) -> list[dict]:
     """Enrich all positions with yfinance market data.
 
     Converts values to EUR using FX rates.
