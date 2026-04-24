@@ -120,6 +120,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     DeGiro symbols sometimes lack exchange suffixes. We add common ones.
     """
     global _yf_rate_limited
+    global _yf_rate_limited_until
     if not symbol:
         return ""
 
@@ -147,6 +148,20 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
             ticker = yf.Ticker(candidate)
             _yf_throttle()
             info = ticker.info
+
+            # Detect 429 returned silently by yfinance (no exception raised)
+            if isinstance(info, dict):
+                err_val = info.get("error", "") or ""
+                if "429" in str(err_val) or "Too Many Requests" in str(err_val):
+                    with _yf_rate_limited_lock:
+                        _yf_rate_limited = True
+                        _yf_rate_limited_until = time.time() + 60.0
+                    logger.warning(
+                        "Rate limit detected (info dict) resolving %s — "
+                        "aborting suffix scan", symbol
+                    )
+                    return symbol
+
             if info and info.get("regularMarketPrice"):
                 with _symbol_cache_lock:
                     _symbol_cache[cache_key] = candidate
