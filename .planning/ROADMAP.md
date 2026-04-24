@@ -13,7 +13,7 @@
 | 3 | Health Indicators | Add concentration, sector, drawdown alerts | HEALTH-01, HEALTH-02, HEALTH-03, HEALTH-04 | 4/4 [x] (2026-04-23) |
 | 4 | Benchmark Tracking | S&P 500 comparison, historical performance | TRACK-01, TRACK-02, TRACK-03 | 3/3 |
 | 5 | Dashboard Polish | Toasts, error states, responsive improvements | DASH-01, DASH-02, DASH-03 | 3/3 |
-| 6 | Testing | Automated tests for core logic | TEST-01, TEST-02, TEST-03 | 3/3 |
+| 6 | Testing | Automated tests for core logic | TEST-01, TEST-02, TEST-03 | 3/3 [x] (2026-04-24) |
 
 **Total:** 6 phases | 22 requirements | All covered ✓
 
@@ -142,8 +142,16 @@ Plans:
 **Implementation Notes:**
 - Use pytest as test framework
 - Mock yfinance and degiro-connector for deterministic tests
-- Store tests in `app/test_*.py` or `tests/` directory
+- Store tests in `tests/` directory at project root (D-01)
 - CI should run tests before any phase commit
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Infrastructure: tests/ directory, conftest.py, run_tests.sh, .dockerignore
+- [ ] 06-02-PLAN.md — test_scoring.py: compute_momentum_score, compute_value_score, compute_scores
+- [ ] 06-03-PLAN.md — test_market_data.py: get_fx_rate, compute_rsi, enrich_position
+- [ ] 06-04-PLAN.md — test_degiro_client.py: _kv_list_to_dict, fetch_portfolio
 
 ---
 
@@ -174,4 +182,4 @@ Phase 1 (Security) ──┬──► Phase 2 (Performance)
 
 ---
 *Roadmap created: 2026-04-23*
-*Last updated: 2026-04-23 — added 04-04 gap closure plan*
+*Last updated: 2026-04-24 — added Phase 6 plans*

@@ -533,22 +533,13 @@ All claims in this research were verified against official sources or the existi
 |---|-------|---------|---------------|
 | A1 | z-index 800 for toast container is sufficient | Common Pitfalls | Toast may appear under enriching banner if banner z-index changes — risk: LOW, banner is fixed at 500 and toast at 800 is well-separated |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should stale badge auto-dismiss after a successful refresh?**
-   - What we know: D-05 says show stale indicator when API fails; no explicit behavior for clearing it
-   - What's unclear: Should it persist until next successful refresh, or auto-hide after a timeout?
-   - Recommendation: Auto-hide on successful `loadPortfolio()` call (implemented as `clearStaleIndicator()` above)
+1. **Should stale badge auto-dismiss after a successful refresh?** — RESOLVED: Auto-hide on successful `loadPortfolio()` call via `clearStaleIndicator()` (implemented in plan 05-02)
 
-2. **Should toasts be pausable on hover?**
-   - What we know: D-03 says non-blocking; no explicit hover behavior specified
-   - What's unclear: Common pattern is to pause auto-dismiss timer on hover
-   - Recommendation: Implement basic pause-on-hover — extends auto-dismiss timer while cursor is over toast
+2. **Should toasts be pausable on hover?** — RESOLVED: Not specified in D-03; skip for now, not in implementation scope
 
-3. **Mobile breakpoint exact boundary for 2-column summary cards**
-   - What we know: 768px+ should be 2-column; 420px should be 1-column
-   - What's unclear: What happens between 421px and 767px (single column is fine, but gap between 768px and ~480px?)
-   - Recommendation: At 768px the grid switches from 1fr to repeat(2, 1fr). Between 481px-767px it remains 1 column, which is acceptable for tablet in portrait mode.
+3. **Mobile breakpoint exact boundary for 2-column summary cards** — RESOLVED: 768px+ switches to `repeat(2, 1fr)`; 481px–767px remains single column (acceptable for tablet portrait)
 
 ## Environment Availability
 
