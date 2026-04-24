@@ -91,6 +91,45 @@ def load_snapshots() -> list[dict]:
     return sorted(snapshots, key=lambda s: s["date"])
 
 
+def load_latest_snapshot() -> Optional[dict]:
+    """Load the most recent snapshot from SNAPSHOT_DIR.
+
+    Returns:
+        Snapshot dict with keys: date, total_value_eur, benchmark_value,
+        benchmark_return_pct, portfolio_data. portfolio_data is None
+        for old-format snapshots (backward compatible).
+
+    Returns None if SNAPSHOT_DIR is empty or does not exist.
+    """
+    snapshot_dir = Path(SNAPSHOT_DIR)
+    if not snapshot_dir.exists():
+        return None
+
+    snapshots = []
+    for file_path in snapshot_dir.glob("*.json"):
+        try:
+            date_str = file_path.stem
+            datetime.strptime(date_str, "%Y-%m-%d")
+            snapshots.append(file_path)
+        except ValueError:
+            logger.warning("Skipping invalid snapshot filename: %s", file_path.name)
+            continue
+
+    if not snapshots:
+        return None
+
+    latest_path = sorted(snapshots, key=lambda p: p.name)[-1]
+    with open(latest_path, "r") as f:
+        data = json.load(f)
+
+    # Backward compatibility: old snapshots lack portfolio_data
+    if "portfolio_data" not in data:
+        data["portfolio_data"] = None
+
+    logger.info("Loaded latest snapshot: %s", latest_path.name)
+    return data
+
+
 def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
     """Fetch benchmark price series from yfinance, indexed to 100 at start_date.
 
