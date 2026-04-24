@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Restore portfolio from latest snapshot on app startup so dashboard renders immediately without requiring a DeGiro session. After serving restored data, trigger background refresh if session is available. Delivers REST-01, REST-02, REST-03.
+Restore portfolio from latest snapshot on app startup so dashboard renders immediately without requiring a DeGiro session. No automatic refresh is ever triggered by the app — the user manually triggers portfolio fetch via API call. Delivers REST-01, REST-02, REST-03.
 
 </domain>
 
@@ -15,32 +15,33 @@ Restore portfolio from latest snapshot on app startup so dashboard renders immed
 
 ### Startup Restoration (REST-01, REST-02)
 
-- **D-01:** Hybrid restore strategy — serve snapshot immediately on startup, then background refresh in background if DeGiro session is valid
-- **D-02:** Skipped TTL check for restored portfolio — treated as fresh data (no 5-min auto-refresh trigger on startup-restore)
-- **D-03:** Background refresh triggers only if `_is_session_valid()` returns true after restore
-- **D-04:** If no snapshot exists on first startup, app continues normally — existing login page handles no-session state (no fail-fast)
+- **D-01:** On app startup, `load_latest_snapshot()` is called and portfolio is restored into `_session["portfolio"]`
+- **D-02:** Dashboard serves last-known portfolio immediately after restart (no DeGiro session required)
 
-### Portfolio TTL Behavior (REST-03)
+### No Auto-Fetch Model
 
-- **D-05:** Restored portfolio bypasses `_is_portfolio_fresh()` TTL check — served on `/api/portfolio` without triggering 401
-- **D-06:** TTL only applies to portfolio fetched via live DeGiro session, not to restored-from-snapshot portfolio
-- **D-07:** On `get_portfolio()` call: if session valid → background refresh; if session invalid but snapshot exists → serve snapshot; if neither → 401
+- **D-03:** NO automatic portfolio refresh is triggered after startup restore — there is no persistent DeGiro session
+- **D-04:** DeGiro session is always user-triggered: user calls refresh API → app connects to DeGiro → fetches portfolio → disconnects
+- **D-05:** After startup restore, the app serves the snapshot portfolio only. No background task, no session check, no auto-fetch
+- **D-06:** The snapshot contains the last known portfolio state from when the user last manually triggered a fetch
+
+### Session TTL Behavior (REST-03)
+
+- **D-07:** `_is_session_valid()` returns False in normal operation (trading_api is None — no persistent session exists)
+- **D-08:** Session TTL check does not block serving restored snapshot portfolio — served directly from `_session["portfolio"]`
+- **D-09:** On `get_portfolio()` call: if session valid (trading_api present) → fetch fresh; if session invalid but snapshot exists → serve snapshot; if neither → return 401
 
 ### Snapshot Loading
 
-- **D-08:** `load_latest_snapshot()` called in `@app.on_event("startup")` context manager (not `on_startup` event)
-- **D-09:** Portfolio restored into `_session["portfolio"]` before startup event completes
-- **D-10:** If snapshot's `portfolio_data` is None (old-format snapshot), treat as no snapshot (warn, continue, let login page handle)
-
-### Background Refresh
-
-- **D-11:** After startup restore, trigger `get_portfolio()` once in background if session valid — updates metrics via yfinance enrichment
-- **D-12:** Background refresh is non-blocking — startup completes regardless of refresh outcome
+- **D-10:** `load_latest_snapshot()` called in `@app.on_event("startup")` context manager (not `on_startup` event)
+- **D-11:** Portfolio restored into `_session["portfolio"]` before startup event completes
+- **D-12:** If snapshot's `portfolio_data` is None (old-format snapshot), treat as no snapshot (warn, continue, let login page handle)
+- **D-13:** If no snapshot exists on first startup, app continues normally — existing login page handles no-session state (no fail-fast)
 
 ### Session Expiry Behavior
 
-- **D-13:** When session expired but cached portfolio exists: serve cached portfolio (no 401) — REST-03
-- **D-14:** When session expired AND no cached portfolio: 401 with "Session expired" message
+- **D-14:** When session expired but cached portfolio exists: serve cached portfolio (no 401) — REST-03
+- **D-15:** When session expired AND no cached portfolio: 401 with "Session expired" message
 
 </decisions>
 
@@ -87,8 +88,9 @@ Restore portfolio from latest snapshot on app startup so dashboard renders immed
 <specifics>
 ## Specific Ideas
 
-- User wants background refresh after restore — hybrid approach, not pure snapshot-only serve
-- User noted existing login page handles no-snapshot scenario — no need for additional empty-state UI for missing snapshot on first startup
+- No persistent DeGiro session — user triggers fetch manually each time
+- Snapshot contains last known portfolio state from user's last manual fetch
+- No auto-fetch after startup restore — user decides when to trigger a new fetch
 
 </specifics>
 
