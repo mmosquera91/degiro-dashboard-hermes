@@ -70,10 +70,8 @@ progress:
 ## Quick Tasks Completed
 
 - **yfinance symbol resolution (2026-04-24):** _resolve_yf_symbol had a dead suffixes_to_try list that was never used - just returned symbol unchanged. European stocks need exchange suffixes for yfinance. Now actively tries each suffix and returns first with valid market price. Commit: ae7e392
-- **portfolio enrichment error (2026-04-24):** Dashboard showed "Failed to fetch portfolio" after raw portfolio loaded — `compute_scores()` and `compute_health_alerts()` threw unhandled exceptions that propagated to the 500 error handler. Both are now wrapped in defensive try/except with warning-level logging.
+- **portfolio enrichment error (2026-04-24):** Dashboard showed "Failed to fetch portfolio" after raw portfolio loaded — `compute_scores()` and `compute_health_alerts()` threw unhandled exceptions that propagated to the 500 error handler. Both are now wrapped in defensive try/except with warning-level logging. Commit: 28012c9. PR: [#1](https://github.com/mmosquera91/degiro-dashboard-hermes/pull/1).
 
 ---
 
-*Last updated: 2026-04-24 — v1.1 milestone started, Phase 7 next*
-
-**Planned Phase:** 8 (startup-portfolio-restoration) — 1 plans — 2026-04-24T11:09:19.442Z
+*Last updated: 2026-04-24 — quick task shipped, PR #1 open*
