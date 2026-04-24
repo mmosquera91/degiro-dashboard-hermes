@@ -12,96 +12,78 @@ Reliable portfolio health visibility — seeing risk and performance signals at 
 
 ### Validated
 
-<!-- Shipped and confirmed valuable. Inferred from existing codebase. -->
+<!-- Confirmed valuable — shipped in v1.0. -->
 
-- ✓ DeGiro authentication via intAccount + JSESSIONID — existing
-- ✓ Raw portfolio fetch from DeGiro API — existing
-- ✓ Market data enrichment via yfinance (prices, 52w range, RSI) — existing
-- ✓ Scoring engine (momentum, value, buy priority) — existing
-- ✓ Portfolio summary with sector breakdown, top winners/losers — existing
-- ✓ Hermes context builder (JSON + plaintext export) — existing
-- ✓ Hermes context API endpoint (`/api/hermes-context`) — existing
-- ✓ Dashboard with Chart.js visualizations (allocation, performance) — existing
-- ✓ Docker deployment with healthcheck — existing
-- ✓ FX rate conversion for multi-currency positions — existing
-- ✓ SEC-01: Debug endpoint removed (`/api/debug-login`)
-- ✓ SEC-02: Debug scripts excluded from Docker image (`scripts/`, `app/debug_*.py`, `app/test_*.py`)
-- ✓ SEC-03: API authentication on all `/api/*` routes via `BROKR_AUTH_TOKEN` bearer token with hmac.compare_digest
-- ✓ SEC-04: FastAPI binds to `127.0.0.1` by default (network exposure prevented)
-- ✓ SEC-05: Debug scripts excluded from Docker build context
-- ✓ SEC-06: Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, CSP) + CORS middleware on all responses
+- ✓ DeGiro authentication via intAccount + JSESSIONID — v1.0
+- ✓ Raw portfolio fetch from DeGiro API — v1.0
+- ✓ Market data enrichment via yfinance (prices, 52w range, RSI) — v1.0
+- ✓ Scoring engine (momentum, value, buy priority) — v1.0
+- ✓ Portfolio summary with sector breakdown, top winners/losers — v1.0
+- ✓ Hermes context builder (JSON + plaintext export) — v1.0
+- ✓ Hermes context API endpoint (`/api/hermes-context`) — v1.0
+- ✓ Dashboard with Chart.js visualizations (allocation, performance) — v1.0
+- ✓ Docker deployment with healthcheck — v1.0
+- ✓ FX rate conversion for multi-currency positions — v1.0
+- ✓ API authentication on all `/api/*` routes via `BROKR_AUTH_TOKEN` — v1.0
+- ✓ FastAPI binds to `127.0.0.1` by default — v1.0
+- ✓ Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, CSP) + CORS — v1.0
+- ✓ Async yfinance enrichment (thread pool) — v1.0
+- ✓ Thread-safe session and FX cache — v1.0
+- ✓ Health alerts (concentration, sector, drawdown, rebalancing) — v1.0
+- ✓ Benchmark comparison (S&P 500) + historical performance chart — v1.0
+- ✓ Attribution analysis — v1.0
+- ✓ Toast notification system — v1.0
+- ✓ Error states with stale indicators — v1.0
+- ✓ Responsive mobile/tablet CSS — v1.0
+- ✓ Automated tests (scoring, market_data, degiro_client) — v1.0
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
+<!-- Current focus — not yet shipped. -->
 
-- [ ] Fix blocking I/O — run yfinance enrichment in thread pool so the event loop stays responsive
-- [ ] Health indicators — concentration risk, sector weightings, drawdown alerts, rebalancing signals
-- [ ] Performance tracking — benchmark comparison (e.g., S&P 500 / MSCI World), performance over time
-- [ ] Dashboard polish — toast notifications replacing alerts, better error states, responsive improvements
-- [ ] Fix thread safety issues in session and FX cache management
-- [ ] Add automated tests for scoring, market data, and portfolio parsing
+- [ ] DeGiro session auto-reauth (session expiry causes 500 errors)
+- [ ] Dynamic FX rate refresh (on-demand, not cached stale)
+- [ ] Historical portfolio snapshots (trend analysis)
+- [ ] Export performance history to CSV/JSON
 
 ### Out of Scope
 
-<!-- Explicit boundaries. Includes reasoning to prevent re-adding. -->
+<!-- Explicit boundaries. -->
 
-- Multi-user / multi-account support — single user for now, architecture can evolve later
-- Real-time price streaming — yfinance polling is sufficient; no WebSocket feed needed
-- Database / persistent storage — in-memory cache is fine for single-user dashboard use
-- Mobile app — web-only, responsive is enough
-- Hermes-side AI logic — Hermes handles all news and analysis independently; Brokr only provides portfolio data
-- Brokerage trading / order placement — read-only analytics, no execution capability
-- Additional broker integrations — DeGiro only for now
+| Feature | Reason |
+|---------|--------|
+| Multi-user / multi-account support | Single user for now |
+| Real-time price streaming | yfinance polling sufficient |
+| Database / persistent storage | In-memory cache acceptable for single-user |
+| Mobile app | Web-only, responsive sufficient |
+| Hermes-side AI logic | Brokr only provides portfolio data |
+| Brokerage trading | Read-only analytics |
+| Additional broker integrations | DeGiro only |
 
 ## Context
 
-**Existing codebase:** FastAPI monolith serving both API and static frontend. Python 3.11, vanilla JS frontend with Chart.js, Docker deployment. No database — all state in memory with TTL caches.
+**Tech Stack:** Python 3.11 + FastAPI backend, vanilla JS frontend (Chart.js), Docker deployment. No database — in-memory state with TTL caches.
 
-**DeGiro integration:** Working but fragile. Authentication requires user to manually extract intAccount and JSESSIONID from their browser. Previous attempts at username/password/TOTP login failed with degiro-connector 3.0.35.
+**DeGiro Integration:** Authentication requires manual extraction of intAccount + JSESSIONID from browser. Session expires ~30 min causing 500 errors on `/api/portfolio`.
 
-**Hermes integration:** A separate AI agent on the same Ubuntu host that fetches news and performs analysis. Brokr provides portfolio context via an HTTP API endpoint. Hermes calls Brokr, not the other way around.
+**Hermes Integration:** Separate AI agent on same Ubuntu host fetches news and performs analysis. Brokr provides portfolio context via HTTP API.
 
-**Known issues:** The concerns audit (`.planning/codebase/CONCERNS.md`) documents critical security vulnerabilities (credential exposure, no auth, plaintext HTTP), blocking I/O in the enrichment layer, and missing test coverage. These need addressing before the app can be safely shared.
-
-**Tech constraints:** No build step for frontend (vanilla JS, CDN dependencies). No database. Docker-first deployment.
-
-## Constraints
-
-- **Tech Stack**: Python 3.11 + FastAPI backend, vanilla JS frontend (no React/Vue/Svelte) — keep it simple, no framework migration
-- **Broker**: DeGiro only via degiro-connector 3.0.35 — no other broker SDKs
-- **Market Data**: yfinance only — no paid data providers
-- **Deployment**: Docker on Ubuntu — same host as Hermes
-- **No Database**: All state in memory — acceptable for single-user use case
+**v1.0 Shipped:** 3262 LOC Python, 89 commits, 17 plans across 6 phases.
 
 ## Key Decisions
 
-<!-- Decisions that constrain future work. Add throughout project lifecycle. -->
-
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| DeGiro auth via intAccount + JSESSIONID (not username/password) | degiro-connector login with credentials failed; session token approach works reliably | ✓ Good |
-| Vanilla JS frontend (no framework) | Single-page dashboard, no build step needed, keeps Docker image small | — Pending |
-| In-memory session cache (no database) | Single-user app, no persistence needed, simplifies deployment | — Pending |
-| Hermes integration via REST API | Hermes calls Brokr's endpoint; no push/webhook from Brokr | ✓ Good |
-| Fix security issues before adding features | Critical credential exposure and no auth make the app unsafe to share | — Pending |
+| DeGiro auth via intAccount + JSESSIONID | degiro-connector login with credentials failed; session token works | ✓ Good |
+| Vanilla JS frontend (no framework) | No build step needed, Docker image stays small | ✓ Good |
+| In-memory session cache (no database) | Single-user app, no persistence needed | ✓ Good |
+| Hermes integration via REST API | Hermes calls Brokr, not push | ✓ Good |
+| Fix security before features | Credential exposure and no auth unsafe to share | ✓ Good |
+| Async yfinance via thread pool | Event loop was blocking on network I/O | ✓ Good |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd-transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd-complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
-
 ---
-*Last updated: 2026-04-23 after phase 01 completion (security hardening)*
+*Last updated: 2026-04-24 after v1.0 milestone shipped*
