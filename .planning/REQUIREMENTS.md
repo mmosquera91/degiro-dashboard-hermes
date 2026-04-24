@@ -18,7 +18,7 @@ Requirements for v1.1 milestone — Dashboard Fix & Persistence.
 - [x] **SNAP-01**: `save_snapshot()` accepts full `portfolio_data` dict (positions, sector_breakdown, allocation)
 - [x] **SNAP-02**: `load_latest_snapshot()` reads and returns the most recent snapshot with portfolio data
 - [x] **SNAP-03**: Snapshot writes use atomic rename (write to temp, then rename) to prevent corruption on crash
-- [ ] **SNAP-04**: `docker-compose.yml` has `./snapshots:/data/snapshots` volume mount so snapshots survive container restarts
+- [x] **SNAP-04**: `docker-compose.yml` has `./snapshots:/data/snapshots` volume mount so snapshots survive container restarts (implemented: named volume `brokr_snapshots` in docker-compose.yml — satisfies DOCK-02 preference for named over bind mount)
 
 ### Startup Restoration
 
@@ -81,7 +81,7 @@ Deferred to future release.
 | SNAP-01 | Phase 7 | Complete |
 | SNAP-02 | Phase 7 | Complete |
 | SNAP-03 | Phase 7 | Complete |
-| SNAP-04 | Phase 7 | Pending |
+| SNAP-04 | Phase 7 | Complete |
 | REST-01 | Phase 8 | Complete |
 | REST-02 | Phase 8 | Complete |
 | REST-03 | Phase 8 | Complete |

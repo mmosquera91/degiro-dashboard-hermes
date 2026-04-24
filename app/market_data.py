@@ -16,9 +16,17 @@ logger = logging.getLogger(__name__)
 _fx_cache: dict[str, float] = {}
 _fx_lock = threading.RLock()
 
+# Cache for resolved yfinance symbols (symbol:isin -> resolved_yf_symbol)
+_symbol_cache: dict[str, str] = {}
+_symbol_cache_lock = threading.RLock()
+
 # Rate limiting: min seconds between yfinance requests
-_YF_DELAY = 0.25
+_YF_DELAY = 1.0
 _last_yf_request = 0.0
+
+# Global rate-limit flag: once 429 is hit, skip all suffix scanning for the session
+_yf_rate_limited: bool = False
+_yf_rate_limited_lock = threading.RLock()
 
 
 def _yf_throttle():
@@ -45,18 +53,18 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
 
     # Fetch outside lock (rate limiting happens inside yfinance calls)
     try:
-        # yfinance uses X suffix for currency pairs
+        # Yahoo Finance uses quote currency as base for =X pairs (EUR is base)
         ticker_map = {
-            "USDEUR": "USDEUR=X",
-            "GBPEUR": "GBPEUR=X",
-            "CHFEUR": "CHFEUR=X",
-            "JPYEUR": "JPYEUR=X",
-            "SEKEUR": "SEKEUR=X",
-            "DKKEUR": "DKKEUR=X",
-            "NOKEUR": "NOKEUR=X",
-            "HKDEUR": "HKDEUR=X",
-            "AUDEUR": "AUDEUR=X",
-            "CADEUR": "CADEUR=X",
+            "USDEUR": "EURUSD=X",   # fetch EURUSD, then invert
+            "GBPEUR": "EURGBP=X",   # fetch EURGBP, then invert
+            "CHFEUR": "EURCHF=X",
+            "JPYEUR": "EURJPY=X",
+            "SEKEUR": "EURSEK=X",
+            "DKKEUR": "EURDKK=X",
+            "NOKEUR": "EURNOK=X",
+            "HKDEUR": "EURHKD=X",
+            "AUDEUR": "EURAUD=X",
+            "CADEUR": "EURCAD=X",
         }
         yf_symbol = ticker_map.get(key, f"{key}=X")
         _yf_throttle()
@@ -68,12 +76,19 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
             logger.warning("yfinance history fetch failed for %s: %s", yf_symbol, e)
             hist = None
         if not hist.empty:
-            rate = float(hist["Close"].iloc[-1])
+            rate_raw = float(hist["Close"].iloc[-1])
+            # Keys where EUR is numerator (must invert the fetched rate)
+            inverted_pairs = {
+                "USDEUR", "GBPEUR", "CHFEUR", "JPYEUR",
+                "SEKEUR", "DKKEUR", "NOKEUR", "HKDEUR",
+                "AUDEUR", "CADEUR",
+            }
+            rate = (1.0 / rate_raw) if key in inverted_pairs else rate_raw
             with _fx_lock:
                 _fx_cache[key] = rate
             return rate
 
-        # Fallback: try inverse
+        # Fallback: try inverse pair
         inverse_key = f"{to_currency}{from_currency}"
         yf_inverse = f"{inverse_key}=X"
         _yf_throttle()
@@ -110,18 +125,41 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     if "." in symbol:
         return symbol
 
+    # Check symbol resolution cache first
+    cache_key = f"{symbol}:{isin}"
+    with _symbol_cache_lock:
+        if cache_key in _symbol_cache:
+            return _symbol_cache[cache_key]
+
     # Common European exchanges — try suffixes in order
     suffixes_to_try = ["", ".AS", ".PA", ".DE", ".MI", ".MC", ".L", ".SW", ".TO", ".SI"]
     for suffix in suffixes_to_try:
+        with _yf_rate_limited_lock:
+            if _yf_rate_limited:
+                logger.warning(
+                    "Rate limited — skipping suffix scan for %s", symbol
+                )
+                return symbol
         candidate = symbol + suffix
         try:
             ticker = yf.Ticker(candidate)
             _yf_throttle()
             info = ticker.info
             if info and info.get("regularMarketPrice"):
+                with _symbol_cache_lock:
+                    _symbol_cache[cache_key] = candidate
                 return candidate
-        except Exception:
-            pass
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str:
+                with _yf_rate_limited_lock:
+                    _yf_rate_limited = True
+                logger.warning(
+                    "Rate limit detected resolving %s — aborting all "
+                    "further symbol resolution this session", symbol
+                )
+                return symbol
+            # other exceptions: continue to next suffix
 
     # Return base symbol as last resort; yfinance will try to resolve it
     return symbol
@@ -305,24 +343,62 @@ def enrich_position(position: dict) -> dict:
             )
 
     except Exception as e:
-        logger.warning("yfinance enrichment failed for %s (%s): %s", symbol, yf_symbol, str(e))
+        err_str = str(e)
+        if "429" in err_str or "Too Many Requests" in err_str or "Expecting value: line 1 column 1" in err_str:
+            position["_enrichment_error"] = "rate_limited"
+            logger.warning(
+                "Rate limited enriching %s — position marked as rate_limited",
+                symbol
+            )
+        else:
+            position["_enrichment_error"] = "yfinance_error"
+            logger.warning(
+                "yfinance enrichment failed for %s (%s): %s",
+                symbol, yf_symbol, str(e)
+            )
+        return position
 
     return position
 
 
-async def enrich_positions(raw_portfolio: dict) -> list[dict]:
+def enrich_positions(raw_portfolio: dict) -> list[dict]:
     """Enrich all positions with yfinance market data.
 
     Converts values to EUR using FX rates.
     Returns list of enriched position dicts.
     """
+    global _yf_rate_limited
+    with _yf_rate_limited_lock:
+        _yf_rate_limited = False
+
     positions = raw_portfolio.get("positions", [])
     base_currency = raw_portfolio.get("currency", "EUR")
 
+    # Prefetch FX rates for all unique non-base currencies before the loop
+    unique_currencies = {
+        pos.get("currency", base_currency)
+        for pos in positions
+        if pos.get("currency", base_currency) != base_currency
+    }
+    for currency in unique_currencies:
+        get_fx_rate(currency, base_currency)
+
     enriched = []
+    _session_rate_limited = False
     for pos in positions:
+        if _session_rate_limited:
+            enriched_pos = pos.copy()
+            enriched_pos["_enrichment_error"] = "rate_limited_session"
+            enriched_pos["current_value_eur"] = pos.get("current_value", 0)
+            enriched_pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
+            enriched_pos["fx_rate"] = 1.0
+            enriched.append(enriched_pos)
+            continue
+
         try:
             enriched_pos = enrich_position(pos.copy())
+            if enriched_pos.get("_enrichment_error") == "rate_limited":
+                _session_rate_limited = True
 
             # FX conversion to EUR
             pos_currency = enriched_pos.get("currency", "EUR")
@@ -340,7 +416,6 @@ async def enrich_positions(raw_portfolio: dict) -> list[dict]:
 
         except Exception as e:
             logger.warning("Failed to enrich position %s: %s", pos.get("name"), str(e))
-            # Still add the position with null yfinance fields
             pos["current_value_eur"] = pos["current_value"]
             pos["unrealized_pl_eur"] = pos["unrealized_pl"]
             pos["fx_rate"] = 1.0
