@@ -13,7 +13,23 @@ from .market_data import _yf_throttle
 
 logger = logging.getLogger(__name__)
 
-SNAPSHOT_DIR = os.getenv("SNAPSHOT_DIR", "/data/snapshots")
+def _resolve_snapshot_dir() -> str:
+    """Resolve SNAPSHOT_DIR with fallback to workspace-relative path.
+
+    Priority:
+    1. SNAPSHOT_DIR env var if set and path exists
+    2. /data/snapshots if it exists (Docker volume mount)
+    3. ./snapshots relative to working directory (workspace fallback)
+    """
+    env_val = os.getenv("SNAPSHOT_DIR")
+    if env_val:
+        return env_val
+    if Path("/data/snapshots").exists():
+        return "/data/snapshots"
+    return "./snapshots"
+
+
+SNAPSHOT_DIR = _resolve_snapshot_dir()
 BENCHMARK_TICKER = os.getenv("BENCHMARK_TICKER", "^GSPC")
 
 
@@ -25,6 +41,9 @@ def save_snapshot(
     portfolio_data: Optional[dict] = None,
 ) -> None:
     """Save a portfolio snapshot to {SNAPSHOT_DIR}/{date_str}.json.
+
+    SNAPSHOT_DIR is resolved dynamically: SNAPSHOT_DIR env var if set,
+    then /data/snapshots if it exists, else ./snapshots (workspace-relative).
 
     Args:
         date_str: Date string in YYYY-MM-DD format.
