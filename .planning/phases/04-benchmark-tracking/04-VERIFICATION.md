@@ -7,13 +7,9 @@ overrides_applied: 1
 note_overrides: "CR-01 was verified as already-fixed during re-run (04-24)"
 gaps:
   - truth: "Attribution correctly shows positions that lost value as negative relative contribution"
-    status: failed
-    reason: "compute_attribution() has sign inversion in relative_contribution formula (CR-01 in 04-REVIEW.md). When a position loses value (negative return), direction=-1 causes the double negation in (position_return - benchmark_return) * direction to flip negative values positive, misrepresenting losing positions as outperformance."
-    artifacts:
-      - path: "app/snapshots.py"
-        issue: "Lines 151-156: relative_contribution = round((position_return - benchmark_return) * weight * direction, 4) — direction=-1 inverts negative returns, showing -10% loss as +1.0% relative contribution"
-    missing:
-      - "Remove direction multiplier from relative_contribution formula: relative_contribution = (position_return - benchmark_return) * weight"
+    status: resolved
+    resolution: "CR-01 fix verified in commit d707dbe (2026-04-23 22:05) — direction multiplier removed, formula is now (position_return - benchmark_return) * weight"
+    verified: "2026-04-24"
 deferred: []
 ---
 
