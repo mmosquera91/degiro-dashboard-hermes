@@ -67,6 +67,10 @@ progress:
 - Historical portfolio snapshots (trend analysis)
 - Performance history export
 
+## Quick Tasks Completed
+
+- **yfinance symbol resolution (2026-04-24):** _resolve_yf_symbol had a dead suffixes_to_try list that was never used - just returned symbol unchanged. European stocks need exchange suffixes for yfinance. Now actively tries each suffix and returns first with valid market price. Commit: ae7e392
+
 ---
 
 *Last updated: 2026-04-24 — v1.1 milestone started, Phase 7 next*
