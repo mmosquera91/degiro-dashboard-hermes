@@ -222,7 +222,7 @@ def _restore_portfolio_from_snapshot():
     """
     snapshot = load_latest_snapshot()
     if snapshot is None:
-        logger.info("No snapshot found on startup — starting fresh")
+        logger.warning("No snapshot found on startup — portfolio not restored; dashboard will show empty state")
         return
 
     portfolio_data = snapshot.get("portfolio_data")
