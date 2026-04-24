@@ -121,8 +121,8 @@ def load_latest_snapshot() -> Optional[dict]:
     Returns None if SNAPSHOT_DIR is empty or does not exist.
     """
     snapshot_dir = Path(SNAPSHOT_DIR)
-    if not snapshot_dir.exists():
-        return None
+    # Ensure directory exists on first startup (gap: ./snapshots not created automatically)
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     snapshots = []
     for file_path in snapshot_dir.glob("*.json"):
