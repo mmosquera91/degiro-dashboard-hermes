@@ -19,7 +19,7 @@ from .market_data import enrich_positions, get_fx_rate
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
-from .snapshots import save_snapshot, load_snapshots, fetch_benchmark_series, compute_attribution
+from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -423,6 +423,7 @@ async def get_portfolio():
                 portfolio["total_value"],
                 benchmark_value,
                 benchmark_return_pct,
+                portfolio,
             )
         except Exception as e:
             logger.warning("Snapshot save failed (non-blocking): %s", str(e))
