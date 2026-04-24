@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Dashboard & Persistence Fix
 status: ready_to_plan
-last_updated: "2026-04-24T10:32:39.361Z"
+last_updated: "2026-04-24T13:03:18.764Z"
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 0
-  percent: 25
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 7
+  percent: 50
 ---
 
 # State
@@ -20,7 +20,7 @@ progress:
 
 **Core Value:** Reliable portfolio health visibility — seeing risk and performance signals at a glance.
 
-**Current Focus:** Phase --phase — 7
+**Current Focus:** Phase --phase — 08
 
 ## Milestone v1.1 Goals
 
@@ -67,6 +67,11 @@ progress:
 - Historical portfolio snapshots (trend analysis)
 - Performance history export
 
+## Quick Tasks Completed
+
+- **yfinance symbol resolution (2026-04-24):** _resolve_yf_symbol had a dead suffixes_to_try list that was never used - just returned symbol unchanged. European stocks need exchange suffixes for yfinance. Now actively tries each suffix and returns first with valid market price. Commit: ae7e392
+- **portfolio enrichment error (2026-04-24):** Dashboard showed "Failed to fetch portfolio" after raw portfolio loaded — `compute_scores()` and `compute_health_alerts()` threw unhandled exceptions that propagated to the 500 error handler. Both are now wrapped in defensive try/except with warning-level logging. Commit: 28012c9. PR: [#1](https://github.com/mmosquera91/degiro-dashboard-hermes/pull/1).
+
 ---
 
-*Last updated: 2026-04-24 — v1.1 milestone started, Phase 7 next*
+*Last updated: 2026-04-24 — quick task shipped, PR #1 open*

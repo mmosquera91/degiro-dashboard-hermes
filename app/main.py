@@ -5,6 +5,7 @@ import hmac
 import logging
 import os
 import threading
+from pathlib import Path
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
@@ -19,7 +20,7 @@ from .market_data import enrich_positions, get_fx_rate
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
-from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution
+from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, SNAPSHOT_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -211,11 +212,46 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
     }
 
 
+def _restore_portfolio_from_snapshot():
+    """Restore portfolio from latest snapshot on startup (REST-01).
+
+    Loads the most recent snapshot and populates _session["portfolio"] and
+    _session["portfolio_time"]. Handles:
+    - Missing snapshot (D-13): logs info, returns silently
+    - Old-format snapshot with portfolio_data=None (D-12): logs warning, skips restore
+    - Valid snapshot: restores portfolio under _session_lock
+    """
+    snapshot = load_latest_snapshot()
+    if snapshot is None:
+        logger.error("No snapshot found on startup — portfolio NOT restored; dashboard will show empty state")
+        return
+
+    # Verify snapshot file still exists on disk (gap: restore succeeded but file gone)
+    latest_path = Path(SNAPSHOT_DIR) / f"{snapshot['date']}.json"
+    if not latest_path.exists():
+        logger.error("Snapshot file %s not found on disk — restore aborted", latest_path)
+        return
+
+    portfolio_data = snapshot.get("portfolio_data")
+    if portfolio_data is None:
+        # D-12: Old-format snapshot without portfolio_data — treat as no snapshot
+        logger.warning("Snapshot dated %s has no portfolio_data — skipping restore", snapshot["date"])
+        return
+
+    with _session_lock:
+        _session["portfolio"] = portfolio_data
+        _session["portfolio_time"] = datetime.now()
+
+    logger.info("Portfolio restored from snapshot dated %s", snapshot["date"])
+
+
 # Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Brokr starting up")
     try:
+        # REST-01: Restore portfolio from latest snapshot before accepting requests
+        _restore_portfolio_from_snapshot()
         yield
     except Exception as e:
         logger.error("Unhandled exception during request: %s", str(e))
@@ -232,7 +268,7 @@ async def on_startup():
     logger.info("Startup event fired")
     try:
         import socket
-        socket.gethostbyname("google.com")
+        await asyncio.to_thread(socket.gethostbyname, "google.com")
         logger.info("DNS resolution: OK")
     except Exception as e:
         logger.error("DNS resolution failed: %s", e)
@@ -251,6 +287,7 @@ async def on_startup():
         logger.info("degiro_client module: OK")
     except Exception as e:
         logger.error("degiro_client import failed: %s", e)
+    # Snapshot restore moved to lifespan.__aenter__() for FastAPI 0.100+ compatibility
 
 
 # ─── Security Headers Middleware (SEC-06, D-08) ───
@@ -364,10 +401,15 @@ async def get_portfolio():
             return portfolio
 
         # No cached portfolio — need active session to fetch
-        if not _is_session_valid():
+        if _session["trading_api"] is None:
             raise HTTPException(
                 status_code=401,
                 detail="Session expired or not authenticated. Please reconnect via the UI.",
+            )
+        if not _is_session_valid():
+            raise HTTPException(
+                status_code=401,
+                detail="Session expired. Please refresh your connection via the UI.",
             )
         trading_api = _session["trading_api"]
 
@@ -381,20 +423,27 @@ async def get_portfolio():
         # Compute portfolio weights
         positions = compute_portfolio_weights(positions)
 
-        # Compute scores
-        positions = compute_scores(positions)
+        # Compute scores (defensive — scoring can fail on edge cases)
+        try:
+            positions = compute_scores(positions)
+        except Exception as e:
+            logger.warning("Score computation failed: %s", str(e))
 
         # Build summary
         portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0))
 
-        # Compute health alerts from the portfolio summary data
-        health_alerts = compute_health_alerts({
-            "positions": portfolio["positions"],
-            "sector_breakdown": portfolio.get("sector_breakdown", {}),
-            "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
-            "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
-        })
-        portfolio["health_alerts"] = health_alerts
+        # Compute health alerts from the portfolio summary data (defensive)
+        try:
+            health_alerts = compute_health_alerts({
+                "positions": portfolio["positions"],
+                "sector_breakdown": portfolio.get("sector_breakdown", {}),
+                "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
+                "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
+            })
+            portfolio["health_alerts"] = health_alerts
+        except Exception as e:
+            logger.warning("Health alerts computation failed: %s", str(e))
+            portfolio["health_alerts"] = []
 
         # Save snapshot as side effect — benchmark indexed to 100 at portfolio start (D-04)
         try:

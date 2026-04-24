@@ -26,7 +26,7 @@
 ### v1.1 Dashboard & Persistence Fix (Phases 7-10)
 
 - [x] **Phase 7: Snapshot Format Extension** — Persist full portfolio data in snapshots with atomic writes (completed 2026-04-24)
-- [ ] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot
+- [x] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot (completed 2026-04-24; gap closure in progress)
 - [ ] **Phase 9: Data Enrichment & Scoring Fixes** — Fix silent yfinance failures and scoring None pollution
 - [ ] **Phase 10: Frontend Dashboard Verification** — Verify charts render with real data and handle missing data gracefully
 
@@ -58,7 +58,11 @@ Plans:
   2. Dashboard renders with last-known portfolio immediately after restart (no 401 error)
   3. When session is expired but cached portfolio exists, dashboard serves cached portfolio (no 401)
   4. Session TTL check does not block serving fresh cached portfolio
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [x] 08-01-PLAN.md — Startup portfolio restoration via on_startup event
+- [x] 08-02-PLAN.md — Workspace-relative snapshot dir + WARNING log
+- [x] 08-03-PLAN.md — Directory auto-creation + ERROR log + file existence check
 **UI hint**: no
 
 ### Phase 9: Data Enrichment & Scoring Fixes
@@ -90,11 +94,11 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 7. Snapshot Format Extension | 3/3 | Complete    | 2026-04-24 |
-| 8. Startup Portfolio Restoration | 0/N | Not started | - |
+| 8. Startup Portfolio Restoration | 2/3 | Gap closure | 2026-04-24 |
 | 9. Data Enrichment & Scoring Fixes | 0/N | Not started | - |
 | 10. Frontend Dashboard Verification | 0/N | Not started | - |
 
 ---
 
 *Roadmap created: 2026-04-23*
-*Last updated: 2026-04-24 — Phase 7 plans created*
+*Last updated: 2026-04-24 — Phase 8 gap closure plan 08-03 added

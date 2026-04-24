@@ -22,9 +22,9 @@ Requirements for v1.1 milestone — Dashboard Fix & Persistence.
 
 ### Startup Restoration
 
-- [ ] **REST-01**: `@app.on_event("startup")` calls `load_latest_snapshot()` and restores portfolio into `_session["portfolio"]`
-- [ ] **REST-02**: Dashboard serves last-known portfolio immediately after restart (no DeGiro session required)
-- [ ] **REST-03**: Session TTL check does not block serving fresh cached portfolio (401 only when both session expired AND no cached portfolio)
+- [x] **REST-01**: `@app.on_event("startup")` calls `load_latest_snapshot()` and restores portfolio into `_session["portfolio"]`
+- [x] **REST-02**: Dashboard serves last-known portfolio immediately after restart (no DeGiro session required)
+- [x] **REST-03**: Session TTL check does not block serving fresh cached portfolio (401 only when both session expired AND no cached portfolio)
 
 ### Dashboard Visualization
 
@@ -82,9 +82,9 @@ Deferred to future release.
 | SNAP-02 | Phase 7 | Complete |
 | SNAP-03 | Phase 7 | Complete |
 | SNAP-04 | Phase 7 | Pending |
-| REST-01 | Phase 8 | Pending |
-| REST-02 | Phase 8 | Pending |
-| REST-03 | Phase 8 | Pending |
+| REST-01 | Phase 8 | Complete |
+| REST-02 | Phase 8 | Complete |
+| REST-03 | Phase 8 | Complete |
 | DASH-01 | Phase 10 | Pending |
 | DASH-02 | Phase 10 | Pending |
 | DASH-03 | Phase 10 | Pending |
