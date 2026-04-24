@@ -69,8 +69,12 @@ progress:
 
 ## Quick Tasks Completed
 
+- **fix 429 abort in _resolve_yf_symbol (2026-04-24):** Module-level `_yf_rate_limited` flag replaces broken string-based 429 detection. Loop was continuing suffixes because yfinance internally catches/re-raises 429 so str(e) doesn't contain "429". Flag is checked before each suffix and set on 429 detection. enrich_positions resets flag at start of each call. Commit: 98fa798
 - **yfinance symbol resolution (2026-04-24):** _resolve_yf_symbol had a dead suffixes_to_try list that was never used - just returned symbol unchanged. European stocks need exchange suffixes for yfinance. Now actively tries each suffix and returns first with valid market price. Commit: ae7e392
 - **portfolio enrichment error (2026-04-24):** Dashboard showed "Failed to fetch portfolio" after raw portfolio loaded — `compute_scores()` and `compute_health_alerts()` threw unhandled exceptions that propagated to the 500 error handler. Both are now wrapped in defensive try/except with warning-level logging. Commit: 28012c9. PR: [#1](https://github.com/mmosquera91/degiro-dashboard-hermes/pull/1).
+- **enrich_positions async def fix (2026-04-24):** enrich_positions was declared `async def` but contained zero await expressions — asyncio.to_thread() received a coroutine object instead of a callable. Changed to `def` in app/market_data.py line 313. Commit: 0c43209.
+- **yfinance rate limit back-off (2026-04-24):** Increase _YF_DELAY from 0.25s to 1.0s to avoid 429s on portfolios >5 positions. Detect 429/Too Many Requests in enrich_position and mark as rate_limited. Track _session_rate_limited in enrich_positions loop and short-circuit remaining positions. Commit: f2fef6a.
+- **FX rate prefetch before enrichment loop (2026-04-24):** Pre-warm FX cache for all unique non-base currencies before the position enrichment loop begins. Eliminates interleaved yfinance FX HTTP requests during the loop. Commit: b7e9227.
 
 ---
 
