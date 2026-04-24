@@ -351,6 +351,15 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     positions = raw_portfolio.get("positions", [])
     base_currency = raw_portfolio.get("currency", "EUR")
 
+    # Prefetch FX rates for all unique non-base currencies before the loop
+    unique_currencies = {
+        pos.get("currency", base_currency)
+        for pos in positions
+        if pos.get("currency", base_currency) != base_currency
+    }
+    for currency in unique_currencies:
+        get_fx_rate(currency, base_currency)
+
     enriched = []
     _session_rate_limited = False
     for pos in positions:
