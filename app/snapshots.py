@@ -22,6 +22,7 @@ def save_snapshot(
     total_value_eur: float,
     benchmark_value: float,
     benchmark_return_pct: float,
+    portfolio_data: Optional[dict] = None,
 ) -> None:
     """Save a portfolio snapshot to {SNAPSHOT_DIR}/{date_str}.json.
 
@@ -30,6 +31,7 @@ def save_snapshot(
         total_value_eur: Total portfolio value in EUR.
         benchmark_value: Indexed benchmark value (100 at portfolio start).
         benchmark_return_pct: Benchmark return percentage since portfolio start.
+        portfolio_data: Optional full portfolio data dict for restoration.
     """
     # Validate date format before constructing file path (T-04-01)
     try:
@@ -46,13 +48,17 @@ def save_snapshot(
         "total_value_eur": round(total_value_eur, 2),
         "benchmark_value": round(benchmark_value, 4),
         "benchmark_return_pct": round(benchmark_return_pct, 4),
+        "portfolio_data": portfolio_data,
     }
 
     file_path = Path(SNAPSHOT_DIR) / f"{date_str}.json"
-    with open(file_path, "w") as f:
+    tmp_path = file_path.with_suffix(".json.tmp")
+    with open(tmp_path, "w") as f:
         json.dump(snapshot, f, indent=2)
-
-    logger.info("Snapshot saved: %s", file_path)
+        f.flush()
+        os.fsync(f.fileno())
+    os.rename(tmp_path, file_path)
+    logger.info("Snapshot saved (atomic): %s", file_path)
 
 
 def load_snapshots() -> list[dict]:
