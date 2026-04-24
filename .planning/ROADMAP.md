@@ -26,7 +26,7 @@
 ### v1.1 Dashboard & Persistence Fix (Phases 7-10)
 
 - [x] **Phase 7: Snapshot Format Extension** — Persist full portfolio data in snapshots with atomic writes (completed 2026-04-24)
-- [ ] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot
+- [x] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot (completed 2026-04-24)
 - [ ] **Phase 9: Data Enrichment & Scoring Fixes** — Fix silent yfinance failures and scoring None pollution
 - [ ] **Phase 10: Frontend Dashboard Verification** — Verify charts render with real data and handle missing data gracefully
 
@@ -90,7 +90,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 7. Snapshot Format Extension | 3/3 | Complete    | 2026-04-24 |
-| 8. Startup Portfolio Restoration | 0/N | Not started | - |
+| 8. Startup Portfolio Restoration | 1/1 | Complete    | 2026-04-24 |
 | 9. Data Enrichment & Scoring Fixes | 0/N | Not started | - |
 | 10. Frontend Dashboard Verification | 0/N | Not started | - |
 

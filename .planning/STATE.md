@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Dashboard & Persistence Fix
 status: ready_to_plan
-last_updated: "2026-04-24T10:32:39.361Z"
+last_updated: "2026-04-24T11:09:42.553Z"
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 0
-  percent: 25
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 3
+  percent: 50
 ---
 
 # State
@@ -20,7 +20,7 @@ progress:
 
 **Core Value:** Reliable portfolio health visibility — seeing risk and performance signals at a glance.
 
-**Current Focus:** Phase --phase — 7
+**Current Focus:** Phase --phase — 8
 
 ## Milestone v1.1 Goals
 
@@ -70,3 +70,5 @@ progress:
 ---
 
 *Last updated: 2026-04-24 — v1.1 milestone started, Phase 7 next*
+
+**Planned Phase:** 8 (startup-portfolio-restoration) — 1 plans — 2026-04-24T11:09:19.442Z
