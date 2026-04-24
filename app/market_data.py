@@ -110,11 +110,21 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     if "." in symbol:
         return symbol
 
-    # Common European exchanges — try Euronext Amsterdam first, then others
-    # US stocks usually work without suffix
+    # Common European exchanges — try suffixes in order
     suffixes_to_try = ["", ".AS", ".PA", ".DE", ".MI", ".MC", ".L", ".SW", ".TO", ".SI"]
+    for suffix in suffixes_to_try:
+        candidate = symbol + suffix
+        try:
+            ticker = yf.Ticker(candidate)
+            _yf_throttle()
+            info = ticker.info
+            if info and info.get("regularMarketPrice"):
+                return candidate
+        except Exception:
+            pass
 
-    return symbol  # Return base symbol; yfinance usually resolves US tickers
+    # Return base symbol as last resort; yfinance will try to resolve it
+    return symbol
 
 
 def compute_rsi(hist_close: pd.Series, period: int = 14) -> Optional[float]:
