@@ -19,7 +19,7 @@ from .market_data import enrich_positions, get_fx_rate
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
-from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution
+from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, SNAPSHOT_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -222,7 +222,13 @@ def _restore_portfolio_from_snapshot():
     """
     snapshot = load_latest_snapshot()
     if snapshot is None:
-        logger.warning("No snapshot found on startup — portfolio not restored; dashboard will show empty state")
+        logger.error("No snapshot found on startup — portfolio NOT restored; dashboard will show empty state")
+        return
+
+    # Verify snapshot file still exists on disk (gap: restore succeeded but file gone)
+    latest_path = Path(SNAPSHOT_DIR) / f"{snapshot['date']}.json"
+    if not latest_path.exists():
+        logger.error("Snapshot file %s not found on disk — restore aborted", latest_path)
         return
 
     portfolio_data = snapshot.get("portfolio_data")
