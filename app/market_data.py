@@ -16,8 +16,12 @@ logger = logging.getLogger(__name__)
 _fx_cache: dict[str, float] = {}
 _fx_lock = threading.RLock()
 
+# Cache for resolved yfinance symbols (symbol:isin -> resolved_yf_symbol)
+_symbol_cache: dict[str, str] = {}
+_symbol_cache_lock = threading.RLock()
+
 # Rate limiting: min seconds between yfinance requests
-_YF_DELAY = 0.25
+_YF_DELAY = 1.0
 _last_yf_request = 0.0
 
 
@@ -110,6 +114,12 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     if "." in symbol:
         return symbol
 
+    # Check symbol resolution cache first
+    cache_key = f"{symbol}:{isin}"
+    with _symbol_cache_lock:
+        if cache_key in _symbol_cache:
+            return _symbol_cache[cache_key]
+
     # Common European exchanges — try suffixes in order
     suffixes_to_try = ["", ".AS", ".PA", ".DE", ".MI", ".MC", ".L", ".SW", ".TO", ".SI"]
     for suffix in suffixes_to_try:
@@ -119,9 +129,18 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
             _yf_throttle()
             info = ticker.info
             if info and info.get("regularMarketPrice"):
+                with _symbol_cache_lock:
+                    _symbol_cache[cache_key] = candidate
                 return candidate
-        except Exception:
-            pass
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str:
+                logger.warning(
+                    "Rate limited resolving %s — aborting suffix scan, "
+                    "will retry next portfolio fetch", symbol
+                )
+                break
+            # other exceptions: continue to next suffix
 
     # Return base symbol as last resort; yfinance will try to resolve it
     return symbol
@@ -305,7 +324,20 @@ def enrich_position(position: dict) -> dict:
             )
 
     except Exception as e:
-        logger.warning("yfinance enrichment failed for %s (%s): %s", symbol, yf_symbol, str(e))
+        err_str = str(e)
+        if "429" in err_str or "Too Many Requests" in err_str or "Expecting value: line 1 column 1" in err_str:
+            position["_enrichment_error"] = "rate_limited"
+            logger.warning(
+                "Rate limited enriching %s — position marked as rate_limited",
+                symbol
+            )
+        else:
+            position["_enrichment_error"] = "yfinance_error"
+            logger.warning(
+                "yfinance enrichment failed for %s (%s): %s",
+                symbol, yf_symbol, str(e)
+            )
+        return position
 
     return position
 
@@ -320,9 +352,21 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     base_currency = raw_portfolio.get("currency", "EUR")
 
     enriched = []
+    _session_rate_limited = False
     for pos in positions:
+        if _session_rate_limited:
+            enriched_pos = pos.copy()
+            enriched_pos["_enrichment_error"] = "rate_limited_session"
+            enriched_pos["current_value_eur"] = pos.get("current_value", 0)
+            enriched_pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
+            enriched_pos["fx_rate"] = 1.0
+            enriched.append(enriched_pos)
+            continue
+
         try:
             enriched_pos = enrich_position(pos.copy())
+            if enriched_pos.get("_enrichment_error") == "rate_limited":
+                _session_rate_limited = True
 
             # FX conversion to EUR
             pos_currency = enriched_pos.get("currency", "EUR")
@@ -340,7 +384,6 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
 
         except Exception as e:
             logger.warning("Failed to enrich position %s: %s", pos.get("name"), str(e))
-            # Still add the position with null yfinance fields
             pos["current_value_eur"] = pos["current_value"]
             pos["unrealized_pl_eur"] = pos["unrealized_pl"]
             pos["fx_rate"] = 1.0
