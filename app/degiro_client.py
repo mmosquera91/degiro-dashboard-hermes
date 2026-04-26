@@ -485,6 +485,27 @@ def _infer_currency_from_isin(isin: str) -> str:
         "CH": "CHF",
     }.get(prefix, "")
 
+    # Well-known US tickers that commonly appear in European DeGiro portfolios.
+    # This list is a catch-all for when product info is unavailable.
+    # Pattern: bare uppercase alpha symbols that trade on US exchanges only.
+    _KNOWN_USD_SYMBOLS = {
+        "UNH", "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META",
+        "TSLA", "BRK-B", "JPM", "V", "MA", "JNJ", "WMT", "PG", "HD",
+        "CVX", "XOM", "LLY", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR",
+        "COST", "AVGO", "ORCL", "ACN", "TXN", "NEE", "RTX", "HON", "UPS",
+        "CAT", "GS", "MS", "BAC", "WFC", "C", "BLK", "SCHW", "AXP",
+        "QUBT", "RGTI", "LWLG", "ONDS", "POET", "CRGO",
+    }
+
+    @staticmethod
+    def _infer_currency_from_symbol(symbol: str) -> str:
+        """Infer trading currency from well-known US stock symbols.
+        Returns 'USD' if recognised, '' otherwise.
+        """
+        if not symbol:
+            return ""
+        return "USD" if symbol.upper() in DeGiroClient._KNOWN_USD_SYMBOLS else ""
+
 
 class DeGiroClient:
     """Handles DeGiro authentication and portfolio data retrieval."""
@@ -718,12 +739,14 @@ class DeGiroClient:
                     "name": prod.get("name", f"Product {pid}"),
                     "isin": prod.get("isin", ""),
                     "symbol": prod.get("symbol", ""),
+                    pos_isin = prod.get("isin", "")
                     "currency": (
                         prod.get("currency")
                         or prod.get("tradingCurrency")
                         or pos.get("currency")
                         or pos.get("currencyCode")
-                        or _infer_currency_from_isin(prod.get("isin", ""))
+                        or _infer_currency_from_isin(pos_isin)
+                        or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
                         or "EUR"
                     ),
                     "asset_type": asset_type,

@@ -85,6 +85,8 @@ progress:
 
 - **ISIN-first resolution for ETF/ETP symbols (2026-04-26):** Added `_resolve_by_isin()` using `yfinance.Search(isin)` with EUR/USD/GBP exchange preference. `_resolve_yf_symbol()` now tries ISIN resolution before the suffix scan, fixing instruments like QDVD, QDV5, O9T whose DeGiro symbol doesn't match their Yahoo ticker. Commit: baaa420
 
+- **currency-infer-from-symbol (2026-04-26):** Added `_infer_currency_from_symbol()` as final fallback in `fetch_portfolio()` currency chain. Uses `_KNOWN_USD_SYMBOLS` set (50 well-known US tickers) to return "USD" when product info is unavailable. Unblocks UNH, NVDA, and other US symbols from enrichment when `products_map` misses them. `app/degiro_client.py` lines 491-507, 749.
+
 ---
 
 *Last updated: 2026-04-26 — quick task shipped*
