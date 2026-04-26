@@ -532,14 +532,47 @@ def enrich_position(position: dict) -> dict:
         wk52_high = info.get("fiftyTwoWeekHigh", None)
         wk52_low = info.get("fiftyTwoWeekLow", None)
 
-        # Determine yfinance ticker currency before fetching history
+        # Determine trading currency from the resolved Yahoo ticker's exchange
+        # suffix — this is more reliable than fast_info.currency for ETFs, which
+        # reports the index denomination (USD for S&P 500 ETFs), not the listing
+        # currency (EUR on AMS/GER for UCITS ETFs).
         yf_currency = ""
-        try:
-            yf_currency = (ticker.fast_info.currency or "").upper().strip()
-        except Exception:
-            pass
+        _price_currency_safe = True  # default: trust price if we can't determine
+
+        _EUR_EXCHANGE_SUFFIXES = {".AS", ".PA", ".DE", ".F", ".MI", ".MC",
+                                   ".HE", ".SW", ".EAM", ".EPA", ".ETR"}
+        _GBP_EXCHANGE_SUFFIXES = {".L"}
+        _USD_EXCHANGE_SUFFIXES = {"", ".SI"}
+        _CAD_EXCHANGE_SUFFIXES = {".TO"}
+
+        # Extract suffix from resolved symbol (e.g. "SXRU.AS" → ".AS", "QUBT" → "")
+        if "." in yf_symbol:
+            resolved_suffix = "." + yf_symbol.rsplit(".", 1)[-1]
+        else:
+            resolved_suffix = ""
+
+        if resolved_suffix in _EUR_EXCHANGE_SUFFIXES:
+            yf_currency = "EUR"
+        elif resolved_suffix in _GBP_EXCHANGE_SUFFIXES:
+            yf_currency = "GBP"
+        elif resolved_suffix in _USD_EXCHANGE_SUFFIXES and resolved_suffix == "":
+            # Bare ticker — fall back to fast_info.currency for confirmation
+            try:
+                yf_currency = (ticker.fast_info.currency or "").upper().strip()
+            except Exception:
+                yf_currency = ""
+
         pos_currency = position.get("currency", "EUR").upper().strip()
-        _price_currency_safe = (not yf_currency) or (yf_currency == pos_currency)
+        if yf_currency:
+            _price_currency_safe = (yf_currency == pos_currency)
+        # else: yf_currency unknown → keep _price_currency_safe = True (trust price)
+
+        if not _price_currency_safe:
+            logger.warning(
+                "Currency mismatch for %s: exchange=%s (%s), position=%s"
+                " — keeping DeGiro price",
+                symbol, resolved_suffix or "bare", yf_currency, pos_currency,
+            )
 
         # Get historical data for RSI and performance
         _yf_throttle()
