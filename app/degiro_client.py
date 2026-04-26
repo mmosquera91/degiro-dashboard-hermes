@@ -463,6 +463,29 @@ def _kv_list_to_dict(kv_list):
     }
 
 
+def _infer_currency_from_isin(isin: str) -> str:
+    """Infer likely trading currency from ISIN country prefix.
+
+    This is a last-resort fallback only — used when DeGiro's product info
+    does not include an explicit currency field.
+
+    ISIN prefixes: US → USD, CA → CAD, GB → GBP, JP → JPY.
+    IE/LU → UCITS ETF (could be EUR or USD depending on listing — return "")
+    so the caller falls through to the hardcoded "EUR" default instead.
+    """
+    if not isin or len(isin) < 2:
+        return ""
+    prefix = isin[:2].upper()
+    return {
+        "US": "USD",
+        "CA": "CAD",
+        "GB": "GBP",
+        "JP": "JPY",
+        "AU": "AUD",
+        "CH": "CHF",
+    }.get(prefix, "")
+
+
 class DeGiroClient:
     """Handles DeGiro authentication and portfolio data retrieval."""
 
@@ -653,6 +676,8 @@ class DeGiroClient:
                 prod = products_map.get(pid, {})
 
                 quantity = float(pos.get("size", pos.get("quantity", 0)))
+                if quantity <= 0:
+                    continue  # skip closed/sold positions
                 current_price = float(pos.get("price", pos.get("currentPrice", 0)))
                 current_value = float(pos.get("value", pos.get("currentValue", 0)))
                 avg_buy_price = float(pos.get("breakEvenPrice", pos.get("break_even_price", pos.get("averagePrice", 0))))
@@ -692,8 +717,15 @@ class DeGiroClient:
                     "product_id": pid,
                     "name": prod.get("name", f"Product {pid}"),
                     "isin": prod.get("isin", ""),
-                    "symbol": prod.get("symbol", prod.get("vwdId", prod.get("vwd_id", ""))),
-                    "currency": prod.get("currency", pos.get("currency", "EUR")),
+                    "symbol": prod.get("symbol", ""),
+                    "currency": (
+                        prod.get("currency")
+                        or prod.get("tradingCurrency")
+                        or pos.get("currency")
+                        or pos.get("currencyCode")
+                        or _infer_currency_from_isin(prod.get("isin", ""))
+                        or "EUR"
+                    ),
                     "asset_type": asset_type,
                     "quantity": quantity,
                     "avg_buy_price": round(avg_buy_price, 4),
