@@ -109,10 +109,43 @@ _DEGIRO_EXCHANGE_TO_YF_SUFFIX: dict[str, str] = {
 
 
 def _suffix_from_exchange_id(exchange_id: str, isin: str = "") -> Optional[str]:
-    """Derive Yahoo Finance suffix from DeGiro exchangeId."""
+    """Derive Yahoo Finance suffix from DeGiro exchangeId.
+
+    Tiebreaks ambiguous exchangeIds using ISIN country prefix:
+      663 → US ISIN returns "" (bare NASDAQ), GB/IE/LU returns .L,
+            unknown ISIN returns None (lets ISIN scan handle it)
+      194 → IE/LU ISIN returns None (UCITS ETFs wrongly routed to Stockholm),
+            genuine Swedish stocks return .ST
+    """
     if not exchange_id:
         return None
-    return _DEGIRO_EXCHANGE_TO_YF_SUFFIX.get(str(exchange_id))
+    suffix = _DEGIRO_EXCHANGE_TO_YF_SUFFIX.get(str(exchange_id))
+    if suffix is None:
+        return None
+
+    # Tiebreak 663: US ISIN → bare NASDAQ/NYSE ticker (no suffix)
+    #               GB ISIN → .L (LSE)
+    #               IE/LU ISIN → .L (LSE, USD share class)
+    #               Unknown → return None so ISIN-guided scan takes over
+    if str(exchange_id) == "663":
+        if not isin:
+            return None  # Unknown origin — let ISIN scan handle it
+        prefix = isin[:2].upper()
+        if prefix == "US":
+            return ""     # NYSE/NASDAQ bare ticker
+        if prefix in ("GB", "IE", "LU"):
+            return ".L"   # LSE listings
+        return None       # Other ISIN on 663 — let scan handle it
+
+    # Tiebreak 194 (Stockholm): only valid for genuinely Swedish stocks
+    # IE/LU ISINs on exchangeId=194 are UCITS ETFs routed wrongly —
+    # return None so ISIN-guided scan (.DE first for IE/LU) takes over
+    if str(exchange_id) == "194":
+        if isin and isin[:2].upper() in ("IE", "LU"):
+            return None  # Let ISIN-guided scan handle UCITS ETFs
+        return ".ST"     # Genuinely Swedish stocks
+
+    return suffix
 
 
 # Rate limiting: min seconds between yfinance requests

@@ -69,6 +69,8 @@ progress:
 
 ## Quick Tasks Completed
 
+| 260426-txp | fix exchangeId 663 and Stockholm ambiguity for US stocks and IE/LU ETFs | 2026-04-26 | [260426-txp-fix-exchangeid-663-and-stockholm-ambigui](./quick/260426-txp-fix-exchangeid-663-and-stockholm-ambigui/) |
+
 - **fix symbol vwdId fallback to yfinance (2026-04-26):** Removed `vwdId` and `vwd_id` from symbol fallback chain in `fetch_portfolio()`. vwdId is a Van der Moolen internal numeric ID (e.g. "72095021"), not a market ticker — using it as a yfinance symbol fallback caused symbol_cache.json poisoning and wasted 10 yfinance HTTP calls per leveraged product/turbo/warrant per enrichment run. `enrich_position()` already handles empty symbol with early return + warning log. `app/degiro_client.py` line 697.
 - **fix _yf_rate_limited race condition (2026-04-24):** Added `_yf_rate_limited_until` with 60s cooldown. `enrich_positions()` now conditionally resets flag only after cooldown expires. `_resolve_yf_symbol()` sets 60s cooldown on 429 detection and checks expiry before skipping. Prevents premature retry after rate limit hit. Commit: 68279c0
 - **fix 429 abort in _resolve_yf_symbol (2026-04-24):** Module-level `_yf_rate_limited` flag replaces broken string-based 429 detection. Loop was continuing suffixes because yfinance internally catches/re-raises 429 so str(e) doesn't contain "429". Flag is checked before each suffix and set on 429 detection. enrich_positions resets flag at start of each call. Commit: 98fa798
@@ -88,7 +90,8 @@ progress:
 - **currency-infer-from-symbol (2026-04-26):** Added `_infer_currency_from_symbol()` as final fallback in `fetch_portfolio()` currency chain. Uses `_KNOWN_USD_SYMBOLS` set (50 well-known US tickers) to return "USD" when product info is unavailable. Unblocks UNH, NVDA, and other US symbols from enrichment when `products_map` misses them. `app/degiro_client.py` lines 491-507, 749.
 - **exchange-id-currency-primary (2026-04-26):** Added `_currency_from_exchange_id()` as the first lookup in the currency chain, before ISIN inference. US-ISIN stocks held on European exchanges (PTX/6RV/O9T on Frankfurt/Hamburg) were getting currency=USD causing double FX conversion on already-EUR prices → ~5% portfolio undercount. exchangeId="72" (Frankfurt) and exchangeId="2" (Hamburg) now correctly resolve to EUR. `app/degiro_client.py` lines 489-528, 797. Commit: fdb21a3.
 - **complete-exchange-suffix-map (2026-04-26):** Replaced `_DEGIRO_EXCHANGE_TO_YF_SUFFIX` with a complete map covering all DeGiro regional exchange IDs: Hamburg (2/HM), Frankfurt (72,62/F), Stuttgart (6/SG), Berlin (3/BE), Düsseldorf (4/DU), Munich (5/MU), Xetra (645/DE), LSE (1,663/.L), Nordic, Southern Europe, Canada, Asia-Pacific. Removed orphaned LSE/NYSE tiebreaker from `_suffix_from_exchange_id()`. Fixes O9T→O9T.HM, PTX→PTX.F, 6RV→6RV.F auto-resolution. `app/market_data.py` line 58–115.
+- **fix-currency-chain-order (2026-04-26):** Reordered currency resolution chain in `fetch_portfolio()` so `prod.get("currency")` and `prod.get("tradingCurrency")` are checked before `_currency_from_exchange_id()`. Fixes US stocks (AMZN, SYM, PANW, CRWV) routed through DeGiro exchangeId=663 that returned "GBP" instead of "USD" from product info. `app/degiro_client.py` lines 796-805.
 
 ---
 
-*Last updated: 2026-04-26 — quick task shipped*
+*Last updated: 2026-04-26 — Completed quick task 260426-txp: fix exchangeId 663 and Stockholm ambiguity*
