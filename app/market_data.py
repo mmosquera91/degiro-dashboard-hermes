@@ -298,7 +298,20 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
         if cache_key in _symbol_cache:
             cached = _symbol_cache.get(cache_key)
             if cached is not None:
-                if cached and cached != symbol:
+                # Check for 24h negative cache sentinel
+                if isinstance(cached, str) and cached.startswith("_notfound_"):
+                    try:
+                        cached_at = int(cached.split("_notfound_")[1])
+                        if time.time() - cached_at < 86400:  # 24 hours
+                            return ""  # still within TTL — skip resolution
+                        else:
+                            # Expired — evict and re-resolve
+                            with _symbol_cache_lock:
+                                del _symbol_cache[cache_key]
+                            _save_symbol_cache()
+                    except (IndexError, ValueError):
+                        return ""  # malformed sentinel — treat as not-found
+                elif cached and cached != symbol:
                     try:
                         _yf_throttle()
                         cached_currency = (yf.Ticker(cached).fast_info.currency or "").upper()
@@ -365,12 +378,13 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
                 return symbol
             # 404 or other error — continue to next suffix
 
-    # All suffixes exhausted — cache as unresolvable so next run skips scan
+    # All suffixes exhausted — cache the negative result for 24h so next run skips scan
+    negative_entry = f"_notfound_{int(time.time())}"
     with _symbol_cache_lock:
-        _symbol_cache[cache_key] = symbol
+        _symbol_cache[cache_key] = negative_entry
     _save_symbol_cache()
-    logger.debug("Symbol %s exhausted all suffixes — cached as unresolvable", symbol)
-    return symbol
+    logger.debug("Symbol %s exhausted all suffixes — cached negative result for 24h", symbol)
+    return ""
 
 
 def compute_rsi(hist_close: pd.Series, period: int = 14) -> Optional[float]:
