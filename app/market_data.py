@@ -66,6 +66,64 @@ _load_symbol_cache()
 
 
 
+def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
+    """Resolve a Yahoo Finance ticker from ISIN using yf.Search.
+
+    Prefers results on exchanges matching position_currency.
+    Returns empty string if nothing is found or on rate limit.
+    """
+    if not isin:
+        return ""
+
+    _EUR_EXCHANGES = {"AMS", "PAR", "FRA", "EBS", "MIL", "MCE", "HEL",
+                      "OSL", "BRU", "LIS", "VIE", "GER", "TDG"}
+    _USD_EXCHANGES = {"NYQ", "NMS", "NGM", "PCX", "ASE", "CBT"}
+    _GBP_EXCHANGES = {"LSE", "IOB"}
+
+    currency_map = {
+        "EUR": _EUR_EXCHANGES,
+        "USD": _USD_EXCHANGES,
+        "GBP": _GBP_EXCHANGES,
+    }
+    preferred_exchanges = currency_map.get(position_currency.upper(), _EUR_EXCHANGES)
+
+    try:
+        _yf_throttle()
+        results = yf.Search(isin, max_results=10)
+        quotes = results.quotes if hasattr(results, "quotes") else []
+
+        if not quotes:
+            return ""
+
+        # First pass: prefer currency-matched exchange
+        for quote in quotes:
+            sym = quote.get("symbol", "")
+            exch = quote.get("exchange", "")
+            if sym and exch in preferred_exchanges:
+                logger.debug("ISIN %s resolved to %s via exchange %s", isin, sym, exch)
+                return sym
+
+        # Second pass: any result with a real symbol (fallback)
+        for quote in quotes:
+            sym = quote.get("symbol", "")
+            if sym:
+                logger.debug("ISIN %s resolved to %s (no currency-matched exchange)", isin, sym)
+                return sym
+
+    except Exception as e:
+        err_str = str(e)
+        if "429" in err_str or "Too Many Requests" in err_str \
+                or "Rate limited" in err_str or "YFRateLimitError" in err_str:
+            with _yf_rate_limited_lock:
+                _yf_rate_limited = True
+                _yf_rate_limited_until = time.time() + 60.0
+            logger.warning("Rate limit on ISIN search for %s", isin)
+        else:
+            logger.debug("ISIN search failed for %s: %s", isin, e)
+
+    return ""
+
+
 def _yf_throttle():
     """Sleep if needed to respect rate limits between yfinance calls."""
     global _last_yf_request
@@ -150,7 +208,7 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
     return 1.0
 
 
-def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
+def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EUR") -> str:
     """Resolve a DeGiro symbol to a yfinance-compatible ticker.
 
     DeGiro symbols sometimes lack exchange suffixes. We try common ones.
@@ -183,6 +241,20 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
     with _symbol_cache_lock:
         if cache_key in _symbol_cache:
             return _symbol_cache[cache_key]
+
+    # Step 0: ISIN-based resolution (most accurate — resolves ETFs/ETPs whose
+    # DeGiro symbol differs from Yahoo ticker, e.g. QDVD → QDVD.L)
+    if isin:
+        with _yf_rate_limited_lock:
+            if _yf_rate_limited and time.time() < _yf_rate_limited_until:
+                logger.warning("Rate limited — skipping ISIN search for %s", symbol)
+            else:
+                isin_result = _resolve_by_isin(isin, position_currency)
+                if isin_result:
+                    with _symbol_cache_lock:
+                        _symbol_cache[cache_key] = isin_result
+                    _save_symbol_cache()
+                    return isin_result
 
     # European suffixes tried first so dual-listed stocks (ASML, TDIV) resolve
     # to the EUR-denominated listing before the bare symbol hits NASDAQ.
@@ -334,7 +406,7 @@ def enrich_position(position: dict) -> dict:
         logger.warning("No symbol for position: %s (ISIN: %s)", position.get("name"), isin)
         return position
 
-    yf_symbol = _resolve_yf_symbol(symbol, isin)
+    yf_symbol = _resolve_yf_symbol(symbol, isin, position.get("currency", "EUR"))
 
     try:
         _yf_throttle()
