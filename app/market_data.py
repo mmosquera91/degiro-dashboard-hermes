@@ -599,8 +599,6 @@ def enrich_position(position: dict) -> dict:
         _EUR_EXCHANGE_SUFFIXES = {".AS", ".PA", ".DE", ".F", ".MI", ".MC",
                                    ".HE", ".SW", ".EAM", ".EPA", ".ETR"}
         _GBP_EXCHANGE_SUFFIXES = {".L"}
-        _USD_EXCHANGE_SUFFIXES = {"", ".SI"}
-        _CAD_EXCHANGE_SUFFIXES = {".TO"}
 
         # Extract suffix from resolved symbol (e.g. "SXRU.AS" → ".AS", "QUBT" → "")
         if "." in yf_symbol:
@@ -612,12 +610,6 @@ def enrich_position(position: dict) -> dict:
             yf_currency = "EUR"
         elif resolved_suffix in _GBP_EXCHANGE_SUFFIXES:
             yf_currency = "GBP"
-        elif resolved_suffix in _USD_EXCHANGE_SUFFIXES and resolved_suffix == "":
-            # Bare ticker — fall back to fast_info.currency for confirmation
-            try:
-                yf_currency = (ticker.fast_info.currency or "").upper().strip()
-            except Exception:
-                yf_currency = ""
 
         pos_currency = position.get("currency", "EUR").upper().strip()
         if yf_currency:
@@ -670,11 +662,6 @@ def enrich_position(position: dict) -> dict:
                         position["unrealized_pl"] = round(
                             (yf_price - position["avg_buy_price"]) * position["quantity"], 2
                         )
-            elif len(close) > 0 and not _price_currency_safe:
-                logger.warning(
-                    "Currency mismatch for %s: yfinance=%s, position=%s — keeping DeGiro price",
-                    symbol, yf_currency, pos_currency,
-                )
 
         # 52w high/low and distance — only write when currencies match.
         # If yfinance price is in a different currency than the position, the
