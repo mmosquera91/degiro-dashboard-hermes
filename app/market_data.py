@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import pathlib
 import threading
 import time
 from typing import Optional
@@ -24,6 +25,36 @@ _symbol_cache: dict[str, str] = {}
 _symbol_cache_lock = threading.RLock()
 _SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
 
+# ISIN → Yahoo ticker overrides (user-maintained, loaded from disk)
+SYMBOL_OVERRIDES_PATH = pathlib.Path(
+    os.environ.get("SYMBOL_OVERRIDES_PATH", "/data/symbol_overrides.json")
+)
+_symbol_overrides: dict[str, str] = {}
+_symbol_overrides_lock = threading.Lock()
+
+def _load_symbol_overrides() -> None:
+    """Load ISIN → Yahoo symbol overrides from disk.
+
+    File format (ISIN as key, Yahoo ticker as value):
+    {
+        "IE00BMCX4Z88": "SXRU.AS",
+        "IE00BYX5NX33": "6RV.DE",
+        "LU1681043910": "O9T.DE"
+    }
+    """
+    global _symbol_overrides
+    if not SYMBOL_OVERRIDES_PATH.exists():
+        return
+    try:
+        with open(SYMBOL_OVERRIDES_PATH, "r") as f:
+            data = json.load(f)
+        with _symbol_overrides_lock:
+            _symbol_overrides = {k.strip().upper(): v.strip() for k, v in data.items() if k and v}
+        logger.info("Loaded %d symbol overrides from %s",
+                    len(_symbol_overrides), SYMBOL_OVERRIDES_PATH)
+    except Exception as e:
+        logger.warning("Failed to load symbol overrides: %s", e)
+
 # Rate limiting: min seconds between yfinance requests
 _YF_DELAY = 0.2
 _last_yf_request = 0.0
@@ -36,6 +67,7 @@ _yf_rate_limited_lock = threading.RLock()
 def _load_symbol_cache() -> None:
     """Load persisted symbol cache from disk into _symbol_cache."""
     global _symbol_cache
+    _load_symbol_overrides()
     try:
         if os.path.exists(_SYMBOL_CACHE_PATH):
             with open(_SYMBOL_CACHE_PATH, "r") as f:
@@ -292,8 +324,19 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
         # Single-char dot — normalize to Yahoo dash convention (BRK.B → BRK-B)
         symbol = symbol.rsplit(".", 1)[0] + "-" + after_dot
 
-    # Check symbol resolution cache first
+    # Step -1: Check manual overrides (ISIN-keyed, highest priority)
     cache_key = f"{symbol}:{isin}"
+    if isin:
+        with _symbol_overrides_lock:
+            override = _symbol_overrides.get(isin.strip().upper(), "")
+        if override:
+            logger.debug("Symbol override for ISIN %s: %s", isin, override)
+            with _symbol_cache_lock:
+                _symbol_cache[cache_key] = override
+            _save_symbol_cache()
+            return override
+
+    # Check symbol resolution cache first
     with _symbol_cache_lock:
         if cache_key in _symbol_cache:
             cached = _symbol_cache.get(cache_key)

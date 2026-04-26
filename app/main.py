@@ -241,6 +241,12 @@ def _restore_portfolio_from_snapshot():
 # Sanitize any inf/nan floats baked into old snapshots before restoring
     if "positions" in portfolio_data:
         portfolio_data["positions"] = [_sanitize_floats(p) for p in portfolio_data["positions"]]
+        try:
+            portfolio_data["positions"] = compute_portfolio_weights(portfolio_data["positions"])
+            portfolio_data["positions"] = compute_scores(portfolio_data["positions"])
+            logger.info("Re-scored %d restored positions from snapshot", len(portfolio_data["positions"]))
+        except Exception as e:
+            logger.warning("Could not re-score restored positions: %s", e)
     with _session_lock:
         _session["portfolio"] = portfolio_data
         _session["portfolio_time"] = datetime.now()
@@ -566,6 +572,14 @@ async def delete_symbol_cache():
     cleared = clear_symbol_cache()
     logger.info("Symbol cache cleared: %d entries removed", cleared)
     return {"cleared": cleared}
+
+
+@app.post("/api/admin/reload-overrides", dependencies=[Depends(verify_brok_token)])
+async def reload_symbol_overrides():
+    """Reload symbol_overrides.json from disk without restarting."""
+    from app.market_data import _load_symbol_overrides
+    _load_symbol_overrides()
+    return {"status": "ok"}
 
 
 # ─── Benchmark ───
