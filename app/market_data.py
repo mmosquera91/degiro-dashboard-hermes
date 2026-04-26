@@ -340,8 +340,20 @@ def enrich_position(position: dict) -> dict:
             logger.warning("ticker.info failed for %s: %s", symbol, e)
             info = {}
 
-        # Sector
-        position["sector"] = info.get("sector", info.get("industry", None))
+        # Sector — stocks use "sector"/"industry"; ETFs use "category" as proxy
+        if position.get("asset_type") == "ETF":
+            position["sector"] = (
+                info.get("category")
+                or info.get("fundFamily")
+                or info.get("industry")
+                or None
+            )
+        else:
+            position["sector"] = (
+                info.get("sector")
+                or info.get("industry")
+                or None
+            )
 
         # Country
         position["country"] = info.get("country", None)
