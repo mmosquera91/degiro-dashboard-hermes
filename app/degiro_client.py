@@ -485,7 +485,50 @@ def _infer_currency_from_isin(isin: str) -> str:
         "CH": "CHF",
     }.get(prefix, "")
 
-    # Well-known US tickers that commonly appear in European DeGiro portfolios.
+
+_EXCHANGE_ID_CURRENCY: dict[str, str] = {
+    # EUR exchanges
+    "200": "EUR",  # Euronext Amsterdam
+    "394": "EUR",  # Euronext Paris
+    "645": "EUR",  # Xetra (Deutsche Börse)
+    "72":  "EUR",  # Frankfurt
+    "2":   "EUR",  # Hamburg
+    "3":   "EUR",  # Berlin
+    "4":   "EUR",  # Düsseldorf
+    "5":   "EUR",  # Munich
+    "6":   "EUR",  # Stuttgart
+    "109": "EUR",  # Helsinki
+    "296": "EUR",  # Borsa Italiana (Milan)
+    "750": "EUR",  # Bolsa de Madrid
+    "490": "EUR",  # Euronext Brussels
+    "314": "EUR",  # Euronext Lisbon
+    "194": "SEK",  # Stockholm
+    "518": "NOK",  # Oslo
+    "735": "DKK",  # Copenhagen
+    # CHF
+    "455": "CHF",  # SIX Swiss Exchange
+    # GBP
+    "663": "GBP",  # London Stock Exchange
+    # USD
+    "676": "USD",  # NASDAQ
+    "13":  "USD",  # NYSE
+    "14":  "USD",  # NASDAQ (alternate)
+    "75":  "USD",  # NASDAQ (alternate)
+    "71":  "USD",  # NYSE MKT (AMEX)
+    # CAD
+    "130": "CAD",  # Toronto Stock Exchange
+    # SGD
+    "737": "SGD",  # Singapore Exchange
+}
+
+
+def _currency_from_exchange_id(exchange_id: str) -> str:
+    """Return the trading currency for a DeGiro exchangeId.
+    Returns empty string if unknown, so caller falls through."""
+    return _EXCHANGE_ID_CURRENCY.get(str(exchange_id), "")
+
+
+# Well-known US tickers that commonly appear in European DeGiro portfolios.
     # This list is a catch-all for when product info is unavailable.
     # Pattern: bare uppercase alpha symbols that trade on US exchanges only.
     _KNOWN_USD_SYMBOLS = {
@@ -700,7 +743,14 @@ class DeGiroClient:
                 if quantity <= 0:
                     continue  # skip closed/sold positions
                 current_price = float(pos.get("price", pos.get("currentPrice", 0)))
-                current_value = float(pos.get("value", pos.get("currentValue", 0)))
+                # Always compute from price × quantity so current_value is in native
+                # trading currency. DeGiro's `value` field is pre-converted to EUR
+                # and must NOT be used directly — enrich_positions() applies FX once.
+                if current_price > 0 and quantity > 0:
+                    current_value = round(current_price * quantity, 2)
+                else:
+                    # Fallback only when price is absent — accept DeGiro's value as-is
+                    current_value = float(pos.get("value", pos.get("currentValue", 0)))
                 avg_buy_price = float(pos.get("breakEvenPrice", pos.get("break_even_price", pos.get("averagePrice", 0))))
 
                 # plBase comes as {"EUR": -29.98} in newer DeGiro format
@@ -709,9 +759,6 @@ class DeGiroClient:
                     unrealized_pl = float(pl_base.get("EUR", list(pl_base.values())[0] if pl_base else 0))
                 else:
                     unrealized_pl = float(pl_base or 0)
-
-                if current_value == 0 and quantity > 0 and current_price > 0:
-                    current_value = quantity * current_price
 
                 unrealized_pl_pct = 0.0
                 if avg_buy_price > 0:
@@ -747,7 +794,8 @@ class DeGiroClient:
                         or ""
                     ),
                     "currency": (
-                        prod.get("currency")
+                        _currency_from_exchange_id(pos.get("exchangeId", ""))
+                        or prod.get("currency")
                         or prod.get("tradingCurrency")
                         or pos.get("currency")
                         or pos.get("currencyCode")
