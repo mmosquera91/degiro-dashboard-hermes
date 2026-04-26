@@ -75,8 +75,19 @@ def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
     if not isin:
         return ""
 
-    _EUR_EXCHANGES = {"AMS", "PAR", "FRA", "EBS", "MIL", "MCE", "HEL",
-                      "OSL", "BRU", "LIS", "VIE", "GER", "TDG"}
+    _EUR_EXCHANGES = {
+        "AMS", "EAM",          # Amsterdam
+        "PAR", "EPA",          # Paris
+        "FRA", "GER", "ETR",   # Frankfurt / Xetra
+        "EBS",                 # Zurich (SIX)
+        "MIL", "BIT",          # Milan / Borsa Italiana
+        "MCE",                 # Madrid
+        "HEL",                 # Helsinki
+        "OSL",                 # Oslo
+        "BRU", "EBR",          # Brussels
+        "LIS", "ELI",          # Lisbon
+        "VIE",                 # Vienna
+    }
     _USD_EXCHANGES = {"NYQ", "NMS", "NGM", "PCX", "ASE", "CBT"}
     _GBP_EXCHANGES = {"LSE", "IOB"}
 
@@ -211,6 +222,48 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
     return 1.0
 
 
+def _get_suffix_order(isin: str, symbol: str) -> list[str]:
+    """Return suffix scan order optimised for the instrument's likely exchange.
+
+    Routing rules based on ISIN country prefix:
+      US / CA       → US markets first; European suffixes are a last resort
+      IE / LU       → UCITS ETF; Xetra/London are primary listings
+      GB            → London first
+      FI            → Helsinki first
+      CH            → SIX first
+      DE / NL / FR  → Local European exchange first
+      Default       → European-first order (portfolio is EUR-heavy)
+    """
+    prefix = (isin[:2].upper() if isin and len(isin) >= 2 else "")
+
+    if prefix in ("US", "CA"):
+        return ["", ".TO", ".AS", ".PA", ".DE", ".L", ".MI",
+                ".MC", ".HE", ".F", ".SW", ".SI"]
+
+    if prefix in ("IE", "LU"):
+        return [".DE", ".F", ".L", ".AS", ".PA", ".MI", ".MC",
+                ".HE", ".SW", ".TO", ".SI", ""]
+
+    if prefix == "GB":
+        return [".L", ".DE", ".F", ".AS", ".PA", ".MI", ".MC",
+                ".HE", ".SW", ".TO", ".SI", ""]
+
+    if prefix == "FI":
+        return [".HE", ".DE", ".F", ".AS", ".PA", ".L", ".MI",
+                ".MC", ".SW", ".TO", ".SI", ""]
+
+    if prefix == "CH":
+        return [".SW", ".DE", ".F", ".AS", ".PA", ".L", ".MI",
+                ".MC", ".HE", ".TO", ".SI", ""]
+
+    if prefix in ("DE", "NL", "FR", "IT", "ES", "BE", "PT", "AT", "NO"):
+        return [".AS", ".PA", ".DE", ".L", ".MI", ".MC",
+                ".HE", ".F", ".SW", ".TO", ".SI", ""]
+
+    return [".AS", ".PA", ".DE", ".L", ".MI", ".MC",
+            ".HE", ".F", ".SW", ".TO", ".SI", ""]
+
+
 def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EUR") -> str:
     """Resolve a DeGiro symbol to a yfinance-compatible ticker.
 
@@ -243,7 +296,27 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
     cache_key = f"{symbol}:{isin}"
     with _symbol_cache_lock:
         if cache_key in _symbol_cache:
-            return _symbol_cache[cache_key]
+            cached = _symbol_cache.get(cache_key)
+            if cached is not None:
+                if cached and cached != symbol:
+                    try:
+                        _yf_throttle()
+                        cached_currency = (yf.Ticker(cached).fast_info.currency or "").upper()
+                        pos_currency = position_currency.upper() if position_currency else "EUR"
+                        if cached_currency and cached_currency != pos_currency:
+                            logger.info(
+                                "Evicting stale cache entry %s → %s (yfinance=%s, expected=%s)",
+                                cache_key, cached, cached_currency, pos_currency,
+                            )
+                            with _symbol_cache_lock:
+                                del _symbol_cache[cache_key]
+                            _save_symbol_cache()
+                        else:
+                            return cached
+                    except Exception:
+                        return cached
+                else:
+                    return cached
 
     # Step 0: ISIN-based resolution (most accurate — resolves ETFs/ETPs whose
     # DeGiro symbol differs from Yahoo ticker, e.g. QDVD → QDVD.L)
@@ -263,7 +336,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
     # to the EUR-denominated listing before the bare symbol hits NASDAQ.
     # .HE = Helsinki (Nokia), .F = Frankfurt Xetra ETFs (alternative to .DE).
     # "" (bare) is last — only reached for genuine US-only listings.
-    suffixes_to_try = [".AS", ".PA", ".DE", ".L", ".MI", ".MC", ".HE", ".F", ".SW", ".TO", ".SI", ""]
+    suffixes_to_try = _get_suffix_order(isin, symbol)
     for suffix in suffixes_to_try:
         with _yf_rate_limited_lock:
             if _yf_rate_limited and time.time() < _yf_rate_limited_until:
@@ -513,15 +586,19 @@ def enrich_position(position: dict) -> dict:
                     symbol, yf_currency, pos_currency,
                 )
 
-        # 52w high/low and distance
-        if wk52_high is not None:
-            position["52w_high"] = round(float(wk52_high), 4)
-        if wk52_low is not None:
-            position["52w_low"] = round(float(wk52_low), 4)
-        if wk52_high is not None and position.get("current_price", 0) > 0:
-            position["distance_from_52w_high_pct"] = round(
-                ((position["current_price"] - float(wk52_high)) / float(wk52_high)) * 100, 2
-            )
+        # 52w high/low and distance — only write when currencies match.
+        # If yfinance price is in a different currency than the position, the
+        # 52w absolute values are in the wrong unit and distance_from_52w_high_pct
+        # would be a meaningless cross-currency ratio.
+        if _price_currency_safe:
+            if wk52_high is not None:
+                position["52w_high"] = round(float(wk52_high), 4)
+            if wk52_low is not None:
+                position["52w_low"] = round(float(wk52_low), 4)
+            if wk52_high is not None and position.get("current_price", 0) > 0:
+                position["distance_from_52w_high_pct"] = round(
+                    ((position["current_price"] - float(wk52_high)) / float(wk52_high)) * 100, 2
+                )
 
     except Exception as e:
         err_str = str(e)
