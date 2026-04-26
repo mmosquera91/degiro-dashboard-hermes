@@ -96,18 +96,21 @@ def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
             return ""
 
         # First pass: prefer currency-matched exchange
+        # Stuttgart ("SG", "STU") and Tradegate ("TDG") return the ISIN itself
+        # as the symbol — skip them.
+        _ISIN_AS_SYMBOL_EXCHANGES = {"SG", "STU", "TDG"}
+
         for quote in quotes:
             sym = quote.get("symbol", "")
             exch = quote.get("exchange", "")
-            if sym and exch in preferred_exchanges:
+            if not sym or not exch:
+                continue
+            if exch in _ISIN_AS_SYMBOL_EXCHANGES:
+                continue  # symbol would be the ISIN string, not a ticker
+            if len(sym) > 12:
+                continue  # ISIN strings are 12 chars — skip anything that long
+            if exch in preferred_exchanges:
                 logger.debug("ISIN %s resolved to %s via exchange %s", isin, sym, exch)
-                return sym
-
-        # Second pass: any result with a real symbol (fallback)
-        for quote in quotes:
-            sym = quote.get("symbol", "")
-            if sym:
-                logger.debug("ISIN %s resolved to %s (no currency-matched exchange)", isin, sym)
                 return sym
 
     except Exception as e:
