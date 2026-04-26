@@ -69,6 +69,7 @@ progress:
 
 ## Quick Tasks Completed
 
+| 260426-x03 | Fix Tradegate US stock currency override | 2026-04-26 | 44a2838 | [260426-x03-fix-tradegate-us-stock-currency-override](./quick/260426-x03-fix-tradegate-us-stock-currency-override/) |
 | 260426-txp | fix exchangeId 663 and Stockholm ambiguity for US stocks and IE/LU ETFs | 2026-04-26 | [260426-txp-fix-exchangeid-663-and-stockholm-ambigui](./quick/260426-txp-fix-exchangeid-663-and-stockholm-ambigui/) |
 
 - **fix symbol vwdId fallback to yfinance (2026-04-26):** Removed `vwdId` and `vwd_id` from symbol fallback chain in `fetch_portfolio()`. vwdId is a Van der Moolen internal numeric ID (e.g. "72095021"), not a market ticker — using it as a yfinance symbol fallback caused symbol_cache.json poisoning and wasted 10 yfinance HTTP calls per leveraged product/turbo/warrant per enrichment run. `enrich_position()` already handles empty symbol with early return + warning log. `app/degiro_client.py` line 697.
@@ -94,4 +95,4 @@ progress:
 
 ---
 
-*Last updated: 2026-04-26 — Completed quick task 260426-txp: fix exchangeId 663 and Stockholm ambiguity*
+*Last updated: 2026-04-26 — Completed quick task 260426-x03: Fix Tradegate US stock currency override*

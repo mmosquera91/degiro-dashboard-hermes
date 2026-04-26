@@ -1,0 +1,3 @@
+When /api/benchmark returns benchmark_series: [] (rate limit or network failure while fetching ^GSPC), renderBenchmark() still calls new Chart(...) with an empty S&P 500 dataset. Chart.js renders axes and the portfolio line but the benchmark line is invisible — looks like a broken chart with no explanation.
+
+Fix: In the "Show chart (2+ snapshots)" block of renderBenchmark() in app/static/app.js, add an early return when benchmarkSeries has fewer than 2 points, showing a user-friendly message instead of rendering a broken chart.
