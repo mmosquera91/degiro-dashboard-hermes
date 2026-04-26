@@ -739,13 +739,19 @@ class DeGiroClient:
                     "name": prod.get("name", f"Product {pid}"),
                     "isin": prod.get("isin", ""),
                     "symbol": prod.get("symbol", ""),
-                    pos_isin = prod.get("isin", "")
+                    "exchange_id": str(
+                        prod.get("exchangeId")
+                        or prod.get("exchange_id")
+                        or pos.get("exchangeId")
+                        or pos.get("exchange_id")
+                        or ""
+                    ),
                     "currency": (
                         prod.get("currency")
                         or prod.get("tradingCurrency")
                         or pos.get("currency")
                         or pos.get("currencyCode")
-                        or _infer_currency_from_isin(pos_isin)
+                        or _infer_currency_from_isin(prod.get("isin", ""))
                         or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
                         or "EUR"
                     ),

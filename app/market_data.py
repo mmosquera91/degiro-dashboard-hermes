@@ -55,6 +55,73 @@ def _load_symbol_overrides() -> None:
     except Exception as e:
         logger.warning("Failed to load symbol overrides: %s", e)
 
+# DeGiro exchangeId → Yahoo Finance suffix.
+# Source: DeGiro product API exchangeId values observed in practice.
+_DEGIRO_EXCHANGE_TO_YF_SUFFIX: dict[str, str] = {
+    # Euronext
+    "200": ".AS",   # Euronext Amsterdam
+    "394": ".PA",   # Euronext Paris
+    "490": ".BR",   # Euronext Brussels
+    "314": ".LS",   # Euronext Lisbon
+    # Germany
+    "645": ".DE",   # Xetra (Deutsche Börse)
+    "72":  ".F",    # Frankfurt (secondary)
+    # UK
+    "663": ".L",    # London Stock Exchange
+    # Nordic
+    "109": ".HE",   # Helsinki (Nasdaq Nordic)
+    "194": ".ST",   # Stockholm
+    "518": ".OL",   # Oslo
+    "735": ".CO",   # Copenhagen
+    # Southern Europe
+    "296": ".MI",   # Borsa Italiana (Milan)
+    "750": ".MC",   # Bolsa de Madrid
+    # Switzerland
+    "455": ".SW",   # SIX Swiss Exchange
+    # US — bare ticker (no suffix)
+    "676": "",      # NASDAQ
+    "663": "",      # NYSE (shares exchangeId with LSE — see note below)
+    "13":  "",      # NYSE (alternate)
+    "14":  "",      # NASDAQ (alternate)
+    "75":  "",      # NASDAQ (alternate)
+    "71":  "",      # NYSE MKT (AMEX)
+    # Canada
+    "130": ".TO",   # Toronto Stock Exchange
+    "490": ".V",    # TSX Venture
+    # Asia-Pacific
+    "737": ".SI",   # Singapore Exchange
+    "225": ".T",    # Tokyo Stock Exchange
+    "240": ".HK",   # Hong Kong
+}
+
+# NOTE: DeGiro uses exchangeId=663 for both LSE and NYSE in some DeGiro responses.
+# When this ambiguity is hit, fall through to the ISIN-prefix heuristic or suffix
+# scan as tiebreaker.
+
+
+def _suffix_from_exchange_id(exchange_id: str, isin: str = "") -> Optional[str]:
+    """Derive Yahoo Finance suffix from DeGiro exchangeId.
+
+    Handles the LSE/NYSE ambiguity (both use 663 in some DeGiro responses)
+    by using the ISIN country prefix as a tiebreaker.
+    """
+    if not exchange_id:
+        return None  # None means "unknown" — fall through to scan
+    suffix = _DEGIRO_EXCHANGE_TO_YF_SUFFIX.get(str(exchange_id))
+    if suffix is None:
+        return None
+
+    # Tiebreak 663: GB ISIN → .L (LSE), US ISIN → "" (NYSE)
+    if exchange_id == "663" and isin:
+        prefix = isin[:2].upper()
+        if prefix == "US":
+            return ""
+        if prefix == "GB":
+            return ".L"
+
+    return suffix
+
+
 # Rate limiting: min seconds between yfinance requests
 _YF_DELAY = 0.2
 _last_yf_request = 0.0
@@ -296,7 +363,7 @@ def _get_suffix_order(isin: str, symbol: str) -> list[str]:
             ".HE", ".F", ".SW", ".TO", ".SI", ""]
 
 
-def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EUR") -> str:
+def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EUR", exchange_id: str = "") -> str:
     """Resolve a DeGiro symbol to a yfinance-compatible ticker.
 
     DeGiro symbols sometimes lack exchange suffixes. We try common ones.
@@ -324,8 +391,31 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
         # Single-char dot — normalize to Yahoo dash convention (BRK.B → BRK-B)
         symbol = symbol.rsplit(".", 1)[0] + "-" + after_dot
 
-    # Step -1: Check manual overrides (ISIN-keyed, highest priority)
     cache_key = f"{symbol}:{isin}"
+
+    # Step 0: Deterministic resolution from DeGiro exchangeId (best signal)
+    if exchange_id:
+        suffix = _suffix_from_exchange_id(exchange_id, isin)
+        if suffix is not None:
+            candidate = symbol + suffix
+            try:
+                _yf_throttle()
+                t = yf.Ticker(candidate)
+                hist = t.history(period="5d")
+                if not hist.empty:
+                    logger.debug(
+                        "Resolved %s via exchangeId %s → %s",
+                        symbol, exchange_id, candidate,
+                    )
+                    with _symbol_cache_lock:
+                        _symbol_cache[cache_key] = candidate
+                    _save_symbol_cache()
+                    return candidate
+            except Exception as e:
+                logger.debug("exchangeId candidate %s failed: %s", candidate, e)
+            # If candidate failed, fall through to ISIN search then suffix scan
+
+    # Step -1: Check manual overrides (ISIN-keyed, highest priority)
     if isin:
         with _symbol_overrides_lock:
             override = _symbol_overrides.get(isin.strip().upper(), "")
@@ -539,7 +629,9 @@ def enrich_position(position: dict) -> dict:
         logger.warning("No symbol for position: %s (ISIN: %s)", position.get("name"), isin)
         return position
 
-    yf_symbol = _resolve_yf_symbol(symbol, isin, position.get("currency", "EUR"))
+    yf_symbol = _resolve_yf_symbol(
+        symbol, isin, position.get("currency", "EUR"), position.get("exchange_id", "")
+    )
 
     try:
         _yf_throttle()
