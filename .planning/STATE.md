@@ -86,6 +86,8 @@ progress:
 - **ISIN-first resolution for ETF/ETP symbols (2026-04-26):** Added `_resolve_by_isin()` using `yfinance.Search(isin)` with EUR/USD/GBP exchange preference. `_resolve_yf_symbol()` now tries ISIN resolution before the suffix scan, fixing instruments like QDVD, QDV5, O9T whose DeGiro symbol doesn't match their Yahoo ticker. Commit: baaa420
 
 - **currency-infer-from-symbol (2026-04-26):** Added `_infer_currency_from_symbol()` as final fallback in `fetch_portfolio()` currency chain. Uses `_KNOWN_USD_SYMBOLS` set (50 well-known US tickers) to return "USD" when product info is unavailable. Unblocks UNH, NVDA, and other US symbols from enrichment when `products_map` misses them. `app/degiro_client.py` lines 491-507, 749.
+- **exchange-id-currency-primary (2026-04-26):** Added `_currency_from_exchange_id()` as the first lookup in the currency chain, before ISIN inference. US-ISIN stocks held on European exchanges (PTX/6RV/O9T on Frankfurt/Hamburg) were getting currency=USD causing double FX conversion on already-EUR prices → ~5% portfolio undercount. exchangeId="72" (Frankfurt) and exchangeId="2" (Hamburg) now correctly resolve to EUR. `app/degiro_client.py` lines 489-528, 797. Commit: fdb21a3.
+- **complete-exchange-suffix-map (2026-04-26):** Replaced `_DEGIRO_EXCHANGE_TO_YF_SUFFIX` with a complete map covering all DeGiro regional exchange IDs: Hamburg (2/HM), Frankfurt (72,62/F), Stuttgart (6/SG), Berlin (3/BE), Düsseldorf (4/DU), Munich (5/MU), Xetra (645/DE), LSE (1,663/.L), Nordic, Southern Europe, Canada, Asia-Pacific. Removed orphaned LSE/NYSE tiebreaker from `_suffix_from_exchange_id()`. Fixes O9T→O9T.HM, PTX→PTX.F, 6RV→6RV.F auto-resolution. `app/market_data.py` line 58–115.
 
 ---
 

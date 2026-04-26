@@ -55,71 +55,64 @@ def _load_symbol_overrides() -> None:
     except Exception as e:
         logger.warning("Failed to load symbol overrides: %s", e)
 
-# DeGiro exchangeId → Yahoo Finance suffix.
-# Source: DeGiro product API exchangeId values observed in practice.
 _DEGIRO_EXCHANGE_TO_YF_SUFFIX: dict[str, str] = {
     # Euronext
     "200": ".AS",   # Euronext Amsterdam
     "394": ".PA",   # Euronext Paris
     "490": ".BR",   # Euronext Brussels
     "314": ".LS",   # Euronext Lisbon
-    # Germany
-    "645": ".DE",   # Xetra (Deutsche Börse)
-    "72":  ".F",    # Frankfurt (secondary)
+
+    # Germany — Xetra + all regional exchanges
+    "645": ".DE",   # Xetra (Deutsche Börse) — primary German exchange
+    "72":  ".F",    # Frankfurt
+    "2":   ".HM",   # Hamburg
+    "3":   ".BE",   # Berlin
+    "4":   ".DU",   # Düsseldorf
+    "5":   ".MU",   # Munich
+    "6":   ".SG",   # Stuttgart (note: Yahoo .SG = Stuttgart, NOT Singapore)
+    "62":  ".F",    # Frankfurt alternate
+
     # UK
     "663": ".L",    # London Stock Exchange
+    "1":   ".L",    # LSE alternate
+
     # Nordic
     "109": ".HE",   # Helsinki (Nasdaq Nordic)
-    "194": ".ST",   # Stockholm
-    "518": ".OL",   # Oslo
-    "735": ".CO",   # Copenhagen
+    "194": ".ST",   # Stockholm (Nasdaq Nordic)
+    "518": ".OL",   # Oslo (Oslo Børs)
+    "735": ".CO",   # Copenhagen (Nasdaq Nordic)
+
     # Southern Europe
     "296": ".MI",   # Borsa Italiana (Milan)
     "750": ".MC",   # Bolsa de Madrid
+
     # Switzerland
     "455": ".SW",   # SIX Swiss Exchange
-    # US — bare ticker (no suffix)
+
+    # US — no suffix (bare ticker)
     "676": "",      # NASDAQ
-    "663": "",      # NYSE (shares exchangeId with LSE — see note below)
-    "13":  "",      # NYSE (alternate)
-    "14":  "",      # NASDAQ (alternate)
-    "75":  "",      # NASDAQ (alternate)
+    "13":  "",      # NYSE
+    "14":  "",      # NASDAQ alternate
+    "75":  "",      # NASDAQ alternate
     "71":  "",      # NYSE MKT (AMEX)
+    "25":  "",      # NYSE alternate
+
     # Canada
     "130": ".TO",   # Toronto Stock Exchange
-    "490": ".V",    # TSX Venture
-    # Asia-Pacific
-    "737": ".SI",   # Singapore Exchange
-    "225": ".T",    # Tokyo Stock Exchange
-    "240": ".HK",   # Hong Kong
-}
+    "138": ".V",    # TSX Venture Exchange
 
-# NOTE: DeGiro uses exchangeId=663 for both LSE and NYSE in some DeGiro responses.
-# When this ambiguity is hit, fall through to the ISIN-prefix heuristic or suffix
-# scan as tiebreaker.
+    # Asia-Pacific
+    "737": ".SI",   # Singapore Exchange (SGX)
+    "225": ".T",    # Tokyo Stock Exchange
+    "240": ".HK",   # Hong Kong Stock Exchange
+}
 
 
 def _suffix_from_exchange_id(exchange_id: str, isin: str = "") -> Optional[str]:
-    """Derive Yahoo Finance suffix from DeGiro exchangeId.
-
-    Handles the LSE/NYSE ambiguity (both use 663 in some DeGiro responses)
-    by using the ISIN country prefix as a tiebreaker.
-    """
+    """Derive Yahoo Finance suffix from DeGiro exchangeId."""
     if not exchange_id:
-        return None  # None means "unknown" — fall through to scan
-    suffix = _DEGIRO_EXCHANGE_TO_YF_SUFFIX.get(str(exchange_id))
-    if suffix is None:
         return None
-
-    # Tiebreak 663: GB ISIN → .L (LSE), US ISIN → "" (NYSE)
-    if exchange_id == "663" and isin:
-        prefix = isin[:2].upper()
-        if prefix == "US":
-            return ""
-        if prefix == "GB":
-            return ".L"
-
-    return suffix
+    return _DEGIRO_EXCHANGE_TO_YF_SUFFIX.get(str(exchange_id))
 
 
 # Rate limiting: min seconds between yfinance requests
