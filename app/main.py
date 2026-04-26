@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .degiro_client import DeGiroClient
-from .market_data import enrich_positions, get_fx_rate, _sanitize_floats
+from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
@@ -255,6 +255,7 @@ async def lifespan(app: FastAPI):
     try:
         # REST-01: Restore portfolio from latest snapshot before accepting requests
         _restore_portfolio_from_snapshot()
+        audit_symbol_cache()
         yield
     except Exception as e:
         logger.error("Unhandled exception during request: %s", str(e))
@@ -551,6 +552,20 @@ async def logout():
     with _session_lock:
         _clear_session()
     return {"status": "logged_out"}
+
+
+# ─── Admin ───
+
+@app.delete("/api/admin/symbol-cache", dependencies=[Depends(verify_brok_token)])
+async def delete_symbol_cache():
+    """Clear the symbol resolution cache.
+
+    Use after yfinance upgrade or when per-stock metrics all show None due to
+    a rate-limiting event that poisoned the cache with bare (unresolved) symbols.
+    """
+    cleared = clear_symbol_cache()
+    logger.info("Symbol cache cleared: %d entries removed", cleared)
+    return {"cleared": cleared}
 
 
 # ─── Benchmark ───

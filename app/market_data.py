@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -425,11 +426,50 @@ def enrich_position(position: dict) -> dict:
 
 def _sanitize_floats(obj: dict) -> dict:
     """Replace float inf/nan with None so json.dumps() doesn't crash."""
-    import math
     return {
         k: (None if isinstance(v, float) and not math.isfinite(v) else v)
         for k, v in obj.items()
     }
+
+
+def clear_symbol_cache() -> int:
+    """Clear the symbol resolution cache (both memory and disk).
+
+    Call this after a yfinance upgrade or when all per-stock metrics show None
+    due to poisoned cache entries.
+    """
+    with _symbol_cache_lock:
+        count = len(_symbol_cache)
+        _symbol_cache.clear()
+    try:
+        if os.path.exists(_SYMBOL_CACHE_PATH):
+            os.remove(_SYMBOL_CACHE_PATH)
+    except OSError:
+        pass
+    return count
+
+
+def audit_symbol_cache() -> int:
+    """Check symbol cache for entries that resolved to bare symbols (no exchange suffix).
+
+    Such entries indicate the suffix scan was aborted by rate limiting before
+    finding a valid suffix — they poison the cache across restarts.
+
+    Returns the count of suspicious entries. Logs a WARNING with remediation advice.
+    """
+    suspicious = 0
+    for bare_symbol, resolved in _symbol_cache.items():
+        # resolved has no "." suffix means it was cached as the bare symbol
+        if "." not in resolved:
+            suspicious += 1
+    if suspicious:
+        logger.warning(
+            "%d suspicious symbol cache entries found (resolved == bare symbol, no suffix). "
+            "This indicates rate-limiting aborted the suffix scan. "
+            "Call DELETE /api/admin/symbol-cache to clear the cache.",
+            suspicious,
+        )
+    return suspicious
 
 def enrich_positions(raw_portfolio: dict) -> list[dict]:
     """Enrich all positions with yfinance market data.
