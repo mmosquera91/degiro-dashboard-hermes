@@ -83,6 +83,8 @@ progress:
 - **price-currency-guard (2026-04-26):** Added `_price_currency_safe` check in `enrich_position()`. Before calling `ticker.history()`, read `ticker.fast_info.currency` and compare to `position["currency"]`. Only update `current_price`/`current_value`/`unrealized_pl` when currencies match. On mismatch, log a warning and keep DeGiro's price — which is always in the correct currency. Fixes wrong P/L when yfinance resolves a USD ticker for a EUR position. `app/market_data.py` lines 361-413.
 - **ETF sector/category fallback (2026-04-26):** `enrich_position()` now uses ETF-aware sector assignment. ETFs get `category` → `fundFamily` → `industry` as sector (yfinance "sector" is stock-only). Stocks unchanged: `sector` → `industry`. Fixes all ETFs showing "Unknown" in sector breakdown chart. `app/market_data.py` lines 343-356.
 
+- **ISIN-first resolution for ETF/ETP symbols (2026-04-26):** Added `_resolve_by_isin()` using `yfinance.Search(isin)` with EUR/USD/GBP exchange preference. `_resolve_yf_symbol()` now tries ISIN resolution before the suffix scan, fixing instruments like QDVD, QDV5, O9T whose DeGiro symbol doesn't match their Yahoo ticker. Commit: baaa420
+
 ---
 
 *Last updated: 2026-04-26 — quick task shipped*
