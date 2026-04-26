@@ -441,6 +441,31 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
                 logger.debug("exchangeId candidate %s failed: %s", candidate, e)
             # If candidate failed, fall through to ISIN search then suffix scan
 
+    # Step 0.5: For Tradegate (196) US-ISIN stocks, resolve via direct ISIN
+    # lookup. DeGiro's local symbol (NVD, PTX, 6RV, O9T) is a German market
+    # code that Yahoo doesn't know. yfinance 1.3.0 accepts raw ISINs as tickers
+    # and returns the canonical listing (NVDA, PLTR, APP, ARM on NASDAQ).
+    if exchange_id == "196" and isin and isin.upper().startswith("US"):
+        try:
+            _yf_throttle()
+            t = yf.Ticker(isin)
+            hist = t.history(period="5d")
+            if not hist.empty:
+                # Extract the real ticker symbol from the resolved info
+                resolved = t.info.get("symbol", "")
+                if resolved:
+                    logger.info(
+                        "Resolved Tradegate US stock %s (ISIN %s) → %s via ISIN lookup",
+                        symbol, isin, resolved,
+                    )
+                    with _symbol_cache_lock:
+                        _symbol_cache[cache_key] = resolved
+                    _save_symbol_cache()
+                    return resolved
+        except Exception as e:
+            logger.debug("ISIN direct lookup failed for %s (%s): %s", symbol, isin, e)
+        # Fall through to suffix scan if ISIN lookup fails
+
     # Step -1: Check manual overrides (ISIN-keyed, highest priority)
     if isin:
         with _symbol_overrides_lock:
