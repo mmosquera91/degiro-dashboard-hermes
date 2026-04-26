@@ -780,29 +780,41 @@ class DeGiroClient:
                     else:
                         asset_type = "STOCK"
 
+                # Build exchange_id once — used for both post-correction and dict entry
+                exchange_id = str(
+                    prod.get("exchangeId")
+                    or prod.get("exchange_id")
+                    or pos.get("exchangeId")
+                    or pos.get("exchange_id")
+                    or ""
+                )
+
+                # Currency resolution chain
+                pos_currency = (
+                    prod.get("currency")
+                    or prod.get("tradingCurrency")
+                    or pos.get("currency")
+                    or pos.get("currencyCode")
+                    or _currency_from_exchange_id(pos.get("exchangeId", ""))
+                    or _infer_currency_from_isin(prod.get("isin", ""))
+                    or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
+                    or "EUR"
+                )
+
+                # Tradegate US stocks trade in USD on NASDAQ — override currency to prevent
+                # EUR-converted prices from being applied to USD-denominated yfinance data.
+                pos_isin = prod.get("isin", "")
+                if exchange_id == "196" and pos_isin.upper().startswith("US"):
+                    pos_currency = "USD"
+
                 position = {
                     "id": str(pos.get("id", pid)),
                     "product_id": pid,
                     "name": prod.get("name", f"Product {pid}"),
                     "isin": prod.get("isin", ""),
                     "symbol": prod.get("symbol", ""),
-                    "exchange_id": str(
-                        prod.get("exchangeId")
-                        or prod.get("exchange_id")
-                        or pos.get("exchangeId")
-                        or pos.get("exchange_id")
-                        or ""
-                    ),
-                    "currency": (
-                        _currency_from_exchange_id(pos.get("exchangeId", ""))
-                        or prod.get("currency")
-                        or prod.get("tradingCurrency")
-                        or pos.get("currency")
-                        or pos.get("currencyCode")
-                        or _infer_currency_from_isin(prod.get("isin", ""))
-                        or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
-                        or "EUR"
-                    ),
+                    "exchange_id": exchange_id,
+                    "currency": pos_currency,
                     "asset_type": asset_type,
                     "quantity": quantity,
                     "avg_buy_price": round(avg_buy_price, 4),
