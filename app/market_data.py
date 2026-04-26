@@ -163,9 +163,20 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
 
     symbol = symbol.strip()
 
-    # Already has an exchange suffix
+    # Skip numeric symbols (vwdId leaking through) — never a valid Yahoo ticker
+    if symbol.isdigit():
+        logger.debug("Skipping numeric symbol %s — not a valid Yahoo ticker", symbol)
+        return ""
+
+    # Exchange suffixes are 2+ chars after the dot (e.g. .AS, .PA, .HE).
+    # Single-char dots are class indicators (e.g. BRK.B = Class B) — do NOT
+    # treat as exchange suffix.
     if "." in symbol:
-        return symbol
+        after_dot = symbol.rsplit(".", 1)[-1]
+        if len(after_dot) >= 2:
+            return symbol
+        # Single-char dot — normalize to Yahoo dash convention (BRK.B → BRK-B)
+        symbol = symbol.rsplit(".", 1)[0] + "-" + after_dot
 
     # Check symbol resolution cache first
     cache_key = f"{symbol}:{isin}"
@@ -173,8 +184,11 @@ def _resolve_yf_symbol(symbol: str, isin: str = "") -> str:
         if cache_key in _symbol_cache:
             return _symbol_cache[cache_key]
 
-    # Common European exchanges — try suffixes in order
-    suffixes_to_try = ["", ".AS", ".PA", ".DE", ".MI", ".MC", ".L", ".SW", ".TO", ".SI"]
+    # European suffixes tried first so dual-listed stocks (ASML, TDIV) resolve
+    # to the EUR-denominated listing before the bare symbol hits NASDAQ.
+    # .HE = Helsinki (Nokia), .F = Frankfurt Xetra ETFs (alternative to .DE).
+    # "" (bare) is last — only reached for genuine US-only listings.
+    suffixes_to_try = [".AS", ".PA", ".DE", ".L", ".MI", ".MC", ".HE", ".F", ".SW", ".TO", ".SI", ""]
     for suffix in suffixes_to_try:
         with _yf_rate_limited_lock:
             if _yf_rate_limited and time.time() < _yf_rate_limited_until:
