@@ -358,6 +358,15 @@ def enrich_position(position: dict) -> dict:
         wk52_high = info.get("fiftyTwoWeekHigh", None)
         wk52_low = info.get("fiftyTwoWeekLow", None)
 
+        # Determine yfinance ticker currency before fetching history
+        yf_currency = ""
+        try:
+            yf_currency = (ticker.fast_info.currency or "").upper().strip()
+        except Exception:
+            pass
+        pos_currency = position.get("currency", "EUR").upper().strip()
+        _price_currency_safe = (not yf_currency) or (yf_currency == pos_currency)
+
         # Get historical data for RSI and performance
         _yf_throttle()
         hist = ticker.history(period="1y")
@@ -382,8 +391,10 @@ def enrich_position(position: dict) -> dict:
             position["perf_90d"] = perf["perf_90d"]
             position["perf_ytd"] = perf["perf_ytd"]
 
-            # Update current price from yfinance if available (more real-time)
-            if len(close) > 0:
+            # Update current price from yfinance only when currencies match.
+            # If currencies differ (e.g. USD ticker resolved for a EUR position),
+            # keep DeGiro's price — it is always in the correct currency.
+            if len(close) > 0 and _price_currency_safe:
                 yf_price = float(close.iloc[-1])
                 if yf_price > 0:
                     position["current_price"] = round(yf_price, 4)
@@ -395,6 +406,11 @@ def enrich_position(position: dict) -> dict:
                         position["unrealized_pl"] = round(
                             (yf_price - position["avg_buy_price"]) * position["quantity"], 2
                         )
+            elif len(close) > 0 and not _price_currency_safe:
+                logger.warning(
+                    "Currency mismatch for %s: yfinance=%s, position=%s — keeping DeGiro price",
+                    symbol, yf_currency, pos_currency,
+                )
 
         # 52w high/low and distance
         if wk52_high is not None:
