@@ -31,6 +31,7 @@ def _resolve_snapshot_dir() -> str:
 
 SNAPSHOT_DIR = _resolve_snapshot_dir()
 BENCHMARK_TICKER = os.getenv("BENCHMARK_TICKER", "^GSPC")
+SNAPSHOT_RETENTION_DAYS = int(os.getenv("SNAPSHOT_RETENTION_DAYS", "365"))
 
 
 def save_snapshot(
@@ -78,6 +79,32 @@ def save_snapshot(
         os.fsync(f.fileno())
     os.rename(tmp_path, file_path)
     logger.info("Snapshot saved (atomic): %s", file_path)
+    _prune_old_snapshots()
+
+
+def _prune_old_snapshots() -> None:
+    """Delete snapshots older than SNAPSHOT_RETENTION_DAYS. Keeps the
+    most recent snapshot regardless of age (safety net for startup restore)."""
+    if SNAPSHOT_RETENTION_DAYS <= 0:
+        return  # 0 = disabled
+    snapshot_dir = Path(SNAPSHOT_DIR)
+    cutoff = datetime.now().date()
+    from datetime import timedelta
+    cutoff -= timedelta(days=SNAPSHOT_RETENTION_DAYS)
+
+    all_files = sorted(snapshot_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json"))
+    if len(all_files) <= 1:
+        return  # always keep at least one
+
+    for file_path in all_files[:-1]:  # never delete the newest
+        try:
+            date_str = file_path.stem
+            file_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            if file_date < cutoff:
+                file_path.unlink()
+                logger.info("Pruned old snapshot: %s", file_path.name)
+        except Exception as e:
+            logger.warning("Could not prune snapshot %s: %s", file_path.name, e)
 
 
 def load_snapshots() -> list[dict]:
