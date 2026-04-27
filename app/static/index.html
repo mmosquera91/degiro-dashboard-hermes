@@ -36,6 +36,9 @@
         <i data-lucide="clipboard-copy" class="icon-sm"></i>
         <span class="btn-label">Export for Hermes</span>
       </button>
+      <button id="btn-privacy" aria-label="Toggle privacy mode" title="Privacy mode">
+        <i data-lucide="eye" class="icon-sm"></i>
+      </button>
     </div>
   </header>
 
@@ -157,6 +160,18 @@
           <h3 class="chart-title">Sector Breakdown</h3>
           <div class="chart-wrap">
             <canvas id="chart-sector"></canvas>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="chart-title">Geographic Exposure</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-geo"></canvas>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h3 class="chart-title">Currency Exposure</h3>
+          <div class="chart-wrap">
+            <canvas id="chart-currency"></canvas>
           </div>
         </div>
       </section>

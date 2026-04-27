@@ -13,6 +13,7 @@
   let sortDir = -1; // -1 = descending
   let charts = {};
   let lastSuccessfulRefresh = null;
+  let privacyMode = false;
 
   // ─── Auth ───
   const AUTH_TOKEN = "dev-secret-change-in-production";
@@ -41,6 +42,7 @@
   const elConnectSpinner = $("#connect-spinner");
   const elBtnRefresh = $("#btn-refresh");
   const elBtnExport = $("#btn-export");
+  const elBtnPrivacy = $("#btn-privacy");
   const elBtnEmptyConnect = $("#btn-empty-connect");
   const elLastRefresh = $("#last-refresh");
   const elPositionsBody = $("#positions-body");
@@ -57,6 +59,7 @@
     elBtnRefresh.addEventListener("click", openModal);
     elBtnEmptyConnect.addEventListener("click", openModal);
     elBtnExport.addEventListener("click", exportHermesContext);
+    elBtnPrivacy.addEventListener("click", togglePrivacyMode);
     $("#modal-close").addEventListener("click", closeModal);
     elCredModal.addEventListener("click", (e) => {
       if (e.target === elCredModal) closeModal();
@@ -120,6 +123,18 @@
 
   function closeModal() {
     elCredModal.classList.add("hidden");
+  }
+
+  // ─── Privacy Mode ───
+  function togglePrivacyMode() {
+    privacyMode = !privacyMode;
+    document.body.classList.toggle("privacy-mode", privacyMode);
+    elBtnPrivacy.classList.toggle("active", privacyMode);
+    const icon = elBtnPrivacy.querySelector("i");
+    if (icon) {
+      icon.setAttribute("data-lucide", privacyMode ? "eye-off" : "eye");
+      lucide.createIcons({ nodes: [elBtnPrivacy] });
+    }
   }
 
   // ─── Auth ───
@@ -250,6 +265,7 @@
 
       if (res.status === 401) {
         showLoading(false);
+        if (portfolioData) renderDashboard();
         openModal();
         return;
       }
@@ -269,6 +285,7 @@
     } catch (err) {
       showLoading(false);
       markDataStale();
+      if (portfolioData) { renderDashboard(); }
       ToastManager.show("Error: " + err.message, "error");
     }
   }
@@ -530,19 +547,26 @@
 
     lastSuccessfulRefresh = Date.now();
     lucide.createIcons();
+
+    // Re-apply privacy mode if active
+    if (privacyMode) document.body.classList.add("privacy-mode");
   }
 
   // ─── Summary ───
   function renderSummary() {
     const d = portfolioData;
 
-    $("#total-value").textContent = fmtEur(d.total_value);
+    const totalValueEl = $("#total-value");
+    totalValueEl.textContent = fmtEur(d.total_value);
+    totalValueEl.classList.add("private-value");
 
     const plEl = $("#total-pl");
-    const plPctEl = $("#total-pl-pct");
     plEl.textContent = fmtEur(d.total_pl);
-    plPctEl.textContent = fmtPct(d.total_pl_pct);
+    plEl.classList.add("private-value");
     setSignClass(plEl, d.total_pl);
+
+    const plPctEl = $("#total-pl-pct");
+    plPctEl.textContent = fmtPct(d.total_pl_pct);
     setSignClass(plPctEl, d.total_pl_pct);
 
     const dailyEl = $("#daily-change");
@@ -561,7 +585,9 @@
     $("#etf-pct").innerHTML = `ETF <span>${etfPct.toFixed(1)}%</span>`;
     $("#stock-pct").innerHTML = `Stock <span>${stockPct.toFixed(1)}%</span>`;
 
-    $("#cash-available").textContent = fmtEur(d.cash_available);
+    const cashEl = $("#cash-available");
+    cashEl.textContent = fmtEur(d.cash_available);
+    cashEl.classList.add("private-value");
     $("#num-positions").textContent = d.num_positions;
   }
 
@@ -666,6 +692,63 @@
         },
       },
     });
+
+    // 4. Geographic breakdown
+    const geoMap = {};
+    positions.forEach(p => {
+      const key = p.country || 'Other';
+      geoMap[key] = (geoMap[key] || 0) + (p.current_value_eur || 0);
+    });
+    const geoLabels = Object.keys(geoMap);
+    const geoValues = Object.values(geoMap);
+    charts.geo = new Chart(document.getElementById('chart-geo'), {
+      type: 'doughnut',
+      data: {
+        labels: geoLabels,
+        datasets: [{ data: geoValues, backgroundColor: generateColors(geoLabels.length),
+                     borderColor: '#1a1a1a', borderWidth: 2 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '55%',
+        plugins: {
+          legend: { display: true, position: 'bottom',
+                    labels: { color: '#888', font: { family: 'Inter', size: 10 },
+                              boxWidth: 12,
+                              generateLabels: function(chart) {
+                                const d = Chart.overrides.doughnut.plugins.legend
+                                            .labels.generateLabels(chart);
+                                d.forEach(l => { if (l.text && l.text.length > 24)
+                                  l.text = l.text.substring(0, 22) + '…'; });
+                                return d;
+                              }}}
+        }
+      }
+    });
+
+    // 5. Currency exposure
+    const fxMap = {};
+    positions.forEach(p => {
+      const key = p.currency || 'EUR';
+      fxMap[key] = (fxMap[key] || 0) + (p.current_value_eur || 0);
+    });
+    const fxLabels = Object.keys(fxMap);
+    const fxValues = Object.values(fxMap);
+    charts.currency = new Chart(document.getElementById('chart-currency'), {
+      type: 'doughnut',
+      data: {
+        labels: fxLabels,
+        datasets: [{ data: fxValues, backgroundColor: generateColors(fxLabels.length),
+                     borderColor: '#1a1a1a', borderWidth: 2 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '55%',
+        plugins: {
+          legend: { display: true, position: 'bottom',
+                    labels: { color: '#888', font: { family: 'Inter', size: 10 },
+                              boxWidth: 12 }}
+        }
+      }
+    });
   }
 
   // ─── Positions Table ───
@@ -705,10 +788,10 @@
       tr.innerHTML = `
         <td class="col-name">${esc(p.name)}</td>
         <td>${p.asset_type || "—"}</td>
-        <td>${fmtEur(p.current_value_eur)}</td>
+        <td class="private-value">${fmtEur(p.current_value_eur)}</td>
         <td>${p.quantity ?? "—"}</td>
-        <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
-        <td>${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
+        <td class="private-value">${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
+        <td class="private-value">${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
         <td class="${plClass}">${p.unrealized_pl_pct != null ? p.unrealized_pl_pct.toFixed(2) + "%" : "—"}</td>
         <td>${p.weight != null ? p.weight.toFixed(1) + "%" : "—"}</td>
         <td>${p.rsi != null ? p.rsi.toFixed(0) : "—"}</td>
@@ -729,8 +812,8 @@
             <div class="detail-item"><label>ISIN</label><span>${esc(p.isin || "—")}</span></div>
             <div class="detail-item"><label>Currency</label><span>${esc(p.currency || "—")}</span></div>
             <div class="detail-item"><label>Sector</label><span>${esc(p.sector || "—")}</span></div>
-            <div class="detail-item"><label>52w High</label><span>${p["52w_high"] != null ? p["52w_high"].toFixed(2) : "—"}</span></div>
-            <div class="detail-item"><label>52w Low</label><span>${p["52w_low"] != null ? p["52w_low"].toFixed(2) : "—"}</span></div>
+            <div class="detail-item"><label>52w High</label><span class="private-value">${p["52w_high"] != null ? p["52w_high"].toFixed(2) : "—"}</span></div>
+            <div class="detail-item"><label>52w Low</label><span class="private-value">${p["52w_low"] != null ? p["52w_low"].toFixed(2) : "—"}</span></div>
             <div class="detail-item"><label>Dist from 52w High</label><span>${p.distance_from_52w_high_pct != null ? p.distance_from_52w_high_pct.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>30d Perf</label><span>${p.perf_30d != null ? p.perf_30d.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>90d Perf</label><span>${p.perf_90d != null ? p.perf_90d.toFixed(1) + "%" : "—"}</span></div>
