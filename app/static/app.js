@@ -106,6 +106,12 @@
         renderPositions();
       });
     });
+
+    // Snapshot manager lazy-load
+    document.getElementById("snapshot-manager")
+      .addEventListener("toggle", e => {
+        if (e.target.open) renderSnapshotManager();
+      });
   }
 
   // ─── Modal ───
@@ -580,6 +586,50 @@
         <strong>Relative:</strong> (position_return − benchmark_return) × weight × direction
       </p>
     `;
+  }
+
+  // ─── Snapshot Manager ───
+  async function renderSnapshotManager() {
+    const wrap = $("#snapshot-table-wrap");
+    if (!wrap) return;
+    try {
+      const res = await apiFetch("/api/snapshots");
+      const snapshots = await res.json();
+      if (!snapshots.length) {
+        wrap.innerHTML = "<p style='color:var(--text-dim)'>No snapshots found.</p>";
+        return;
+      }
+      const rows = snapshots.slice().reverse().map(s => `
+        <tr>
+          <td>${s.date}</td>
+          <td>${s.total_value_eur != null ? "€" + s.total_value_eur.toLocaleString("nl-NL", {minimumFractionDigits:2}) : "—"}</td>
+          <td>${s.benchmark_return_pct != null ? (s.benchmark_return_pct >= 0 ? "+" : "") + s.benchmark_return_pct.toFixed(2) + "%" : "—"}</td>
+          <td>${s.has_portfolio_data ? "✓" : "—"}</td>
+          <td>
+            <button class="btn btn-danger-sm" data-delete="${s.date}">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+      wrap.innerHTML = `
+        <table class="positions-table">
+          <thead><tr>
+            <th>Date</th><th>Portfolio Value</th>
+            <th>Benchmark Return</th><th>Has Data</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      wrap.querySelectorAll("[data-delete]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const date = btn.dataset.delete;
+          if (!confirm("Delete snapshot " + date + "?")) return;
+          const r = await apiFetch("/api/snapshots/" + date, { method: "DELETE" });
+          if (r.ok) renderSnapshotManager();
+          else ToastManager.show("Failed to delete snapshot", "error");
+        });
+      });
+    } catch (e) {
+      wrap.innerHTML = "<p>Failed to load snapshots.</p>";
+    }
   }
 
   // ─── Render Dashboard ───

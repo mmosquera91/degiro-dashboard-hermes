@@ -15,3 +15,4 @@
 | 2026-04-27 | benchmark-ttl-cache | complete |
 | 2026-04-27 | last-enriched-at | complete |
 | 2026-04-27 | refresh-prices-endpoint-and-daily-enrichment | complete |
+| 2026-04-27 | snapshot-management-api-and-ui | complete |

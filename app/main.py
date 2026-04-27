@@ -776,6 +776,48 @@ async def get_benchmark():
     }
 
 
+# ─── Snapshots ───
+
+@app.get("/api/snapshots", dependencies=[Depends(verify_brok_token)])
+async def list_snapshots():
+    """List all snapshots (lightweight — no portfolio_data payload)."""
+    snapshots = load_snapshots()
+    return [
+        {
+            "date": s["date"],
+            "total_value_eur": s.get("total_value_eur"),
+            "benchmark_value": s.get("benchmark_value"),
+            "benchmark_return_pct": s.get("benchmark_return_pct"),
+            "has_portfolio_data": s.get("portfolio_data") is not None,
+        }
+        for s in snapshots
+    ]
+
+
+@app.delete("/api/snapshots/{date_str}", dependencies=[Depends(verify_brok_token)])
+async def delete_snapshot(date_str: str):
+    """Delete a snapshot file by date string (YYYY-MM-DD)."""
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    file_path = Path(SNAPSHOT_DIR) / f"{date_str}.json"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    # Prevent deleting the only remaining snapshot
+    all_snapshots = load_snapshots()
+    if len(all_snapshots) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the only snapshot")
+
+    file_path.unlink()
+    global _benchmark_cache_time
+    _benchmark_cache_time = 0.0  # invalidate benchmark cache
+    logger.info("Snapshot deleted: %s", date_str)
+    return {"deleted": date_str}
+
+
 # ─── Static Files ───
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
