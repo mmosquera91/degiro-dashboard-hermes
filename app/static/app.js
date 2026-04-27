@@ -316,8 +316,8 @@
       try {
         const status = await apiFetch("/api/enrichment-status");
         if (!status.enriching) {
-          const data = await apiFetch("/api/portfolio");
-          portfolioData = data;
+          const res = await apiFetch("/api/portfolio");
+          portfolioData = await res.json();
           renderDashboard();
           const bmData = await fetchBenchmarkData();
           if (bmData) { benchmarkData = bmData; renderBenchmark(bmData); renderAttribution(bmData); }
