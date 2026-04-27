@@ -564,13 +564,20 @@
     totalValueEl.classList.add("private-value");
 
     const plEl = $("#total-pl");
-    plEl.textContent = fmtEur(d.unrealized_pl_total);
-    plEl.classList.add("private-value");
-    setSignClass(plEl, d.unrealized_pl_total);
+    if (plEl && d.true_total_pl != null) {
+        plEl.textContent = fmtEur(d.true_total_pl);
+        setSignClass(plEl, d.true_total_pl);
+    } else if (plEl) {
+        plEl.textContent = "—";
+    }
 
     const plPctEl = $("#total-pl-pct");
-    plPctEl.textContent = fmtPct(d.unrealized_pl_total_pct);
-    setSignClass(plPctEl, d.unrealized_pl_total_pct);
+    if (plPctEl && d.true_total_pl_pct != null) {
+        plPctEl.textContent = fmtPct(d.true_total_pl_pct);
+        setSignClass(plPctEl, d.true_total_pl_pct);
+    } else if (plPctEl) {
+        plPctEl.textContent = "—";
+    }
 
     const totalPlCombined = document.getElementById('total-pl-combined');
     const totalPlCombinedPct = document.getElementById('total-pl-combined-pct');
@@ -608,32 +615,7 @@
     Object.values(charts).forEach((c) => c.destroy());
     charts = {};
 
-    // 1. ETF vs Stocks donut
-    const etfVal = positions.filter((p) => p.asset_type === "ETF").reduce((s, p) => s + (p.current_value_eur || 0), 0);
-    const stockVal = positions.filter((p) => p.asset_type === "STOCK").reduce((s, p) => s + (p.current_value_eur || 0), 0);
-
-    charts.etfStock = new Chart($("#chart-etf-stock"), {
-      type: "doughnut",
-      data: {
-        labels: ["ETFs", "Stocks"],
-        datasets: [{
-          data: [etfVal, stockVal],
-          backgroundColor: ["#01696f", "#d97706"],
-          borderColor: "#1a1a1a",
-          borderWidth: 2,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "65%",
-        plugins: {
-          legend: { display: true, position: "bottom", labels: { color: "#888", font: { family: "Inter", size: 11 } } },
-        },
-      },
-    });
-
-    // 2. Top 10 by weight
+    // 1. Top 10 by weight
     const top10 = [...positions].sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 10);
     charts.topWeight = new Chart($("#chart-top-weight"), {
       type: "bar",
@@ -679,6 +661,24 @@
         maintainAspectRatio: false,
         cutout: "55%",
         plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = total > 0
+                  ? ((context.parsed / total) * 100).toFixed(1) + '%'
+                  : '0%';
+                if (document.body.classList.contains('privacy-mode')) {
+                  return context.label + ': ' + pct;
+                }
+                const eur = context.parsed.toLocaleString('de-DE', {
+                  style: 'currency', currency: 'EUR',
+                  minimumFractionDigits: 0, maximumFractionDigits: 0
+                });
+                return context.label + ': ' + eur + ' (' + pct + ')';
+              }
+            }
+          },
           legend: {
             display: true,
             position: "bottom",
@@ -719,6 +719,24 @@
       options: {
         responsive: true, maintainAspectRatio: false, cutout: '55%',
         plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = total > 0
+                  ? ((context.parsed / total) * 100).toFixed(1) + '%'
+                  : '0%';
+                if (document.body.classList.contains('privacy-mode')) {
+                  return context.label + ': ' + pct;
+                }
+                const eur = context.parsed.toLocaleString('de-DE', {
+                  style: 'currency', currency: 'EUR',
+                  minimumFractionDigits: 0, maximumFractionDigits: 0
+                });
+                return context.label + ': ' + eur + ' (' + pct + ')';
+              }
+            }
+          },
           legend: { display: true, position: 'bottom',
                     labels: { color: '#888', font: { family: 'Inter', size: 10 },
                               boxWidth: 12,
@@ -772,9 +790,9 @@
         <td class="col-name">${esc(p.name)}</td>
         <td>${p.asset_type || "—"}</td>
         <td class="private-value">${fmtEur(p.current_value_eur)}</td>
-        <td>${p.quantity ?? "—"}</td>
-        <td class="private-value">${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
-        <td class="private-value">${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
+        <td><span class="private-value">${p.quantity ?? "—"}</span></td>
+        <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
+        <td>${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
         <td class="${plClass}">${p.unrealized_pl_pct != null ? p.unrealized_pl_pct.toFixed(2) + "%" : "—"}</td>
         <td>${p.weight != null ? p.weight.toFixed(1) + "%" : "—"}</td>
         <td>${p.rsi != null ? p.rsi.toFixed(0) : "—"}</td>
