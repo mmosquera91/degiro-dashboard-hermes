@@ -92,8 +92,8 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
 
     total_value = sum(p.get("current_value", 0) or 0 for p in positions_copy)
     total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions_copy)
-    total_pl = total_value - total_invested
-    total_pl_pct = (total_pl / total_invested * 100) if total_invested > 0 else 0
+    unrealized_pl_total = total_value - total_invested
+    unrealized_pl_total_pct = (unrealized_pl_total / total_invested * 100) if total_invested > 0 else 0
 
     etf_value = sum(p.get("current_value", 0) or 0 for p in positions_copy if p.get("asset_type") == "ETF")
     stock_value = sum(p.get("current_value", 0) or 0 for p in positions_copy if p.get("asset_type") == "STOCK")
@@ -137,8 +137,9 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         "total_value": round(total_value, 2),
         "total_value_eur": round(total_value, 2),
         "total_invested": round(total_invested, 2),
-        "total_pl": round(total_pl, 2),
-        "total_pl_pct": round(total_pl_pct, 2),
+        # DeGiro does not expose realized gains via API — total_pl = unrealized only
+        "unrealized_pl_total": round(unrealized_pl_total, 2),
+        "unrealized_pl_total_pct": round(unrealized_pl_total_pct, 2),
         "etf_allocation_pct": round(etf_allocation_pct, 1),
         "stock_allocation_pct": round(stock_allocation_pct, 1),
         "num_positions": len(positions_copy),
@@ -156,8 +157,8 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
     """Build the full portfolio summary from enriched, scored positions."""
     total_value = sum(p.get("current_value_eur", 0) or 0 for p in positions)
     total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions)
-    total_pl = total_value - total_invested
-    total_pl_pct = (total_pl / total_invested * 100) if total_invested > 0 else 0
+    unrealized_pl_total = total_value - total_invested
+    unrealized_pl_total_pct = (unrealized_pl_total / total_invested * 100) if total_invested > 0 else 0
 
     etf_value = sum(p.get("current_value_eur", 0) or 0 for p in positions if p.get("asset_type") == "ETF")
     stock_value = sum(p.get("current_value_eur", 0) or 0 for p in positions if p.get("asset_type") == "STOCK")
@@ -199,8 +200,9 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
         "total_value": round(total_value, 2),
         "total_value_eur": round(total_value, 2),
         "total_invested": round(total_invested, 2),
-        "total_pl": round(total_pl, 2),
-        "total_pl_pct": round(total_pl_pct, 2),
+        # DeGiro does not expose realized gains via API — total_pl = unrealized only
+        "unrealized_pl_total": round(unrealized_pl_total, 2),
+        "unrealized_pl_total_pct": round(unrealized_pl_total_pct, 2),
         "etf_allocation_pct": round(etf_allocation_pct, 1),
         "stock_allocation_pct": round(stock_allocation_pct, 1),
         "num_positions": len(positions),

@@ -564,23 +564,25 @@
     totalValueEl.classList.add("private-value");
 
     const plEl = $("#total-pl");
-    plEl.textContent = fmtEur(d.total_pl);
+    plEl.textContent = fmtEur(d.unrealized_pl_total);
     plEl.classList.add("private-value");
-    setSignClass(plEl, d.total_pl);
+    setSignClass(plEl, d.unrealized_pl_total);
 
     const plPctEl = $("#total-pl-pct");
-    plPctEl.textContent = fmtPct(d.total_pl_pct);
-    setSignClass(plPctEl, d.total_pl_pct);
+    plPctEl.textContent = fmtPct(d.unrealized_pl_total_pct);
+    setSignClass(plPctEl, d.unrealized_pl_total_pct);
 
     const totalPlCombined = document.getElementById('total-pl-combined');
     const totalPlCombinedPct = document.getElementById('total-pl-combined-pct');
     if (totalPlCombined) {
-      totalPlCombined.textContent = fmtEur(d.total_pl);
-      setSignClass(totalPlCombined, d.total_pl);
+      totalPlCombined.textContent = fmtEur(d.unrealized_pl_total);
+      totalPlCombined.classList.add("private-value");
+      setSignClass(totalPlCombined, d.unrealized_pl_total);
     }
     if (totalPlCombinedPct) {
-      totalPlCombinedPct.textContent = fmtPct(d.total_pl_pct);
-      setSignClass(totalPlCombinedPct, d.total_pl_pct);
+      totalPlCombinedPct.textContent = fmtPct(d.unrealized_pl_total_pct);
+      totalPlCombinedPct.classList.add("private-value");
+      setSignClass(totalPlCombinedPct, d.unrealized_pl_total_pct);
     }
 
     // Allocation bar

@@ -977,11 +977,16 @@ body.privacy-mode .private-value:active {
 }
 
 #btn-privacy {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none;
   color: var(--text-muted, #7a7974);
 }
 #btn-privacy:hover {
+  background: transparent !important;
   color: var(--text, #cdccca);
 }
 #btn-privacy.active {
+  background: transparent !important;
   color: var(--teal, #01696f);
 }
