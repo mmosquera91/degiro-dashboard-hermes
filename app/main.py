@@ -704,6 +704,7 @@ async def get_benchmark():
     Benchmark data is fetched fresh from yfinance — NOT stored in snapshots (D-07).
     """
     import time as _time
+    global _benchmark_cache, _benchmark_cache_time
 
     snapshots = load_snapshots()
     if not snapshots:

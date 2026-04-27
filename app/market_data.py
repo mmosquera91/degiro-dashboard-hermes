@@ -221,6 +221,7 @@ def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
     Prefers results on exchanges matching position_currency.
     Returns empty string if nothing is found or on rate limit.
     """
+    global _yf_rate_limited, _yf_rate_limited_until
     if not isin:
         return ""
 
@@ -272,6 +273,19 @@ def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
             if exch in preferred_exchanges:
                 logger.debug("ISIN %s resolved to %s via exchange %s", isin, sym, exch)
                 return sym
+
+        # Second pass: accept any exchange if no preferred-exchange match found
+        for quote in quotes:
+            sym = quote.get("symbol", "")
+            exch = quote.get("exchange", "")
+            if not sym or not exch:
+                continue
+            if exch in _ISIN_AS_SYMBOL_EXCHANGES:
+                continue
+            if len(sym) > 12:
+                continue
+            logger.debug("ISIN %s resolved to %s via fallback exchange %s", isin, sym, exch)
+            return sym
 
     except Exception as e:
         err_str = str(e)

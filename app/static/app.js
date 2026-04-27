@@ -41,6 +41,7 @@
   const elConnectText = $("#connect-text");
   const elConnectSpinner = $("#connect-spinner");
   const elBtnRefresh = $("#btn-refresh");
+  const elBtnUpdatePrices = $("#btn-update-prices");
   const elBtnExport = $("#btn-export");
   const elBtnPrivacy = $("#btn-privacy");
   const elBtnEmptyConnect = $("#btn-empty-connect");
@@ -57,6 +58,7 @@
 
   function bindEvents() {
     elBtnRefresh.addEventListener("click", openModal);
+    elBtnUpdatePrices.addEventListener("click", handleUpdatePrices);
     elBtnEmptyConnect.addEventListener("click", openModal);
     elBtnExport.addEventListener("click", exportHermesContext);
     elBtnPrivacy.addEventListener("click", togglePrivacyMode);
@@ -228,6 +230,7 @@
       if (res.status === 401) {
         showEnriching(false);
         openModal();
+        disableUpdatePrices();
         return;
       }
 
@@ -267,6 +270,7 @@
         showLoading(false);
         if (portfolioData) renderDashboard();
         openModal();
+        disableUpdatePrices();
         return;
       }
 
@@ -288,6 +292,64 @@
       if (portfolioData) { renderDashboard(); }
       ToastManager.show("Error: " + err.message, "error");
     }
+  }
+
+  // ─── Update Prices ───
+  async function waitForEnrichment() {
+    const MAX_RETRIES = 20;
+    const POLL_INTERVAL_MS = 3000;
+    const today = new Date().toDateString();
+
+    for (let i = 0; i < MAX_RETRIES; i++) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+      try {
+        const res = await apiFetch("/api/portfolio");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.last_enriched_at && new Date(data.last_enriched_at).toDateString() === today) {
+            portfolioData = data;
+            renderDashboard();
+            const bmData = await fetchBenchmarkData();
+            if (bmData) {
+              benchmarkData = bmData;
+              renderBenchmark(bmData);
+              renderAttribution(bmData);
+            }
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+    ToastManager.show("Price update timed out. Please refresh manually.", "warn");
+  }
+
+  async function handleUpdatePrices() {
+    if (!portfolioData) return;
+    const btn = elBtnUpdatePrices;
+    btn.disabled = true;
+    btn.querySelector(".btn-label").textContent = "Updating...";
+    try {
+      const res = await apiFetch("/api/refresh-prices", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Price refresh failed");
+      }
+      await waitForEnrichment();
+    } catch (e) {
+      console.error("Update prices failed", e);
+      ToastManager.show("Update prices failed: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.querySelector(".btn-label").textContent = "Update Prices";
+    }
+  }
+
+  function enableUpdatePrices() {
+    if (elBtnUpdatePrices) elBtnUpdatePrices.disabled = false;
+  }
+
+  function disableUpdatePrices() {
+    if (elBtnUpdatePrices) elBtnUpdatePrices.disabled = true;
   }
 
   function showLoading(on) {
@@ -527,6 +589,9 @@
     const dt = new Date(portfolioData.date);
     elLastRefresh.textContent = "Updated " + dt.toLocaleString();
 
+    // Clear stale badge when fresh data is loaded
+    clearStaleIndicator();
+
     // Summary cards
     renderSummary();
 
@@ -550,6 +615,7 @@
 
     lastSuccessfulRefresh = Date.now();
     lucide.createIcons();
+    enableUpdatePrices();
 
     // Re-apply privacy mode if active
     if (privacyMode) document.body.classList.add("privacy-mode");
@@ -1080,6 +1146,11 @@ function renderHealthAlerts() {
   }
 
   // ─── Stale Data Indicator ───
+  function isDataStale() {
+    if (!portfolioData || portfolioData.last_enriched_at == null) return true;
+    return new Date(portfolioData.last_enriched_at).toDateString() !== new Date().toDateString();
+  }
+
   function markDataStale() {
     var badge = document.getElementById("stale-badge");
     if (badge) {
@@ -1091,7 +1162,13 @@ function renderHealthAlerts() {
 
   function clearStaleIndicator() {
     var badge = document.getElementById("stale-badge");
-    if (badge) badge.classList.add("hidden");
+    if (badge) {
+      if (isDataStale()) {
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    }
   }
 
   function formatTimeSince(timestamp) {
