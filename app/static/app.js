@@ -368,18 +368,19 @@
     }
 
     // Filter benchmark series to start at first snapshot date
-    const firstSnapDate = indexedPortfolio[0].date;
+    const normDate = d => (d || '').slice(0, 10);   // keep YYYY-MM-DD only
+    const firstSnapDate = normDate(indexedPortfolio[0].date);
     const filteredBenchmark = benchmarkSeries.filter(b => b.date >= firstSnapDate);
 
     // Merge both series by date so the x-axis covers all daily dates.
     // Portfolio gets null on dates it doesn't cover (keeps benchmark continuous).
     const allDates = [...new Set([
-      ...indexedPortfolio.map(p => p.date),
-      ...filteredBenchmark.map(b => b.date)
+      ...indexedPortfolio.map(p => normDate(p.date)),
+      ...filteredBenchmark.map(b => normDate(b.date))
     ])].sort();
 
-    const portfolioByDate = new Map(indexedPortfolio.map(p => [p.date, p]));
-    const benchmarkByDate = new Map(filteredBenchmark.map(b => [b.date, b]));
+    const portfolioByDate = new Map(indexedPortfolio.map(p => [normDate(p.date), p]));
+    const benchmarkByDate = new Map(filteredBenchmark.map(b => [normDate(b.date), b]));
 
     const mergedPortfolio = allDates.map(d => portfolioByDate.get(d) || null);
     const mergedBenchmark = allDates.map(d => benchmarkByDate.get(d) || null);
