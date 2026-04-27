@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Dashboard & Persistence Fix
 status: ready_to_plan
-last_updated: "2026-04-26"
+last_updated: "2026-04-27"
 progress:
   total_phases: 4
   completed_phases: 2
@@ -71,6 +71,8 @@ progress:
 
 | 260426-x03 | Fix Tradegate US stock currency override | 2026-04-26 | 44a2838 | [260426-x03-fix-tradegate-us-stock-currency-override](./quick/260426-x03-fix-tradegate-us-stock-currency-override/) |
 | 260426-txp | fix exchangeId 663 and Stockholm ambiguity for US stocks and IE/LU ETFs | 2026-04-26 | [260426-txp-fix-exchangeid-663-and-stockholm-ambigui](./quick/260426-txp-fix-exchangeid-663-and-stockholm-ambigui/) |
+| 260427-710 | Map DeGiro exchangeId 710 to Euronext Paris / EUR (Euronext Fund Services) | 2026-04-27 | 4decb2f | |
+| 260427-tve | Add total_value_eur to portfolio summary responses | 2026-04-27 | bd5a3d2 | [260427-tve](./quick/260427-tve/) |
 
 - **fix symbol vwdId fallback to yfinance (2026-04-26):** Removed `vwdId` and `vwd_id` from symbol fallback chain in `fetch_portfolio()`. vwdId is a Van der Moolen internal numeric ID (e.g. "72095021"), not a market ticker — using it as a yfinance symbol fallback caused symbol_cache.json poisoning and wasted 10 yfinance HTTP calls per leveraged product/turbo/warrant per enrichment run. `enrich_position()` already handles empty symbol with early return + warning log. `app/degiro_client.py` line 697.
 - **fix _yf_rate_limited race condition (2026-04-24):** Added `_yf_rate_limited_until` with 60s cooldown. `enrich_positions()` now conditionally resets flag only after cooldown expires. `_resolve_yf_symbol()` sets 60s cooldown on 429 detection and checks expiry before skipping. Prevents premature retry after rate limit hit. Commit: 68279c0
@@ -95,4 +97,4 @@ progress:
 
 ---
 
-*Last updated: 2026-04-26 — Completed quick task 260426-x03: Fix Tradegate US stock currency override*
+*Last updated: 2026-04-27 — Completed quick task 260427-tve: Add total_value_eur to portfolio summary responses*
