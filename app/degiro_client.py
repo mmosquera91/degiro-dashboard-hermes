@@ -676,7 +676,10 @@ class DeGiroClient:
             cash_funds_data = update_dict.get("cashFunds", update_dict.get("cash_funds", {}))
             total_portfolio_data = update_dict.get("totalPortfolio", update_dict.get("total_portfolio", {}))
 
-            # Extract positions
+            # Safe defaults — overwritten below once total_portfolio_flat is parsed
+            total_deposit_withdrawal_val = 0.0
+            total_cash_val = 0.0
+            total_fees_val = 0.0
             positions = []
             product_ids = []
             raw_positions = []
@@ -854,10 +857,38 @@ class DeGiroClient:
                                 cash_available = val
 
             logger.info("Fetched %d positions from DeGiro", len(positions))
+
+            # Parse total_portfolio kv-list (same format as positions)
+            total_portfolio_flat = {}
+            if isinstance(total_portfolio_data, dict):
+                tp_values = (total_portfolio_data.get("value")
+                             or total_portfolio_data.get("values")
+                             or [])
+                if tp_values:
+                    total_portfolio_flat = _kv_list_to_dict(tp_values)
+                else:
+                    # Already flat dict (newer degiro-connector versions)
+                    total_portfolio_flat = total_portfolio_data
+
+            # Extract key aggregates
+            def _safe_float(val, default=0.0):
+                try:
+                    return float(val) if val is not None else default
+                except (TypeError, ValueError):
+                    return default
+
+            total_deposit_withdrawal = _safe_float(
+                total_portfolio_flat.get("totalDepositWithdrawal")
+            )
+            total_cash = _safe_float(total_portfolio_flat.get("totalCash", 0))
+            total_fees = _safe_float(total_portfolio_flat.get("totalNonProductFees", 0))
+            total_deposit_withdrawal_val = total_deposit_withdrawal
+
             return {
                 "positions": positions,
                 "cash_available": round(cash_available, 2),
                 "currency": "EUR",
+                "total_deposit_withdrawal": round(total_deposit_withdrawal_val, 2),
             }
 
         except Exception as e:

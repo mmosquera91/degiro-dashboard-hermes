@@ -140,6 +140,9 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         # DeGiro does not expose realized gains via API — total_pl = unrealized only
         "unrealized_pl_total": round(unrealized_pl_total, 2),
         "unrealized_pl_total_pct": round(unrealized_pl_total_pct, 2),
+        "true_total_pl": None,
+        "true_total_pl_pct": None,
+        "total_deposit_withdrawal": 0.0,
         "etf_allocation_pct": round(etf_allocation_pct, 1),
         "stock_allocation_pct": round(stock_allocation_pct, 1),
         "num_positions": len(positions_copy),
@@ -153,7 +156,7 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
     }
 
 
-def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
+def _build_portfolio_summary(positions: list, cash_available: float, raw: dict | None = None) -> dict:
     """Build the full portfolio summary from enriched, scored positions."""
     total_value = sum(p.get("current_value_eur", 0) or 0 for p in positions)
     total_invested = sum((p.get("avg_buy_price", 0) or 0) * p.get("quantity", 0) for p in positions)
@@ -195,6 +198,16 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
     # Daily change (approximation from yfinance — not directly from DeGiro)
     daily_change_pct = None
 
+    # True P&L = all position value + cash - total net deposits ever made
+    # Does NOT include fees separately — fees already reduce cash balance
+    total_deposit_withdrawal = raw.get("total_deposit_withdrawal", 0.0) if raw else 0.0
+    if total_deposit_withdrawal > 0:
+        true_total_pl = round(total_value + (cash_available or 0) - total_deposit_withdrawal, 2)
+        true_total_pl_pct = round((true_total_pl / total_deposit_withdrawal) * 100, 2)
+    else:
+        true_total_pl = None
+        true_total_pl_pct = None
+
     return {
         "date": datetime.now().isoformat(),
         "total_value": round(total_value, 2),
@@ -203,6 +216,9 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
         # DeGiro does not expose realized gains via API — total_pl = unrealized only
         "unrealized_pl_total": round(unrealized_pl_total, 2),
         "unrealized_pl_total_pct": round(unrealized_pl_total_pct, 2),
+        "true_total_pl": true_total_pl,
+        "true_total_pl_pct": true_total_pl_pct,
+        "total_deposit_withdrawal": round(total_deposit_withdrawal, 2),
         "etf_allocation_pct": round(etf_allocation_pct, 1),
         "stock_allocation_pct": round(stock_allocation_pct, 1),
         "num_positions": len(positions),
@@ -444,7 +460,7 @@ async def get_portfolio():
             logger.warning("Score computation failed: %s", str(e))
 
         # Build summary
-        portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0))
+        portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0), raw)
 
         # Compute health alerts from the portfolio summary data (defensive)
         try:
