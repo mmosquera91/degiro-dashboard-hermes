@@ -70,9 +70,10 @@
           <span id="total-pl" class="card-value-main">—</span>
           <span id="total-pl-pct" class="card-sub">—</span>
         </div>
-        <div class="card card-daily">
-          <span class="card-label">Daily Change</span>
-          <span id="daily-change" class="card-value-main">—</span>
+        <div class="card card-pl">
+          <span class="card-label">Total P&L (Combined)</span>
+          <span id="total-pl-combined" class="card-value-main">—</span>
+          <span id="total-pl-combined-pct" class="card-sub">—</span>
         </div>
         <div class="card card-allocation">
           <span class="card-label">ETF / Stock Split</span>
@@ -95,6 +96,25 @@
         <div class="card card-positions">
           <span class="card-label">Positions</span>
           <span id="num-positions" class="card-value-main">—</span>
+        </div>
+      </section>
+
+      <!-- CONCENTRATION CARDS -->
+      <section class="summary-row-centered">
+        <div id="card-top-holding" class="card">
+          <span class="card-label">Top Holding</span>
+          <span class="card-value">—</span>
+          <span class="card-sub">—</span>
+        </div>
+        <div id="card-top5-weight" class="card">
+          <span class="card-label">Top 5 Weight</span>
+          <span class="card-value">—</span>
+          <span class="card-sub">—</span>
+        </div>
+        <div id="card-hhi" class="card">
+          <span class="card-label">HHI Concentration</span>
+          <span class="card-value">—</span>
+          <span class="card-sub">—</span>
         </div>
       </section>
 
@@ -166,12 +186,6 @@
           <h3 class="chart-title">Geographic Exposure</h3>
           <div class="chart-wrap">
             <canvas id="chart-geo"></canvas>
-          </div>
-        </div>
-        <div class="card chart-card">
-          <h3 class="chart-title">Currency Exposure</h3>
-          <div class="chart-wrap">
-            <canvas id="chart-currency"></canvas>
           </div>
         </div>
       </section>

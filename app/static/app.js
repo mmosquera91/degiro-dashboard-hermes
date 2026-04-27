@@ -530,6 +530,9 @@
     // Summary cards
     renderSummary();
 
+    // Concentration metrics
+    renderConcentration();
+
     // Charts
     renderCharts();
 
@@ -569,12 +572,15 @@
     plPctEl.textContent = fmtPct(d.total_pl_pct);
     setSignClass(plPctEl, d.total_pl_pct);
 
-    const dailyEl = $("#daily-change");
-    if (d.daily_change_pct != null) {
-      dailyEl.textContent = fmtPct(d.daily_change_pct);
-      setSignClass(dailyEl, d.daily_change_pct);
-    } else {
-      dailyEl.textContent = "—";
+    const totalPlCombined = document.getElementById('total-pl-combined');
+    const totalPlCombinedPct = document.getElementById('total-pl-combined-pct');
+    if (totalPlCombined) {
+      totalPlCombined.textContent = fmtEur(d.total_pl);
+      setSignClass(totalPlCombined, d.total_pl);
+    }
+    if (totalPlCombinedPct) {
+      totalPlCombinedPct.textContent = fmtPct(d.total_pl_pct);
+      setSignClass(totalPlCombinedPct, d.total_pl_pct);
     }
 
     // Allocation bar
@@ -721,31 +727,6 @@
                                   l.text = l.text.substring(0, 22) + '…'; });
                                 return d;
                               }}}
-        }
-      }
-    });
-
-    // 5. Currency exposure
-    const fxMap = {};
-    positions.forEach(p => {
-      const key = p.currency || 'EUR';
-      fxMap[key] = (fxMap[key] || 0) + (p.current_value_eur || 0);
-    });
-    const fxLabels = Object.keys(fxMap);
-    const fxValues = Object.values(fxMap);
-    charts.currency = new Chart(document.getElementById('chart-currency'), {
-      type: 'doughnut',
-      data: {
-        labels: fxLabels,
-        datasets: [{ data: fxValues, backgroundColor: generateColors(fxLabels.length),
-                     borderColor: '#1a1a1a', borderWidth: 2 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: '55%',
-        plugins: {
-          legend: { display: true, position: 'bottom',
-                    labels: { color: '#888', font: { family: 'Inter', size: 10 },
-                              boxWidth: 12 }}
         }
       }
     });
@@ -896,6 +877,51 @@
     `
       )
       .join("");
+  }
+
+  // ─── Concentration Metrics ───
+  function renderConcentration() {
+    if (!portfolioData?.positions) return;
+    const positions = portfolioData.positions;
+
+    // Top holding
+    const top = positions.reduce((a, b) =>
+      (b.weight||0) > (a.weight||0) ? b : a, positions[0]);
+    const topEl = document.getElementById('card-top-holding');
+    if (topEl) {
+      topEl.querySelector('.card-value').textContent =
+        (top.weight||0).toFixed(1) + '%';
+      topEl.querySelector('.card-sub').textContent =
+        (top.name || '').substring(0, 22);
+    }
+
+    // Top 5
+    const top5 = [...positions].sort((a,b) => (b.weight||0)-(a.weight||0))
+      .slice(0,5).reduce((s,p) => s+(p.weight||0), 0);
+    const top5El = document.getElementById('card-top5-weight');
+    if (top5El) {
+      const val = top5El.querySelector('.card-value');
+      val.textContent = top5.toFixed(1) + '%';
+      val.className = 'card-value ' + (top5 < 40 ? 'positive' :
+                       top5 < 60 ? '' : 'negative');
+      if (top5 >= 40 && top5 < 60) val.style.color = '#d97706';
+      else val.style.color = '';
+    }
+
+    // HHI
+    const hhi = Math.round(positions.reduce((s,p) =>
+      s + Math.pow((p.weight||0)/100, 2), 0) * 10000);
+    const hhiEl = document.getElementById('card-hhi');
+    if (hhiEl) {
+      const val = hhiEl.querySelector('.card-value');
+      val.textContent = hhi.toLocaleString();
+      val.className = 'card-value ' + (hhi < 1500 ? 'positive' :
+                       hhi < 2500 ? '' : 'negative');
+      if (hhi >= 1500 && hhi < 2500) val.style.color = '#d97706';
+      else val.style.color = '';
+      hhiEl.querySelector('.card-sub').textContent =
+        hhi < 1500 ? 'Diversified' : hhi < 2500 ? 'Moderate' : 'Concentrated';
+    }
   }
 
   // ─── Health Alerts ───

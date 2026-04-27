@@ -214,6 +214,14 @@ body {
   margin-bottom: 20px;
 }
 
+.summary-row-centered {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
 .card-pl .card-value-main.positive { color: var(--green); }
 .card-pl .card-value-main.negative { color: var(--red); }
 .card-pl .card-sub.positive { color: var(--green); }
@@ -952,3 +960,28 @@ body {
   align-items: center;
 }
 .toast-close:hover { color: var(--text); }
+
+/* ─── PRIVACY MODE ─── */
+.private-value {
+  transition: filter 0.2s ease;
+}
+
+body.privacy-mode .private-value {
+  filter: blur(8px);
+  user-select: none;
+  cursor: pointer;
+}
+
+body.privacy-mode .private-value:active {
+  filter: none;
+}
+
+#btn-privacy {
+  color: var(--text-muted, #7a7974);
+}
+#btn-privacy:hover {
+  color: var(--text, #cdccca);
+}
+#btn-privacy.active {
+  color: var(--teal, #01696f);
+}
