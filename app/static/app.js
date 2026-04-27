@@ -296,27 +296,32 @@
 
   // ─── Update Prices ───
   async function waitForEnrichment() {
-    const MAX_RETRIES = 20;
-    const POLL_INTERVAL_MS = 3000;
-    const today = new Date().toDateString();
+    const MAX_WAIT_MS = 5 * 60 * 1000;
+    const POLL_MS = 2000;
+    const started = Date.now();
 
-    for (let i = 0; i < MAX_RETRIES; i++) {
-      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    // Phase 1: wait until enriching flips to true (max 10s — thread starts fast)
+    const STARTED_TIMEOUT = 10000;
+    while (Date.now() - started < STARTED_TIMEOUT) {
+      await new Promise(r => setTimeout(r, POLL_MS));
       try {
-        const res = await apiFetch("/api/portfolio");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.last_enriched_at && new Date(data.last_enriched_at).toDateString() === today) {
-            portfolioData = data;
-            renderDashboard();
-            const bmData = await fetchBenchmarkData();
-            if (bmData) {
-              benchmarkData = bmData;
-              renderBenchmark(bmData);
-              renderAttribution(bmData);
-            }
-            return;
-          }
+        const status = await apiFetch("/api/enrichment-status");
+        if (status.enriching) break;
+      } catch (_) {}
+    }
+
+    // Phase 2: wait until enriching flips back to false
+    while (Date.now() - started < MAX_WAIT_MS) {
+      await new Promise(r => setTimeout(r, POLL_MS));
+      try {
+        const status = await apiFetch("/api/enrichment-status");
+        if (!status.enriching) {
+          const data = await apiFetch("/api/portfolio");
+          portfolioData = data;
+          renderDashboard();
+          const bmData = await fetchBenchmarkData();
+          if (bmData) { benchmarkData = bmData; renderBenchmark(bmData); renderAttribution(bmData); }
+          return;
         }
       } catch (_) {}
     }

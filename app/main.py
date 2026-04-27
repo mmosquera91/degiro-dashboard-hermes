@@ -32,6 +32,7 @@ _session = {
     "portfolio": None,
     "portfolio_time": None,
     "last_enriched_at": None,
+    "enriching": False,
 }
 _session_lock = threading.Lock()
 
@@ -97,6 +98,7 @@ def _clear_session():
     _session["portfolio"] = None
     _session["portfolio_time"] = None
     _session["last_enriched_at"] = None
+    _session["enriching"] = False
 
 
 def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict:
@@ -612,23 +614,30 @@ def _do_enrich_session():
     Called by both the /api/refresh-prices endpoint (via thread) and the
     daily enrichment loop (via asyncio.to_thread). Does NOT call DeGiro.
     """
-    with _session_lock:
-        positions = [p.copy() for p in _session["portfolio"]["positions"]]
-        cash = _session["portfolio"].get("cash_available", 0)
-        raw_portfolio = _session["portfolio"]
+    try:
+        with _session_lock:
+            _session["enriching"] = True
 
-    enriched = enrich_positions({"positions": positions})
-    enriched = compute_portfolio_weights(enriched)
-    enriched = compute_scores(enriched)
-    summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
-    summary = _sanitize_floats_deep(summary)
+        with _session_lock:
+            positions = [p.copy() for p in _session["portfolio"]["positions"]]
+            cash = _session["portfolio"].get("cash_available", 0)
+            raw_portfolio = _session["portfolio"]
 
-    with _session_lock:
-        _session["portfolio"] = summary
-        _session["portfolio_time"] = datetime.now()
-        _session["last_enriched_at"] = datetime.now()
+        enriched = enrich_positions({"positions": positions})
+        enriched = compute_portfolio_weights(enriched)
+        enriched = compute_scores(enriched)
+        summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
+        summary = _sanitize_floats_deep(summary)
 
-    _save_snapshot_for_portfolio(summary)
+        with _session_lock:
+            _session["portfolio"] = summary
+            _session["portfolio_time"] = datetime.now()
+            _session["last_enriched_at"] = datetime.now()
+
+        _save_snapshot_for_portfolio(summary)
+    finally:
+        with _session_lock:
+            _session["enriching"] = False
 
 
 @app.post("/api/refresh-prices", dependencies=[Depends(verify_brok_token)])
@@ -646,6 +655,18 @@ async def refresh_prices():
     thread = threading.Thread(target=_do_enrich_session, daemon=True)
     thread.start()
     return {"status": "enrichment_started"}
+
+
+@app.get("/api/enrichment-status")
+async def enrichment_status():
+    """Return current enrichment state — no auth required, no financial data."""
+    with _session_lock:
+        enriching = _session.get("enriching", False)
+        last_enriched_at = _session.get("last_enriched_at")
+    return {
+        "enriching": enriching,
+        "last_enriched_at": last_enriched_at.isoformat() if last_enriched_at else None,
+    }
 
 
 # ─── Hermes Context ───
