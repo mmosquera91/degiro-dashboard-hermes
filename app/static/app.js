@@ -223,6 +223,8 @@
 
       portfolioData = await res.json();
 
+      renderDashboard();
+
       // Fetch benchmark data
       const bmData = await fetchBenchmarkData();
       if (bmData) {
@@ -231,7 +233,6 @@
         renderAttribution(bmData);
       }
 
-      renderDashboard();
       showEnriching(false);
     } catch (err) {
       showEnriching(false);
@@ -351,26 +352,55 @@
     const baseValue = snapshots[0].total_value_eur;
     const indexedPortfolio = snapshots.map(s => ({
       date: s.date,
+      raw: s.total_value_eur,
       value: baseValue > 0 ? (s.total_value_eur / baseValue) * 100 : 100
     }));
 
-    // Build chart data — X-axis from snapshots, Y-axis indexed to 100
+    if (benchmarkSeries.length < 2) {
+      if (chartWrap) {
+        chartWrap.innerHTML =
+          '<div class="benchmark-empty">Benchmark data unavailable ' +
+          '(rate limited or network error). Portfolio has ' +
+          snapshots.length + ' snapshot' + (snapshots.length !== 1 ? 's' : '') +
+          '. The S&P 500 line will appear after the next portfolio refresh.</div>';
+      }
+      return;
+    }
+
+    // Filter benchmark series to start at first snapshot date
+    const firstSnapDate = indexedPortfolio[0].date;
+    const filteredBenchmark = benchmarkSeries.filter(b => b.date >= firstSnapDate);
+
+    // Merge both series by date so the x-axis covers all daily dates.
+    // Portfolio gets null on dates it doesn't cover (keeps benchmark continuous).
+    const allDates = [...new Set([
+      ...indexedPortfolio.map(p => p.date),
+      ...filteredBenchmark.map(b => b.date)
+    ])].sort();
+
+    const portfolioByDate = new Map(indexedPortfolio.map(p => [p.date, p]));
+    const benchmarkByDate = new Map(filteredBenchmark.map(b => [b.date, b]));
+
+    const mergedPortfolio = allDates.map(d => portfolioByDate.get(d) || null);
+    const mergedBenchmark = allDates.map(d => benchmarkByDate.get(d) || null);
+
+    // Build chart data — X-axis from merged daily dates, Y-axis indexed to 100
     charts.benchmark = new Chart($("#chart-benchmark"), {
       type: "line",
       data: {
-        labels: indexedPortfolio.map(p => p.date),
+        labels: allDates,
         datasets: [
           {
             label: "Portfolio",
-            data: indexedPortfolio.map(p => p.value),
+            data: mergedPortfolio.map(p => p?.value ?? null),
             borderColor: "#01696f",
             backgroundColor: "transparent",
             tension: 0.1,
-            spanGaps: true,  // D-17: allow gaps in data
+            spanGaps: true,
           },
           {
             label: "S&P 500",
-            data: benchmarkSeries.map(b => b.value),
+            data: mergedBenchmark.map(b => b?.value ?? null),
             borderColor: "#d97706",
             backgroundColor: "transparent",
             tension: 0.1,
@@ -383,6 +413,19 @@
         maintainAspectRatio: false,
         plugins: {
           legend: { display: true, labels: { color: "#888", font: { family: "Inter", size: 11 } } },
+          tooltip: {
+            callbacks: {
+              title: (items) => items[0]?.label || "",
+              label: (item) => {
+                const raw = mergedPortfolio[item.dataIndex];
+                if (item.datasetIndex === 0 && raw) {
+                  const eur = raw.raw != null ? raw.raw.toLocaleString("de-DE", { style: "currency", currency: "EUR" }) : "—";
+                  return `Portfolio: ${item.parsed.y.toFixed(2)} (${eur})`;
+                }
+                return `${item.dataset.label}: ${item.parsed.y.toFixed(2)}`;
+              }
+            }
+          },
         },
         scales: {
           x: {
@@ -392,7 +435,7 @@
           y: {
             ticks: { color: "#888", font: { family: "Inter", size: 10 }, callback: (v) => v.toFixed(0) },
             grid: { color: "#2a2a2a" },
-            title: { display: true, text: "Indexed to 100", color: "#666" },
+            title: { display: true, text: "Indexed return (base 100) — 100 = start", color: "#666" },
           },
         },
       },
