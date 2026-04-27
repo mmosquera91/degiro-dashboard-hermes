@@ -31,8 +31,14 @@ _session = {
     "session_time": None,
     "portfolio": None,
     "portfolio_time": None,
+    "last_enriched_at": None,
 }
 _session_lock = threading.Lock()
+
+# Benchmark cache (1-hour TTL)
+_benchmark_cache: dict = {"series": None, "snapshots": None, "attribution": None}
+_benchmark_cache_time: float = 0.0
+_BENCHMARK_TTL: int = 3600  # 1 hour
 
 
 async def verify_brok_token(request: Request):
@@ -77,12 +83,20 @@ def _is_portfolio_fresh() -> bool:
     return datetime.now() - _session["portfolio_time"] < PORTFOLIO_TTL
 
 
+def _is_prices_current() -> bool:
+    """Returns True if yfinance enrichment ran today."""
+    if _session["last_enriched_at"] is None:
+        return False
+    return _session["last_enriched_at"].date() == datetime.now().date()
+
+
 def _clear_session():
     """Clear all session data."""
     _session["trading_api"] = None
     _session["session_time"] = None
     _session["portfolio"] = None
     _session["portfolio_time"] = None
+    _session["last_enriched_at"] = None
 
 
 def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict:
@@ -232,6 +246,47 @@ def _build_portfolio_summary(positions: list, cash_available: float, raw: dict |
     }
 
 
+def _sanitize_floats_deep(portfolio: dict) -> dict:
+    """Apply _sanitize_floats recursively to all positions in a portfolio dict."""
+    if "positions" in portfolio:
+        portfolio["positions"] = [_sanitize_floats(p) for p in portfolio["positions"]]
+    return portfolio
+
+
+def _save_snapshot_for_portfolio(portfolio: dict) -> None:
+    """Save portfolio snapshot and invalidate benchmark cache. Called as a side effect after enrichment."""
+    try:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        snapshots = load_snapshots()
+
+        if snapshots:
+            first_date = snapshots[0]["date"]
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            series = fetch_benchmark_series(first_date, today_str)
+            if series:
+                benchmark_value = series[-1]["value"]
+                benchmark_return_pct = benchmark_value - 100.0
+            else:
+                benchmark_value = snapshots[-1].get("benchmark_value", 100.0)
+                benchmark_return_pct = snapshots[-1].get("benchmark_return_pct", 0.0)
+        else:
+            benchmark_value = 100.0
+            benchmark_return_pct = 0.0
+
+        safe_portfolio = _sanitize_floats_deep(portfolio)
+        save_snapshot(
+            date_str,
+            safe_portfolio["total_value"],
+            benchmark_value,
+            benchmark_return_pct,
+            safe_portfolio,
+        )
+        global _benchmark_cache_time
+        _benchmark_cache_time = 0.0
+    except Exception as e:
+        logger.warning("Snapshot save failed (non-blocking): %s", str(e))
+
+
 def _restore_portfolio_from_snapshot():
     """Restore portfolio from latest snapshot on startup (REST-01).
 
@@ -270,6 +325,11 @@ def _restore_portfolio_from_snapshot():
     with _session_lock:
         _session["portfolio"] = portfolio_data
         _session["portfolio_time"] = datetime.now()
+        snap_date = snapshot.get("date")  # "YYYY-MM-DD"
+        try:
+            _session["last_enriched_at"] = datetime.strptime(snap_date, "%Y-%m-%d")
+        except Exception:
+            _session["last_enriched_at"] = None
 
     logger.info("Portfolio restored from snapshot dated %s", snapshot["date"])
 
@@ -282,12 +342,30 @@ async def lifespan(app: FastAPI):
         # REST-01: Restore portfolio from latest snapshot before accepting requests
         _restore_portfolio_from_snapshot()
         audit_symbol_cache()
+        # Daily auto-enrichment at ~08:00 local time
+        asyncio.create_task(_daily_enrichment_loop())
         yield
     except Exception as e:
         logger.error("Unhandled exception during request: %s", str(e))
     finally:
         _clear_session()
         logger.info("Brokr shutting down")
+
+
+async def _daily_enrichment_loop():
+    """Re-enrich portfolio once per day at approximately 08:00 local time."""
+    while True:
+        now = datetime.now()
+        next_run = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+        await asyncio.sleep((next_run - now).total_seconds())
+        if _session.get("portfolio") and _session["portfolio"].get("positions"):
+            logger.info("Daily enrichment task running")
+            try:
+                await asyncio.to_thread(_do_enrich_session)
+            except Exception as e:
+                logger.warning("Daily enrichment failed: %s", e)
 
 
 app = FastAPI(title="Brokr", lifespan=lifespan)
@@ -477,43 +555,15 @@ async def get_portfolio():
 
         # Save snapshot as side effect — benchmark indexed to 100 at portfolio start (D-04)
         try:
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            snapshots = load_snapshots()
-
-            if snapshots:
-                # Compute benchmark return relative to first snapshot date
-                first_date = snapshots[0]["date"]
-                today_str = datetime.now().strftime("%Y-%m-%d")
-                series = fetch_benchmark_series(first_date, today_str)
-                if series:
-                    # benchmark_value is indexed to 100 at first snapshot
-                    benchmark_value = series[-1]["value"]
-                    benchmark_return_pct = benchmark_value - 100.0
-                else:
-                    benchmark_value = snapshots[-1].get("benchmark_value", 100.0)
-                    benchmark_return_pct = snapshots[-1].get("benchmark_return_pct", 0.0)
-            else:
-                # First snapshot — benchmark starts at 100
-                benchmark_value = 100.0
-                benchmark_return_pct = 0.0
-
-            safe_portfolio = {
-                **portfolio,
-                "positions": [_sanitize_floats(p) for p in portfolio.get("positions", [])],
-            }
-            save_snapshot(
-                date_str,
-                safe_portfolio["total_value"],
-                benchmark_value,
-                benchmark_return_pct,
-                safe_portfolio,
-            )
+            _save_snapshot_for_portfolio(portfolio)
         except Exception as e:
             logger.warning("Snapshot save failed (non-blocking): %s", str(e))
 
         with _session_lock:
             _session["portfolio"] = portfolio
             _session["portfolio_time"] = datetime.now()
+            _session["last_enriched_at"] = datetime.now()
+            portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
 
         return portfolio
 
@@ -548,11 +598,54 @@ async def get_portfolio_raw():
             raw.get("positions", []),
             raw.get("cash_available", 0),
         )
+        portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
         return portfolio
 
     except Exception as e:
         logger.error("Raw portfolio fetch error: %s", str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+
+
+def _do_enrich_session():
+    """Re-enrich the current portfolio with fresh yfinance data.
+
+    Called by both the /api/refresh-prices endpoint (via thread) and the
+    daily enrichment loop (via asyncio.to_thread). Does NOT call DeGiro.
+    """
+    with _session_lock:
+        positions = [p.copy() for p in _session["portfolio"]["positions"]]
+        cash = _session["portfolio"].get("cash_available", 0)
+        raw_portfolio = _session["portfolio"]
+
+    enriched = enrich_positions({"positions": positions})
+    enriched = compute_portfolio_weights(enriched)
+    enriched = compute_scores(enriched)
+    summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
+    summary = _sanitize_floats_deep(summary)
+
+    with _session_lock:
+        _session["portfolio"] = summary
+        _session["portfolio_time"] = datetime.now()
+        _session["last_enriched_at"] = datetime.now()
+
+    _save_snapshot_for_portfolio(summary)
+
+
+@app.post("/api/refresh-prices", dependencies=[Depends(verify_brok_token)])
+async def refresh_prices():
+    """Re-enrich current portfolio positions with fresh yfinance data.
+
+    Does not require a DeGiro session — works from snapshot-restored portfolio.
+    Runs enrichment in a background thread and returns immediately.
+    """
+    with _session_lock:
+        portfolio = _session.get("portfolio")
+    if not portfolio or not portfolio.get("positions"):
+        raise HTTPException(status_code=400, detail="No portfolio loaded")
+
+    thread = threading.Thread(target=_do_enrich_session, daemon=True)
+    thread.start()
+    return {"status": "enrichment_started"}
 
 
 # ─── Hermes Context ───
@@ -610,9 +703,20 @@ async def get_benchmark():
 
     Benchmark data is fetched fresh from yfinance — NOT stored in snapshots (D-07).
     """
+    import time as _time
+
     snapshots = load_snapshots()
     if not snapshots:
         return {"snapshots": [], "benchmark_series": [], "attribution": [], "message": "No snapshots yet"}
+
+    # Check cache before hitting yfinance
+    if _benchmark_cache["series"] is not None and \
+            _time.time() - _benchmark_cache_time < _BENCHMARK_TTL:
+        return {
+            "snapshots": _benchmark_cache["snapshots"],
+            "benchmark_series": _benchmark_cache["series"],
+            "attribution": _benchmark_cache["attribution"],
+        }
 
     # Get date range from snapshots
     first_date = snapshots[0]["date"]
@@ -636,6 +740,12 @@ async def get_benchmark():
     # Compute attribution using current benchmark return (from last snapshot)
     latest_benchmark_return = snapshots[-1].get("benchmark_return_pct", 0) if snapshots else 0
     attribution = compute_attribution(portfolio.get("positions", []), latest_benchmark_return)
+
+    # Populate cache
+    _benchmark_cache["series"] = benchmark_series
+    _benchmark_cache["snapshots"] = snapshots
+    _benchmark_cache["attribution"] = attribution
+    _benchmark_cache_time = _time.time()
 
     return {
         "snapshots": snapshots,
