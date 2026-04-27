@@ -676,6 +676,39 @@ def _compute_performance(hist_close: pd.Series) -> dict:
     return result
 
 
+def _infer_etf_category_from_name(name: str) -> Optional[str]:
+    """Infer broad ETF category from name — fallback for UCITS ETFs yfinance doesn't classify."""
+    if not name:
+        return None
+    n = name.lower()
+    if any(k in n for k in ["bond", "fixed income", "treasury", "gilt", "aggregate", "government", "sovereign"]):
+        return "Fixed Income"
+    if any(k in n for k in ["real estate", "reit", "property"]):
+        return "Real Estate"
+    if any(k in n for k in ["gold", "silver", "commodity", "commodities"]):
+        return "Commodities"
+    if any(k in n for k in ["emerging market", "emerging markets", "em ucits", "msci em", "em sml"]):
+        return "Emerging Markets Equity"
+    if any(k in n for k in ["s&p 500", "s&p500", "msci usa", "nasdaq", "russell", "dow jones"]):
+        return "US Equity"
+    if any(k in n for k in ["europe", "euro stoxx", "stoxx europe", "msci europe"]):
+        return "European Equity"
+    if any(k in n for k in ["asia", "pacific", "japan", "china", "india", "korea"]):
+        return "Asia-Pacific Equity"
+    if any(k in n for k in ["clean energy", "renewable energy", "solar", "wind energy"]):
+        return "Energy"
+    if any(k in n for k in ["world", "global", "msci acwi", "all country", "all-world", "allworld", "ftse all", "developed market", "div lead"]):
+        return "Global Equity"
+    if any(k in n for k in ["tech", "technology", "semiconductor", "software", "gaming", "esport"]):
+        return "Technology"
+    if any(k in n for k in ["health", "healthcare", "pharma", "biotech"]):
+        return "Healthcare"
+    if any(k in n for k in ["financ", "bank", "insurance"]):
+        return "Financials"
+    if any(k in n for k in ["esg", "sustainable", "responsible", "sri"]):
+        return "ESG / Sustainable"
+    return None
+
 def enrich_position(position: dict) -> dict:
     """Enrich a single position with yfinance data.
 
@@ -732,11 +765,12 @@ def enrich_position(position: dict) -> dict:
 
         # Sector — stocks use "sector"/"industry"; ETFs use "category" as proxy
         if position.get("asset_type") == "ETF":
+            etf_name = info.get("longName") or info.get("shortName") or position.get("name", "")
             position["sector"] = (
-                info.get("categoryName")   # yfinance 1.3.0 — e.g. "Europe Large-Cap Blend Equity"
-                or info.get("category")    # fallback for older yfinance
-                or info.get("industry")    # sometimes populated for ETFs
-                or "ETF"                   # final fallback — fundFamily gives manager legal name, useless for charts
+                info.get("categoryName")
+                or info.get("category")
+                or info.get("industry")
+                or _infer_etf_category_from_name(etf_name)
             )
         else:
             position["sector"] = (
