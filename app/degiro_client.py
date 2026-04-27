@@ -507,6 +507,10 @@ _EXCHANGE_ID_CURRENCY: dict[str, str] = {
     "735": "DKK",  # Copenhagen
     # CHF
     "455": "CHF",  # SIX Swiss Exchange
+
+    # Euronext Fund Services (DeGiro internal — Amundi LU, HSBC IE ETFs)
+    "710": "EUR",
+
     # GBP
     "663": "GBP",  # London Stock Exchange
     # USD

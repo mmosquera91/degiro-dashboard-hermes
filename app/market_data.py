@@ -110,6 +110,9 @@ _DEGIRO_EXCHANGE_TO_YF_SUFFIX: dict[str, str] = {
     # Switzerland
     "455": ".SW",   # SIX Swiss Exchange
 
+    # Euronext Fund Services (DeGiro internal — Amundi LU, HSBC IE ETFs)
+    "710": ".PA",   # Euronext Paris (primary listing for these funds)
+
     # US — no suffix (bare ticker)
     "676": "",      # NASDAQ
     "13":  "",      # NYSE
@@ -152,8 +155,8 @@ def _suffix_from_exchange_id(exchange_id: str, isin: str = "") -> Optional[str]:
         if not isin:
             return None  # Unknown origin — let ISIN scan handle it
         prefix = isin[:2].upper()
-        if prefix == "US":
-            return ""     # NYSE/NASDAQ bare ticker
+        if prefix in ("US", "KY"):
+            return ""     # NYSE/NASDAQ bare ticker / KY = Cayman-domiciled NASDAQ
         if prefix in ("GB", "IE", "LU"):
             return ".L"   # LSE listings
         return None       # Other ISIN on 663 — let scan handle it
@@ -440,54 +443,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
 
     cache_key = f"{symbol}:{isin}"
 
-    # Step 0: Deterministic resolution from DeGiro exchangeId (best signal)
-    if exchange_id:
-        suffix = _suffix_from_exchange_id(exchange_id, isin)
-        if suffix is not None:
-            candidate = symbol + suffix
-            try:
-                _yf_throttle()
-                t = yf.Ticker(candidate)
-                hist = t.history(period="5d")
-                if not hist.empty:
-                    logger.debug(
-                        "Resolved %s via exchangeId %s → %s",
-                        symbol, exchange_id, candidate,
-                    )
-                    with _symbol_cache_lock:
-                        _symbol_cache[cache_key] = candidate
-                    _save_symbol_cache()
-                    return candidate
-            except Exception as e:
-                logger.debug("exchangeId candidate %s failed: %s", candidate, e)
-            # If candidate failed, fall through to ISIN search then suffix scan
-
-    # Step 0.5: For Tradegate (196) US-ISIN stocks, resolve via direct ISIN
-    # lookup. DeGiro's local symbol (NVD, PTX, 6RV, O9T) is a German market
-    # code that Yahoo doesn't know. yfinance 1.3.0 accepts raw ISINs as tickers
-    # and returns the canonical listing (NVDA, PLTR, APP, ARM on NASDAQ).
-    if exchange_id == "196" and isin and isin.upper().startswith("US"):
-        try:
-            _yf_throttle()
-            t = yf.Ticker(isin)
-            hist = t.history(period="5d")
-            if not hist.empty:
-                # Extract the real ticker symbol from the resolved info
-                resolved = t.info.get("symbol", "")
-                if resolved:
-                    logger.info(
-                        "Resolved Tradegate US stock %s (ISIN %s) → %s via ISIN lookup",
-                        symbol, isin, resolved,
-                    )
-                    with _symbol_cache_lock:
-                        _symbol_cache[cache_key] = resolved
-                    _save_symbol_cache()
-                    return resolved
-        except Exception as e:
-            logger.debug("ISIN direct lookup failed for %s (%s): %s", symbol, isin, e)
-        # Fall through to suffix scan if ISIN lookup fails
-
-    # Step -1: Check manual overrides (ISIN-keyed, highest priority)
+    # Step -1: Check manual overrides (ISIN-keyed, highest priority — must beat cache)
     if isin:
         with _symbol_overrides_lock:
             override = _symbol_overrides.get(isin.strip().upper(), "")
@@ -535,6 +491,53 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
                         return cached
                 else:
                     return cached
+
+    # Step 0: Deterministic resolution from DeGiro exchangeId (best signal)
+    if exchange_id:
+        suffix = _suffix_from_exchange_id(exchange_id, isin)
+        if suffix is not None:
+            candidate = symbol + suffix
+            try:
+                _yf_throttle()
+                t = yf.Ticker(candidate)
+                hist = t.history(period="5d")
+                if not hist.empty:
+                    logger.debug(
+                        "Resolved %s via exchangeId %s → %s",
+                        symbol, exchange_id, candidate,
+                    )
+                    with _symbol_cache_lock:
+                        _symbol_cache[cache_key] = candidate
+                    _save_symbol_cache()
+                    return candidate
+            except Exception as e:
+                logger.debug("exchangeId candidate %s failed: %s", candidate, e)
+            # If candidate failed, fall through to ISIN search then suffix scan
+
+    # Step 0.5: For Tradegate (196) US-ISIN stocks, resolve via direct ISIN
+    # lookup. DeGiro's local symbol (NVD, PTX, 6RV, O9T) is a German market
+    # code that Yahoo doesn't know. yfinance 1.3.0 accepts raw ISINs as tickers
+    # and returns the canonical listing (NVDA, PLTR, APP, ARM on NASDAQ).
+    if exchange_id == "196" and isin and isin.upper().startswith("US"):
+        try:
+            _yf_throttle()
+            t = yf.Ticker(isin)
+            hist = t.history(period="5d")
+            if not hist.empty:
+                # Extract the real ticker symbol from the resolved info
+                resolved = t.info.get("symbol", "")
+                if resolved:
+                    logger.info(
+                        "Resolved Tradegate US stock %s (ISIN %s) → %s via ISIN lookup",
+                        symbol, isin, resolved,
+                    )
+                    with _symbol_cache_lock:
+                        _symbol_cache[cache_key] = resolved
+                    _save_symbol_cache()
+                    return resolved
+        except Exception as e:
+            logger.debug("ISIN direct lookup failed for %s (%s): %s", symbol, isin, e)
+        # Fall through to suffix scan if ISIN lookup fails
 
     # Step 0: ISIN-based resolution (most accurate — resolves ETFs/ETPs whose
     # DeGiro symbol differs from Yahoo ticker, e.g. QDVD → QDVD.L)
@@ -726,7 +729,8 @@ def enrich_position(position: dict) -> dict:
         # Sector — stocks use "sector"/"industry"; ETFs use "category" as proxy
         if position.get("asset_type") == "ETF":
             position["sector"] = (
-                info.get("category")
+                info.get("categoryName")   # yfinance 1.3.0: renamed from 'category'
+                or info.get("category")    # fallback
                 or info.get("fundFamily")
                 or info.get("industry")
                 or None
