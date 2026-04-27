@@ -95,6 +95,50 @@
         </div>
       </section>
 
+      <!-- BENCHMARK SECTION -->
+      <section class="benchmark-section">
+        <h3 class="section-title">Benchmark Comparison</h3>
+        <div class="benchmark-chart-wrap">
+          <canvas id="chart-benchmark"></canvas>
+        </div>
+        <div id="benchmark-comparison-table" class="benchmark-comparison hidden">
+          <!-- Shown when only one snapshot exists (D-18) -->
+        </div>
+      </section>
+
+      <!-- HEALTH ALERTS -->
+      <section class="health-alerts-section">
+        <h3 class="section-title">Health Alerts</h3>
+        <div id="health-alerts-list" class="alerts-list"></div>
+      </section>
+
+      <!-- BUY RADAR -->
+      <section class="buy-radar-section">
+        <h3 class="section-title">Buy Radar</h3>
+        <div class="radar-panels">
+          <div class="card radar-panel">
+            <h4 class="radar-title">Top ETF Candidates</h4>
+            <div id="radar-etfs" class="radar-list"></div>
+          </div>
+          <div class="card radar-panel">
+            <h4 class="radar-title">Top Stock Candidates</h4>
+            <div id="radar-stocks" class="radar-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WINNERS / LOSERS -->
+      <section class="winners-losers-section">
+        <div class="card wl-card">
+          <h4 class="wl-title wl-win">Top 5 Winners</h4>
+          <div id="top-winners" class="wl-list"></div>
+        </div>
+        <div class="card wl-card">
+          <h4 class="wl-title wl-lose">Top 5 Losers</h4>
+          <div id="top-losers" class="wl-list"></div>
+        </div>
+      </section>
+
       <!-- ALLOCATION CHARTS -->
       <section class="charts-section">
         <div class="card chart-card">
@@ -114,25 +158,6 @@
           <div class="chart-wrap">
             <canvas id="chart-sector"></canvas>
           </div>
-        </div>
-      </section>
-
-      <!-- BENCHMARK SECTION -->
-      <section class="benchmark-section">
-        <h3 class="section-title">Benchmark Comparison</h3>
-        <div class="benchmark-chart-wrap">
-          <canvas id="chart-benchmark"></canvas>
-        </div>
-        <div id="benchmark-comparison-table" class="benchmark-comparison hidden">
-          <!-- Shown when only one snapshot exists (D-18) -->
-        </div>
-      </section>
-
-      <!-- ATTRIBUTION SECTION -->
-      <section class="attribution-section">
-        <h3 class="section-title">Attribution Analysis</h3>
-        <div id="attribution-table-wrap" class="attribution-table-wrap">
-          <!-- Attribution table rendered by app.js -->
         </div>
       </section>
 
@@ -170,38 +195,15 @@
         </div>
       </section>
 
-      <!-- BUY RADAR -->
-      <section class="buy-radar-section">
-        <h3 class="section-title">Buy Radar</h3>
-        <div class="radar-panels">
-          <div class="card radar-panel">
-            <h4 class="radar-title">Top ETF Candidates</h4>
-            <div id="radar-etfs" class="radar-list"></div>
+      <!-- ATTRIBUTION SECTION -->
+      <details>
+        <summary>Attribution Analysis (click to expand)</summary>
+        <section class="attribution-section">
+          <div id="attribution-table-wrap" class="attribution-table-wrap">
+            <!-- Attribution table rendered by app.js -->
           </div>
-          <div class="card radar-panel">
-            <h4 class="radar-title">Top Stock Candidates</h4>
-            <div id="radar-stocks" class="radar-list"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- HEALTH ALERTS -->
-      <section class="health-alerts-section">
-        <h3 class="section-title">Health Alerts</h3>
-        <div id="health-alerts-list" class="alerts-list"></div>
-      </section>
-
-      <!-- WINNERS / LOSERS -->
-      <section class="winners-losers-section">
-        <div class="card wl-card">
-          <h4 class="wl-title wl-win">Top 5 Winners</h4>
-          <div id="top-winners" class="wl-list"></div>
-        </div>
-        <div class="card wl-card">
-          <h4 class="wl-title wl-lose">Top 5 Losers</h4>
-          <div id="top-losers" class="wl-list"></div>
-        </div>
-      </section>
+        </section>
+      </details>
 
     </div>
   </main>
