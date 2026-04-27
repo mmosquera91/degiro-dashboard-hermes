@@ -135,6 +135,7 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
     return {
         "date": datetime.now().isoformat(),
         "total_value": round(total_value, 2),
+        "total_value_eur": round(total_value, 2),
         "total_invested": round(total_invested, 2),
         "total_pl": round(total_pl, 2),
         "total_pl_pct": round(total_pl_pct, 2),
@@ -196,6 +197,7 @@ def _build_portfolio_summary(positions: list, cash_available: float) -> dict:
     return {
         "date": datetime.now().isoformat(),
         "total_value": round(total_value, 2),
+        "total_value_eur": round(total_value, 2),
         "total_invested": round(total_invested, 2),
         "total_pl": round(total_pl, 2),
         "total_pl_pct": round(total_pl_pct, 2),
