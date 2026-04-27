@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -202,9 +202,25 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
         logger.warning("start_date %s must be before end_date %s", start_date, end_date)
         return []
 
+    # Ensure end_date is exclusive-inclusive: add 1 day so today's data is included
+    end_dt_padded = end_dt + timedelta(days=1)
+
+    # If range is less than 7 days, pad start back to ensure trading days are covered
+    if (end_dt - start_dt).days < 7:
+        start_dt_padded = end_dt - timedelta(days=7)
+        logger.info(
+            "Benchmark range too narrow (%s to %s) — padding start to %s",
+            start_date, end_date, start_dt_padded.strftime("%Y-%m-%d")
+        )
+    else:
+        start_dt_padded = start_dt
+
+    fetch_start = start_dt_padded.strftime("%Y-%m-%d")
+    fetch_end = end_dt_padded.strftime("%Y-%m-%d")
+
     _yf_throttle()
     try:
-        data = yf.download(ticker, start=start_date, end=end_date, progress=False, timeout=10)
+        data = yf.download(ticker, start=fetch_start, end=fetch_end, progress=False, timeout=10)
     except Exception as e:
         e_str = str(e).lower()
         if "timezone" in e_str or "delisted" in e_str or \
@@ -226,6 +242,8 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
     result = []
     for idx, row in data.iterrows():
         date_str = idx.strftime("%Y-%m-%d")
+        if date_str < start_date:
+            continue  # exclude padding days from output
         price = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
         indexed_value = (price / first_price) * 100.0
         result.append({"date": date_str, "value": round(indexed_value, 4)})
