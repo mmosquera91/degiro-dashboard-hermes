@@ -25,7 +25,7 @@ def compute_health_alerts(portfolio: dict) -> list[dict]:
     alerts.extend(_check_concentration(positions))
 
     # HEALTH-02: Sector weighting
-    alerts.extend(_check_sector_weighting(sector_breakdown))
+    alerts.extend(_check_sector_weighting(positions))
 
     # HEALTH-03: Drawdown
     alerts.append(_check_drawdown(positions))
@@ -57,15 +57,24 @@ def _check_concentration(positions: list) -> list[dict]:
     return alerts
 
 
-def _check_sector_weighting(sector_breakdown: dict) -> list[dict]:
-    """HEALTH-02: Warn when any sector exceeds HEALTH_SECTOR_THRESHOLD."""
+def _check_sector_weighting(positions: list) -> list[dict]:
+    """HEALTH-02: Warn when any stock sector exceeds HEALTH_SECTOR_THRESHOLD."""
+    stock_positions = [p for p in positions if p.get("asset_type") != "ETF"]
+    stock_sector_breakdown = {}
+    for p in stock_positions:
+        s = p.get("sector") or "Unknown"
+        stock_sector_breakdown[s] = stock_sector_breakdown.get(s, 0) + (p.get("current_value_eur") or 0)
+    stock_total = sum(stock_sector_breakdown.values())
+    if stock_total == 0:
+        return []
     alerts = []
-    for sector, pct in sector_breakdown.items():
+    for sector, val in stock_sector_breakdown.items():
+        pct = (val / stock_total) * 100
         if pct > HEALTH_SECTOR_THRESHOLD:
             alerts.append({
                 "type": "sector",
                 "severity": "warn",
-                "message": f"Sector '{sector}' is {pct:.1f}% of portfolio (threshold {HEALTH_SECTOR_THRESHOLD}%)",
+                "message": f"Stock sector concentration: {sector} is {pct:.1f}% of stock holdings (threshold {HEALTH_SECTOR_THRESHOLD}%)",
                 "current_value": pct,
                 "threshold": float(HEALTH_SECTOR_THRESHOLD),
                 "triggering_positions": None,
