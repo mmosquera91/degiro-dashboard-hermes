@@ -708,6 +708,10 @@ def enrich_position(position: dict) -> dict:
         symbol, isin, position.get("currency", "EUR"), position.get("exchange_id", "")
     )
 
+    if not yf_symbol:
+        logger.debug("No yfinance symbol resolved for %s (ISIN: %s) — skipping enrichment", symbol, isin)
+        return position
+
     try:
         _yf_throttle()
         ticker = yf.Ticker(yf_symbol)
@@ -729,11 +733,10 @@ def enrich_position(position: dict) -> dict:
         # Sector — stocks use "sector"/"industry"; ETFs use "category" as proxy
         if position.get("asset_type") == "ETF":
             position["sector"] = (
-                info.get("categoryName")   # yfinance 1.3.0: renamed from 'category'
-                or info.get("category")    # fallback
-                or info.get("fundFamily")
-                or info.get("industry")
-                or None
+                info.get("categoryName")   # yfinance 1.3.0 — e.g. "Europe Large-Cap Blend Equity"
+                or info.get("category")    # fallback for older yfinance
+                or info.get("industry")    # sometimes populated for ETFs
+                or "ETF"                   # final fallback — fundFamily gives manager legal name, useless for charts
             )
         else:
             position["sector"] = (

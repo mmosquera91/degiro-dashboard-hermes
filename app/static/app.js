@@ -644,7 +644,24 @@
         maintainAspectRatio: false,
         cutout: "55%",
         plugins: {
-          legend: { display: true, position: "bottom", labels: { color: "#888", font: { family: "Inter", size: 10 }, boxWidth: 12 } },
+          legend: {
+            display: true,
+            position: "bottom",
+            labels: {
+              color: "#888",
+              font: { family: "Inter", size: 10 },
+              boxWidth: 12,
+              generateLabels: function(chart) {
+                const defaults = Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart);
+                defaults.forEach(lbl => {
+                  if (lbl.text && lbl.text.length > 24) {
+                    lbl.text = lbl.text.substring(0, 22) + "…";
+                  }
+                });
+                return defaults;
+              }
+            }
+          },
         },
       },
     });
