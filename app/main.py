@@ -818,6 +818,21 @@ async def delete_snapshot(date_str: str):
     return {"deleted": date_str}
 
 
+@app.post("/api/snapshots/save", dependencies=[Depends(verify_brok_token)])
+async def save_snapshot_now():
+    """Manually trigger a snapshot save for the current portfolio."""
+    with _session_lock:
+        portfolio = _session.get("portfolio")
+    if not portfolio:
+        raise HTTPException(status_code=400, detail="No portfolio loaded")
+    try:
+        _save_snapshot_for_portfolio(portfolio)
+        return {"saved": datetime.now().strftime("%Y-%m-%d")}
+    except Exception as e:
+        logger.warning("Manual snapshot save failed: %s", e)
+        raise HTTPException(status_code=500, detail="Snapshot save failed")
+
+
 # ─── Static Files ───
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

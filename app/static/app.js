@@ -112,6 +112,26 @@
       .addEventListener("toggle", e => {
         if (e.target.open) renderSnapshotManager();
       });
+
+    // Manual snapshot save button
+    document.getElementById("btn-save-snapshot")
+      .addEventListener("click", async () => {
+        const btn = document.getElementById("btn-save-snapshot");
+        btn.disabled = true;
+        btn.querySelector(".btn-label").textContent = "Saving...";
+        try {
+          const res = await apiFetch("/api/snapshots/save", { method: "POST" });
+          if (res.ok) {
+            ToastManager.show("Snapshot saved", "success");
+            renderSnapshotManager();
+          } else {
+            ToastManager.show("Failed to save snapshot", "error");
+          }
+        } finally {
+          btn.disabled = false;
+          btn.querySelector(".btn-label").textContent = "Save Snapshot Now";
+        }
+      });
   }
 
   // ─── Modal ───
