@@ -29,11 +29,15 @@ _SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
 SYMBOL_OVERRIDES_PATH = pathlib.Path(
     os.environ.get("SYMBOL_OVERRIDES_PATH", "/data/symbol_overrides.json")
 )
+BUNDLED_OVERRIDES_PATH = pathlib.Path(__file__).parent / "bundled_overrides.json"
 _symbol_overrides: dict[str, str] = {}
 _symbol_overrides_lock = threading.Lock()
 
 def _load_symbol_overrides() -> None:
     """Load ISIN → Yahoo symbol overrides from disk.
+
+    Bundled overrides (ship with the repo) are merged with user overrides
+    (from SYMBOL_OVERRIDES_PATH). User overrides take precedence on key conflict.
 
     File format (ISIN as key, Yahoo ticker as value):
     {
@@ -43,17 +47,34 @@ def _load_symbol_overrides() -> None:
     }
     """
     global _symbol_overrides
-    if not SYMBOL_OVERRIDES_PATH.exists():
-        return
+
+    # 1. Load bundled overrides (empty dict if file missing or invalid)
+    bundled_data: dict[str, str] = {}
     try:
-        with open(SYMBOL_OVERRIDES_PATH, "r") as f:
-            data = json.load(f)
-        with _symbol_overrides_lock:
-            _symbol_overrides = {k.strip().upper(): v.strip() for k, v in data.items() if k and v}
-        logger.info("Loaded %d symbol overrides from %s",
-                    len(_symbol_overrides), SYMBOL_OVERRIDES_PATH)
+        if BUNDLED_OVERRIDES_PATH.exists():
+            with open(BUNDLED_OVERRIDES_PATH, "r") as f:
+                bundled_data = json.load(f)
     except Exception as e:
-        logger.warning("Failed to load symbol overrides: %s", e)
+        logger.warning("Failed to load bundled overrides: %s", e)
+
+    # 2. Load user overrides (keep existing logic)
+    user_data: dict[str, str] = {}
+    if SYMBOL_OVERRIDES_PATH.exists():
+        try:
+            with open(SYMBOL_OVERRIDES_PATH, "r") as f:
+                user_data = json.load(f)
+        except Exception as e:
+            logger.warning("Failed to load symbol overrides: %s", e)
+
+    # 3. Merge — user data wins on key conflict
+    merged = {**bundled_data, **user_data}
+
+    # 4. Normalize and store
+    with _symbol_overrides_lock:
+        _symbol_overrides = {k.strip().upper(): v.strip() for k, v in merged.items() if k and v}
+
+    logger.info("Loaded %d bundled + %d user symbol overrides",
+                len(bundled_data), len(user_data))
 
 _DEGIRO_EXCHANGE_TO_YF_SUFFIX: dict[str, str] = {
     # Euronext
