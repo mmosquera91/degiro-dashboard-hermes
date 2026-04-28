@@ -242,8 +242,8 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
     result = []
     for idx, row in data.iterrows():
         date_str = idx.strftime("%Y-%m-%d")
-        if date_str < start_date:
-            continue  # exclude padding days from output
+        if date_str < fetch_start:
+            continue  # exclude only days before the padded fetch window
         price = float(row["Close"].iloc[0]) if hasattr(row["Close"], 'iloc') else float(row["Close"])
         indexed_value = (price / first_price) * 100.0
         result.append({"date": date_str, "value": round(indexed_value, 4)})

@@ -466,7 +466,7 @@
       value: baseValue > 0 ? (s.total_value_eur / baseValue) * 100 : 100
     }));
 
-    if (benchmarkSeries.length < 2) {
+    if (benchmarkSeries.length === 0) {
       if (chartWrap) {
         chartWrap.innerHTML =
           '<div class="benchmark-empty">Benchmark data unavailable ' +
@@ -480,7 +480,13 @@
     // Filter benchmark series to start at first snapshot date
     const normDate = d => (d || '').slice(0, 10);   // keep YYYY-MM-DD only
     const firstSnapDate = normDate(indexedPortfolio[0].date);
-    const filteredBenchmark = benchmarkSeries.filter(b => b.date >= firstSnapDate);
+    // Find nearest benchmark date <= firstSnapDate (handles weekend/holiday portfolio starts).
+    // If none exists (very new portfolio), fall back to all available benchmark data.
+    const beforeOrOn = benchmarkSeries.filter(b => b.date <= firstSnapDate);
+    const anchorDate = beforeOrOn.length > 0
+        ? beforeOrOn[beforeOrOn.length - 1].date
+        : (benchmarkSeries[0]?.date ?? firstSnapDate);
+    const filteredBenchmark = benchmarkSeries.filter(b => b.date >= anchorDate);
 
     // Merge both series by date so the x-axis covers all daily dates.
     // Portfolio gets null on dates it doesn't cover (keeps benchmark continuous).
