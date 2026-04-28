@@ -197,7 +197,13 @@ _yf_rate_limited_until: float = 0.0
 _yf_rate_limited_lock = threading.RLock()
 
 def _load_symbol_cache() -> None:
-    """Load persisted resolution cache from disk into _resolution_cache."""
+    """Load persisted resolution cache from disk into _resolution_cache.
+
+    Also evicts any .L entries (LSE) whose yf_symbol ends in .L — these are
+    stale for UCITS ETFs that should resolve to .DE (Xetra).  The .L listing
+    returns GBp (pence) prices without GBp currency metadata, so the GBp safety
+    net never fires, causing 100x price inflation before GBP→EUR FX conversion.
+    """
     global _resolution_cache
     _load_symbol_overrides()
     try:
@@ -205,8 +211,16 @@ def _load_symbol_cache() -> None:
             with open(_SYMBOL_CACHE_PATH, "r") as f:
                 data = json.load(f)
             with _resolution_cache_lock:
-                _resolution_cache.update(data)
-            logger.info("Loaded %d resolution cache entries from disk", len(data))
+                for key, entry in list(data.items()):
+                    if isinstance(entry, dict) and entry.get("yf_symbol", "").endswith(".L"):
+                        logger.info(
+                            "[INFO] Evicted stale .L resolution cache entry for %s "
+                            "— will re-resolve to .DE",
+                            key,
+                        )
+                        continue  # skip = don't load .L entries
+                    _resolution_cache[key] = entry
+            logger.info("Loaded %d resolution cache entries from disk", len(_resolution_cache))
     except Exception as e:
         logger.warning("Could not load symbol cache: %s", e)
 
@@ -602,6 +616,11 @@ def _resolve_yf_symbol(
     # "" (bare) is last — only reached for genuine US-only listings.
     suffixes_to_try = _get_suffix_order(isin, symbol)
     for suffix in suffixes_to_try:
+        # Fix part 3 — skip .L (LSE GBp pence listing) in suffix scan.
+        # .DE is preferred for IE/LU UCITS ETFs.  .L returns GBp prices without
+        # currency metadata, so the GBp safety net never fires.
+        if suffix == ".L":
+            continue
         with _yf_rate_limited_lock:
             if _yf_rate_limited and time.time() < _yf_rate_limited_until:
                 logger.warning("Rate limited — skipping suffix scan for %s", symbol)
@@ -1313,6 +1332,15 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
 
     _batch_elapsed = time.time() - _batch_start
     logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
+
+    # Fix part 2 — GBp→GBP correction for .L tickers in batch:
+    # yf.download() returns LSE prices in pence (GBp) with no currency metadata,
+    # so the per-ticker GBp safety net never fires in the batch path.
+    # Halve .L prices here so they land in GBP before the FX→EUR conversion.
+    for sym in list(price_batch.keys()):
+        if sym.endswith(".L"):
+            price_batch[sym] = price_batch[sym] / 100.0
+            logger.info("[INFO] GBp→GBP correction applied for %s", sym)
 
     # Step 3: Enrich each position (now price-fetch is centralized, no more ThreadPoolExecutor)
     enriched = []
