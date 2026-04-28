@@ -262,53 +262,18 @@
         Your credentials are used only for this session and are never stored.
       </div>
 
-      <!-- Tabs -->
-      <div class="modal-tabs">
-        <button class="modal-tab active" data-tab="creds-tab">Credentials</button>
-        <button class="modal-tab" data-tab="session-tab">Browser Session</button>
-      </div>
-
-      <!-- Credentials tab -->
-      <div id="creds-tab" class="tab-panel active">
-        <form id="cred-form" class="cred-form">
-          <div class="form-group">
-            <label for="cred-user">Username (email)</label>
-            <input type="email" id="cred-user" required autocomplete="off" placeholder="user@example.com">
-          </div>
-          <div class="form-group">
-            <label for="cred-pass">Password</label>
-            <input type="password" id="cred-pass" required autocomplete="off" placeholder="Your DeGiro password">
-          </div>
-          <div class="form-group">
-            <label for="cred-otp">2FA code <span class="optional-label">(optional)</span></label>
-            <input type="text" id="cred-otp" autocomplete="off" placeholder="One-time code" inputmode="numeric" pattern="[0-9]*">
-          </div>
-          <button type="submit" id="btn-connect" class="btn btn-primary btn-block">
-            <span id="connect-text">Connect & Refresh</span>
-            <span id="connect-spinner" class="spinner hidden"></span>
-          </button>
-          <div id="cred-error" class="cred-error hidden"></div>
-        </form>
-      </div>
-
-      <!-- Browser Session tab -->
-      <div id="session-tab" class="tab-panel">
+      <!-- Browser Session form -->
+      <div id="session-tab" class="tab-panel active">
         <form id="session-form" class="cred-form">
           <div class="form-group">
             <label for="session-id">JSESSIONID <span class="hint">(from browser cookies)</span></label>
             <input type="text" id="session-id" required autocomplete="off" placeholder="e.g. A1B2C3...prod_dcv_ch61_4">
           </div>
-          <div class="form-group">
-            <label for="int-account">intAccount <span class="optional-label">(optional)</span></label>
-            <input type="text" id="int-account" autocomplete="off" placeholder="e.g. 51152239" inputmode="numeric" pattern="[0-9]*">
-          </div>
           <div class="session-instructions">
-            <p><strong>How to get your session ID:</strong></p>
             <ol>
-              <li>Log in to <a href="https://trader.degiro.nl" target="_blank" rel="noopener">trader.degiro.nl</a> in your browser</li>
-              <li>Open DevTools → Application → Cookies</li>
-              <li>Copy the value of <code>JSESSIONID</code></li>
-              <li>Paste it here</li>
+              <li>Open <strong>trader.degiro.nl</strong> in your browser and log in</li>
+              <li>Open DevTools → Application → Cookies → trader.degiro.nl</li>
+              <li>Copy the value of <strong>JSESSIONID</strong></li>
             </ol>
           </div>
           <button type="submit" id="btn-session-connect" class="btn btn-primary btn-block">

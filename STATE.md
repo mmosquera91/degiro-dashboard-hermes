@@ -20,3 +20,4 @@
 | 2026-04-27 | manual-snapshot-button | complete |
 | 2026-04-27 | fix-benchmark-date-range | complete |
 | 2026-04-28 | fix-stale-badge-after-update-prices | complete |
+| 2026-04-28 | health-alerts-on-enrich | complete |

@@ -72,17 +72,6 @@
     elCredForm.addEventListener("submit", handleAuth);
     $("#session-form").addEventListener("submit", handleSession);
 
-    // Modal tabs
-    $$(".modal-tab").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const tabId = btn.dataset.tab;
-        $$(".modal-tab").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        $$(".tab-panel").forEach((p) => p.classList.remove("active"));
-        $("#" + tabId).classList.add("active");
-      });
-    });
-
     // Filter tabs
     $$(".filter-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -209,8 +198,6 @@
     e.preventDefault();
 
     const sessionId = $("#session-id").value.trim();
-    const intAccountRaw = $("#int-account").value.trim();
-    const intAccount = intAccountRaw ? parseInt(intAccountRaw, 10) : null;
 
     if (!sessionId) return;
 
@@ -228,7 +215,7 @@
       const res = await apiFetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, int_account: intAccount }),
+        body: JSON.stringify({ session_id: sessionId }),
       });
 
       if (!res.ok) {
