@@ -22,3 +22,5 @@
 | 2026-04-28 | fix-stale-badge-after-update-prices | complete |
 | 2026-04-28 | health-alerts-on-enrich | complete |
 | 2026-04-28 | fix-timezone-naive-datetimes | complete |
+| 2026-04-28 | fix-isin-lse-fallback-eur-positions | complete |
+| 2026-04-28 | revert-wrong-bundled-overrides | complete |
