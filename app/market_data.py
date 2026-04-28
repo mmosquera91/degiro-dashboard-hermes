@@ -723,6 +723,44 @@ def _infer_etf_category_from_name(name: str) -> Optional[str]:
         return "ESG / Sustainable"
     return None
 
+def _infer_country_from_etf_name(name: str, category: str) -> str:
+    """Infer geographic region from ETF name or category for geo chart."""
+    n = (name + " " + (category or "")).lower()
+
+    if any(k in n for k in ["world", "global", "acwi", "all-world", "allworld",
+                              "ftse all", "developed market", "all country",
+                              "msci world", "msci acwi"]):
+        return "Global"
+    if any(k in n for k in ["s&p 500", "sp500", "s&p500", "nasdaq", "us equity",
+                              "united states", "usa", "north america"]):
+        return "United States"
+    if any(k in n for k in ["europe", "european", "euro stoxx", "stoxx",
+                              "euronext", "ftse europe"]):
+        return "Europe"
+    if any(k in n for k in ["emerging", "em equity", "bric", "asia pacific",
+                              "asia ex", "apac"]):
+        return "Emerging Markets"
+    if any(k in n for k in ["china", "chinese"]):
+        return "China"
+    if any(k in n for k in ["japan", "japanese", "topix", "nikkei"]):
+        return "Japan"
+    if any(k in n for k in ["india", "indian"]):
+        return "India"
+    if any(k in n for k in ["uk equity", "united kingdom", "ftse 100", "ftse100"]):
+        return "United Kingdom"
+    if any(k in n for k in ["germany", "german", "dax"]):
+        return "Germany"
+    if any(k in n for k in ["clean energy", "renewable", "solar", "wind",
+                              "battery", "esg", "sustainable", "green"]):
+        return "Global"  # thematic ETFs are inherently global
+    if any(k in n for k in ["technology", "tech", "semiconductor", "cyber",
+                              "robotics", "artificial intelligence", "ai "]):
+        return "Global"  # sector ETFs typically global
+    if any(k in n for k in ["gold", "silver", "commodity", "commodities",
+                              "oil", "energy commodity"]):
+        return "Global"
+    return "Other"
+
 def enrich_position(position: dict) -> dict:
     """Enrich a single position with yfinance data.
 
@@ -794,7 +832,13 @@ def enrich_position(position: dict) -> dict:
             )
 
         # Country
-        position["country"] = info.get("country", None)
+        if position.get("asset_type") == "ETF":
+            position["country"] = _infer_country_from_etf_name(
+                position.get("name", ""),
+                info.get("category", "") or ""
+            )
+        else:
+            position["country"] = info.get("country", None)
 
         # P/E ratio (stocks only)
         if position.get("asset_type") == "STOCK":
