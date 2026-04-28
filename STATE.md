@@ -26,3 +26,4 @@
 | 2026-04-28 | revert-wrong-bundled-overrides | complete |
 | 2026-04-28 | 260428-fix-isin-lse-overrides-correct | complete |
 | 2026-04-28 | 260428-fix-update-prices-toast-and-operation-lock | complete |
+| 2026-04-28 | 260428-fix-button-click-handlers-broken | complete |

@@ -237,6 +237,7 @@
       }
 
       showEnriching(false);
+      setOperationActive(false);
     } catch (err) {
       showEnriching(false);
       console.error("Portfolio load error:", err);
@@ -380,6 +381,14 @@
 
   // Track active operation state across all buttons
   let operationActive = false;
+
+  function disableUpdatePrices() {
+    if (elBtnUpdatePrices) elBtnUpdatePrices.disabled = true;
+  }
+
+  function enableUpdatePrices() {
+    if (elBtnUpdatePrices) elBtnUpdatePrices.disabled = false;
+  }
 
   function setOperationActive(active) {
     operationActive = active;
