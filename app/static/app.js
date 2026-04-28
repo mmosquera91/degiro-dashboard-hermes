@@ -35,11 +35,9 @@
   const elEmptyState = $("#empty-state");
   const elCredModal = $("#cred-modal");
   const elLoadingOverlay = $("#loading-overlay");
-  const elPriceUpdateModal = $("#price-update-modal");
-  const elPriceUpdateModalContent = $("#price-update-modal-content");
-  const elPriceUpdateError = $("#price-update-error");
-  const elPriceUpdateErrorMsg = $("#price-update-error-msg");
-  const elPriceUpdateClose = $("#price-update-close");
+  const elPriceUpdateToast = $("#price-update-toast");
+  const elPriceUpdateToastMsg = $("#price-update-toast-msg");
+  const elPriceUpdateToastClose = $("#price-update-toast-close");
   const elCredError = $("#cred-error");
   const elBtnConnect = $("#btn-connect");
   const elConnectText = $("#connect-text");
@@ -51,6 +49,12 @@
   const elBtnEmptyConnect = $("#btn-empty-connect");
   const elLastRefresh = $("#last-refresh");
   const elPositionsBody = $("#positions-body");
+  const elEnrichmentModal = $("#enrichment-modal");
+  const elEnrichmentModalContent = $("#enrichment-modal-content");
+  const elEnrichmentStatus = $("#enrichment-status");
+  const elEnrichmentError = $("#enrichment-error");
+  const elEnrichmentErrorMsg = $("#enrichment-error-msg");
+  const elEnrichmentClose = $("#enrichment-close");
 
   // ─── Init ───
   document.addEventListener("DOMContentLoaded", () => {
@@ -67,7 +71,8 @@
     elBtnExport.addEventListener("click", exportHermesContext);
     elBtnPrivacy.addEventListener("click", togglePrivacyMode);
     $("#modal-close").addEventListener("click", closeModal);
-    elPriceUpdateClose.addEventListener("click", closePriceUpdateModal);
+    elPriceUpdateToastClose.addEventListener("click", hidePriceUpdateToast);
+    elEnrichmentClose.addEventListener("click", closeEnrichmentModal);
     elCredModal.addEventListener("click", (e) => {
       if (e.target === elCredModal) closeModal();
     });
@@ -266,15 +271,50 @@
     }
   }
 
-  // ─── Update Prices ───
-  async function waitForEnrichment() {
+  // ─── Update Prices (non-blocking) ───
+  function showPriceUpdateToast(msg, variant) {
+    elPriceUpdateToastMsg.textContent = msg;
+    elPriceUpdateToast.className = "toast toast-" + (variant || "info");
+    elPriceUpdateToast.style.display = "flex";
+    lucide.createIcons({ nodes: [elPriceUpdateToast] });
+  }
+
+  function hidePriceUpdateToast() {
+    elPriceUpdateToast.style.display = "none";
+  }
+
+  async function handleUpdatePrices() {
+    if (!portfolioData) return;
+    const btn = elBtnUpdatePrices;
+    btn.disabled = true;
+    showPriceUpdateToast("Updating prices…", "info");
+    try {
+      const res = await apiFetch("/api/refresh-prices", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Price refresh failed");
+      }
+      // Poll enrichment status, update toast with progress
+      const done = await waitForEnrichmentToast();
+      if (done) {
+        showPriceUpdateToast("Prices updated", "success");
+        setTimeout(hidePriceUpdateToast, 3000);
+      }
+    } catch (e) {
+      console.error("Update prices failed", e);
+      showPriceUpdateToast(e.message, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function waitForEnrichmentToast() {
     const MAX_WAIT_MS = 5 * 60 * 1000;
     const POLL_MS = 2000;
     const started = Date.now();
 
-    // Phase 1: wait until enriching flips to true (max 10s — thread starts fast)
-    const STARTED_TIMEOUT = 10000;
-    while (Date.now() - started < STARTED_TIMEOUT) {
+    // Phase 1: wait until enriching flips to true (max 10s)
+    while (Date.now() - started < 10000) {
       await new Promise(r => setTimeout(r, POLL_MS));
       try {
         const res1 = await apiFetch("/api/enrichment-status");
@@ -283,7 +323,7 @@
       } catch (_) {}
     }
 
-    // Phase 2: wait until enriching flips back to false
+    // Phase 2: poll until enriching flips back to false
     while (Date.now() - started < MAX_WAIT_MS) {
       await new Promise(r => setTimeout(r, POLL_MS));
       try {
@@ -293,50 +333,14 @@
           const res = await apiFetch("/api/portfolio");
           portfolioData = await res.json();
           renderDashboard();
-          ToastManager.show("Prices updated successfully", "success");
           const bmData = await fetchBenchmarkData();
           if (bmData) { benchmarkData = bmData; renderBenchmark(bmData); renderAttribution(bmData); }
-          return;
+          return true;
         }
       } catch (_) {}
     }
-    ToastManager.show("Price update timed out. Please refresh manually.", "warn");
-  }
-
-  function showPriceUpdateModal() {
-    elPriceUpdateModalContent.classList.remove("hidden");
-    elPriceUpdateError.classList.add("hidden");
-    elPriceUpdateModal.classList.remove("hidden");
-  }
-
-  function closePriceUpdateModal() {
-    elPriceUpdateModal.classList.add("hidden");
-    elPriceUpdateModalContent.classList.remove("hidden");
-    elPriceUpdateError.classList.add("hidden");
-  }
-
-  async function handleUpdatePrices() {
-    if (!portfolioData) return;
-    const btn = elBtnUpdatePrices;
-    btn.disabled = true;
-    showPriceUpdateModal();
-    try {
-      const res = await apiFetch("/api/refresh-prices", { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Price refresh failed");
-      }
-      await waitForEnrichment();
-      closePriceUpdateModal();
-      ToastManager.show("Prices updated successfully", "success");
-    } catch (e) {
-      console.error("Update prices failed", e);
-      elPriceUpdateModalContent.classList.add("hidden");
-      elPriceUpdateErrorMsg.textContent = e.message;
-      elPriceUpdateError.classList.remove("hidden");
-    } finally {
-      btn.disabled = false;
-    }
+    showPriceUpdateToast("Timed out — refresh manually", "error");
+    return false;
   }
 
   function enableUpdatePrices() {
@@ -356,11 +360,10 @@
   }
 
   function showEnriching(on) {
-    const banner = $("#enriching-banner");
     if (on) {
-      banner.classList.remove("hidden");
+      showEnrichmentModal("Enriching with market data…");
     } else {
-      banner.classList.add("hidden");
+      closeEnrichmentModal();
     }
   }
 

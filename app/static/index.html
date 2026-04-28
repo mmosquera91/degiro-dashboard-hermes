@@ -292,24 +292,27 @@
     <p id="loading-text">Fetching portfolio data…</p>
   </div>
 
-  <!-- ENRICHING BANNER -->
-  <div id="enriching-banner" class="enriching-banner hidden">
-    <div class="enriching-spinner"></div>
-    <span>Enriching with market data…</span>
-  </div>
-
-  <!-- PRICE UPDATE MODAL -->
-  <div id="price-update-modal" class="modal-overlay hidden">
+  <!-- ENRICHMENT BLOCKING MODAL -->
+  <div id="enrichment-modal" class="modal-overlay hidden">
     <div class="modal">
-      <div id="price-update-modal-content">
-        <div class="price-update-spinner"></div>
-        <span id="price-update-status">Fetching latest market data</span>
+      <div id="enrichment-modal-content">
+        <div class="enrichment-spinner"></div>
+        <span id="enrichment-status">Starting enrichment…</span>
       </div>
-      <div id="price-update-error" class="hidden">
-        <p id="price-update-error-msg"></p>
-        <button id="price-update-close" class="btn btn-primary btn-block">Close</button>
+      <div id="enrichment-error" class="hidden">
+        <p id="enrichment-error-msg"></p>
+        <button id="enrichment-close" class="btn btn-primary btn-block">Close</button>
       </div>
     </div>
+  </div>
+
+  <!-- PRICE UPDATE TOAST (non-blocking) -->
+  <div id="price-update-toast" class="toast toast-info" style="display:none; position:fixed; bottom:20px; right:16px; z-index:800; pointer-events:auto;">
+    <i data-lucide="trending-up" class="toast-icon"></i>
+    <span id="price-update-toast-msg" class="toast-message">Updating prices…</span>
+    <button id="price-update-toast-close" class="toast-close" aria-label="Dismiss">
+      <i data-lucide="x" class="icon-sm"></i>
+    </button>
   </div>
 
   <!-- TOAST CONTAINER -->
