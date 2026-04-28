@@ -35,7 +35,6 @@
   const elEmptyState = $("#empty-state");
   const elCredModal = $("#cred-modal");
   const elLoadingOverlay = $("#loading-overlay");
-  const elCredForm = $("#cred-form");
   const elCredError = $("#cred-error");
   const elBtnConnect = $("#btn-connect");
   const elConnectText = $("#connect-text");
@@ -69,7 +68,6 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeModal();
     });
-    elCredForm.addEventListener("submit", handleAuth);
     $("#session-form").addEventListener("submit", handleSession);
 
     // Filter tabs
@@ -128,14 +126,8 @@
     elCredModal.classList.remove("hidden");
     elCredError.classList.add("hidden");
     $("#session-error").classList.add("hidden");
-    elCredForm.reset();
     $("#session-form").reset();
-    // Reset to first tab
-    $$(".modal-tab").forEach((b) => b.classList.remove("active"));
-    $$(".tab-panel").forEach((p) => p.classList.remove("active"));
-    $(".modal-tab[data-tab='creds-tab']").classList.add("active");
-    $("#creds-tab").classList.add("active");
-    $("#cred-user").focus();
+    $("#session-id").focus();
   }
 
   function closeModal() {
@@ -151,45 +143,6 @@
     if (icon) {
       icon.setAttribute("data-lucide", privacyMode ? "eye-off" : "eye");
       lucide.createIcons({ nodes: [elBtnPrivacy] });
-    }
-  }
-
-  // ─── Auth ───
-  async function handleAuth(e) {
-    e.preventDefault();
-
-    const username = $("#cred-user").value.trim();
-    const password = $("#cred-pass").value;
-    const otp = $("#cred-otp").value.trim() || null;
-
-    if (!username || !password) return;
-
-    elBtnConnect.disabled = true;
-    elConnectText.classList.add("hidden");
-    elConnectSpinner.classList.remove("hidden");
-    elCredError.classList.add("hidden");
-
-    try {
-      const res = await apiFetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, otp }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Authentication failed");
-      }
-
-      closeModal();
-      await loadPortfolioRaw();
-    } catch (err) {
-      elCredError.textContent = err.message;
-      elCredError.classList.remove("hidden");
-    } finally {
-      elBtnConnect.disabled = false;
-      elConnectText.classList.remove("hidden");
-      elConnectSpinner.classList.add("hidden");
     }
   }
 
