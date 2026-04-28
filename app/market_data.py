@@ -827,7 +827,7 @@ def _update_price_cache(yf_symbol: str, price: float, currency: str) -> None:
         }
 
 
-def enrich_position(position: dict) -> dict:
+def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
     """Enrich a single position with yfinance data.
 
     Uses two-layer caching:
@@ -836,6 +836,9 @@ def enrich_position(position: dict) -> dict:
 
     If yfinance fails for a position, affected fields are set to None.
     The position dict is updated in place and returned.
+
+    price_batch: optional dict of {yf_symbol: price} from a batch yf.download() prefetch.
+    If provided, prices are looked up here first before calling yfinance per-symbol.
     """
     symbol = position.get("symbol", "")
     isin = position.get("isin", "")
@@ -1010,16 +1013,17 @@ def enrich_position(position: dict) -> dict:
             position["perf_90d"] = perf["perf_90d"]
             position["perf_ytd"] = perf["perf_ytd"]
 
-            # Price: use price cache if fresh, otherwise fetch and cache
-            if cached_price is not None and cached_price_currency == yf_currency and _price_currency_safe:
+            # Price: use batch prefetch first, then price cache, then per-ticker history
+            yf_price = 0.0
+            if price_batch is not None and yf_symbol in price_batch:
+                yf_price = price_batch[yf_symbol]
+            elif cached_price is not None and cached_price_currency == yf_currency and _price_currency_safe:
                 # Fresh price cache hit — use cached price
                 yf_price = cached_price
             else:
-                # Price cache miss or stale/wrong currency — fetch fresh
+                # Price cache miss or stale/wrong currency — fetch from history
                 if len(close) > 0 and _price_currency_safe:
                     yf_price = float(close.iloc[-1])
-                else:
-                    yf_price = 0.0
 
             if yf_price > 0:
                 position["current_price"] = round(yf_price, 4)
@@ -1146,13 +1150,84 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     for currency in unique_currencies:
         get_fx_rate(currency, base_currency)
 
-    enriched = []
-    _session_rate_limited = False
     _enrich_start = time.time()
 
-    def _enrich_and_convert(pos: dict) -> tuple[dict, bool]:
-        """Enrich a single position and return (enriched_pos, is_rate_limited)."""
-        enriched_pos = enrich_position(pos.copy())
+    # Step 1: Resolve all yf_symbols first (before any yfinance calls)
+    resolved_symbols: list[str] = []
+    resolved_yf_symbols: list[str] = []
+    symbol_to_position_idx: dict[str, list[int]] = {}
+
+    for idx, pos in enumerate(positions):
+        sym = pos.get("symbol", "")
+        isin = pos.get("isin", "")
+        yf_sym = ""
+        cache_key = f"{sym}:{isin}"
+
+        with _resolution_cache_lock:
+            entry = _resolution_cache.get(cache_key)
+            if entry and isinstance(entry, dict):
+                cached_yf = entry.get("yf_symbol", "")
+                if cached_yf:
+                    cached_at = entry.get("cached_at", 0)
+                    if time.time() - cached_at < 86400:
+                        yf_sym = cached_yf
+
+        if not yf_sym:
+            yf_sym = _resolve_yf_symbol(
+                sym, isin, pos.get("currency", "EUR"), pos.get("exchange_id", ""),
+                evict_on_404=True,
+            )
+
+        resolved_symbols.append(yf_sym)
+        resolved_yf_symbols.append(yf_sym)
+        if yf_sym:
+            symbol_to_position_idx.setdefault(yf_sym, []).append(idx)
+
+    # Step 2: Batch fetch prices for all resolved symbols
+    unique_yf_symbols = [s for s in dict.fromkeys(resolved_yf_symbols) if s]  # deduplicate, skip empty
+    price_batch: dict[str, float] = {}
+    _batch_start = time.time()
+    if unique_yf_symbols:
+        try:
+            batch = yf.download(
+                unique_yf_symbols,
+                period="2d",
+                auto_adjust=True,
+                progress=False,
+                threads=False,
+            )
+            if batch is not None and not batch.empty:
+                close_df = batch["Close"] if "Close" in batch.columns.get_level_values(0) else None
+                if close_df is None:
+                    close_df = batch
+                for sym in unique_yf_symbols:
+                    try:
+                        if isinstance(close_df, pd.DataFrame):
+                            if sym in close_df.columns:
+                                price = float(close_df[sym].iloc[-1])
+                                if price > 0:
+                                    price_batch[sym] = price
+                        elif isinstance(close_df, pd.Series):
+                            if sym == close_df.name:
+                                price = float(close_df.iloc[-1])
+                                if price > 0:
+                                    price_batch[sym] = price
+                    except (ValueError, TypeError, KeyError):
+                        pass
+        except Exception as e:
+            logger.warning("Batch price fetch failed: %s", e)
+
+    _batch_elapsed = time.time() - _batch_start
+    logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
+
+    # Step 3: Enrich each position (now price-fetch is centralized, no more ThreadPoolExecutor)
+    enriched = []
+    _session_rate_limited = False
+
+    for idx, pos in enumerate(positions):
+        yf_sym = resolved_symbols[idx]
+        pos["_resolved_yf_symbol"] = yf_sym
+        enriched_pos = enrich_position(pos, price_batch=price_batch)
         is_rl = enriched_pos.get("_enrichment_error") == "rate_limited"
 
         # FX conversion to EUR
@@ -1170,28 +1245,10 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             enriched_pos["current_value_eur"] = enriched_pos["current_value"]
             enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
 
-        return _sanitize_floats(enriched_pos), is_rl
+        if is_rl:
+            _session_rate_limited = True
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(_enrich_and_convert, pos): pos for pos in positions}
-        for future in as_completed(futures):
-            try:
-                enriched_pos, is_rl = future.result()
-                if is_rl:
-                    _session_rate_limited = True
-                enriched.append(enriched_pos)
-            except Exception as e:
-                pos = futures[future]
-                logger.warning("Failed to enrich position %s: %s", pos.get("name"), str(e))
-                pos["current_value_eur"] = pos.get("current_value", 0)
-                pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
-                pos["fx_rate"] = 1.0
-                for field in ["52w_high", "52w_low", "distance_from_52w_high_pct",
-                              "rsi", "perf_30d", "perf_90d", "perf_ytd",
-                              "pe_ratio", "sector", "country",
-                              "value_score", "momentum_score", "buy_priority_score"]:
-                    pos.setdefault(field, None)
-                enriched.append(_sanitize_floats(pos))
+        enriched.append(_sanitize_floats(enriched_pos))
 
     elapsed = time.time() - _enrich_start
     logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)
