@@ -7,6 +7,7 @@ import os
 import pathlib
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from datetime import datetime
 
@@ -1147,48 +1148,52 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
 
     enriched = []
     _session_rate_limited = False
-    for pos in positions:
-        if _session_rate_limited:
-            enriched_pos = pos.copy()
-            enriched_pos["_enrichment_error"] = "rate_limited_session"
-            enriched_pos["current_value_eur"] = pos.get("current_value", 0)
-            enriched_pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
+    _enrich_start = time.time()
+
+    def _enrich_and_convert(pos: dict) -> tuple[dict, bool]:
+        """Enrich a single position and return (enriched_pos, is_rate_limited)."""
+        enriched_pos = enrich_position(pos.copy())
+        is_rl = enriched_pos.get("_enrichment_error") == "rate_limited"
+
+        # FX conversion to EUR
+        pos_currency = enriched_pos.get("currency", "EUR")
+        if pos_currency != base_currency:
+            fx_rate = get_fx_rate(pos_currency, base_currency)
+            if fx_rate is None:
+                logger.warning("fx_rate is None for %s — falling back to 1.0", pos_currency)
+                fx_rate = 1.0
+            enriched_pos["fx_rate"] = fx_rate
+            enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
+            enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
+        else:
             enriched_pos["fx_rate"] = 1.0
-            enriched.append(_sanitize_floats(enriched_pos))
-            continue
+            enriched_pos["current_value_eur"] = enriched_pos["current_value"]
+            enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
 
-        try:
-            enriched_pos = enrich_position(pos.copy())
-            if enriched_pos.get("_enrichment_error") == "rate_limited":
-                _session_rate_limited = True
+        return _sanitize_floats(enriched_pos), is_rl
 
-            # FX conversion to EUR
-            pos_currency = enriched_pos.get("currency", "EUR")
-            if pos_currency != base_currency:
-                fx_rate = get_fx_rate(pos_currency, base_currency)
-                if fx_rate is None:
-                    logger.warning("fx_rate is None for %s — falling back to 1.0", pos_currency)
-                    fx_rate = 1.0
-                enriched_pos["fx_rate"] = fx_rate
-                enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
-                enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
-            else:
-                enriched_pos["fx_rate"] = 1.0
-                enriched_pos["current_value_eur"] = enriched_pos["current_value"]
-                enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_enrich_and_convert, pos): pos for pos in positions}
+        for future in as_completed(futures):
+            try:
+                enriched_pos, is_rl = future.result()
+                if is_rl:
+                    _session_rate_limited = True
+                enriched.append(enriched_pos)
+            except Exception as e:
+                pos = futures[future]
+                logger.warning("Failed to enrich position %s: %s", pos.get("name"), str(e))
+                pos["current_value_eur"] = pos.get("current_value", 0)
+                pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
+                pos["fx_rate"] = 1.0
+                for field in ["52w_high", "52w_low", "distance_from_52w_high_pct",
+                              "rsi", "perf_30d", "perf_90d", "perf_ytd",
+                              "pe_ratio", "sector", "country",
+                              "value_score", "momentum_score", "buy_priority_score"]:
+                    pos.setdefault(field, None)
+                enriched.append(_sanitize_floats(pos))
 
-            enriched.append(_sanitize_floats(enriched_pos))
-
-        except Exception as e:
-            logger.warning("Failed to enrich position %s: %s", pos.get("name"), str(e))
-            pos["current_value_eur"] = pos.get("current_value", 0)
-            pos["unrealized_pl_eur"] = pos.get("unrealized_pl", 0)
-            pos["fx_rate"] = 1.0
-            for field in ["52w_high", "52w_low", "distance_from_52w_high_pct",
-                          "rsi", "perf_30d", "perf_90d", "perf_ytd",
-                          "pe_ratio", "sector", "country",
-                          "value_score", "momentum_score", "buy_priority_score"]:
-                pos.setdefault(field, None)
-            enriched.append(_sanitize_floats(pos))
+    elapsed = time.time() - _enrich_start
+    logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)
 
     return enriched
