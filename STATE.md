@@ -12,6 +12,7 @@
 | 2026-04-27 | brokr-total-portfolio-debug2 | complete |
 | 2026-04-27 | fix-resolve-by-isin-global | complete |
 | 2026-04-27 | fix-resolve-by-isin-second-pass | complete |
+| 2026-04-28 | fix-update-prices-toast | complete |
 | 2026-04-27 | benchmark-ttl-cache | complete |
 | 2026-04-27 | fix-benchmark-cache-stale-on-ratelimit | complete |
 | 2026-04-27 | last-enriched-at | complete |
@@ -27,3 +28,4 @@
 | 2026-04-28 | 260428-fix-isin-lse-overrides-correct | complete |
 | 2026-04-28 | 260428-fix-update-prices-toast-and-operation-lock | complete |
 | 2026-04-28 | 260428-fix-button-click-handlers-broken | complete |
+| 2026-04-28 | 260428-split-resolution-and-price-cache | complete |
