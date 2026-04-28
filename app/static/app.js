@@ -35,6 +35,11 @@
   const elEmptyState = $("#empty-state");
   const elCredModal = $("#cred-modal");
   const elLoadingOverlay = $("#loading-overlay");
+  const elPriceUpdateModal = $("#price-update-modal");
+  const elPriceUpdateModalContent = $("#price-update-modal-content");
+  const elPriceUpdateError = $("#price-update-error");
+  const elPriceUpdateErrorMsg = $("#price-update-error-msg");
+  const elPriceUpdateClose = $("#price-update-close");
   const elCredError = $("#cred-error");
   const elBtnConnect = $("#btn-connect");
   const elConnectText = $("#connect-text");
@@ -62,6 +67,7 @@
     elBtnExport.addEventListener("click", exportHermesContext);
     elBtnPrivacy.addEventListener("click", togglePrivacyMode);
     $("#modal-close").addEventListener("click", closeModal);
+    elPriceUpdateClose.addEventListener("click", closePriceUpdateModal);
     elCredModal.addEventListener("click", (e) => {
       if (e.target === elCredModal) closeModal();
     });
@@ -297,11 +303,23 @@
     ToastManager.show("Price update timed out. Please refresh manually.", "warn");
   }
 
+  function showPriceUpdateModal() {
+    elPriceUpdateModalContent.classList.remove("hidden");
+    elPriceUpdateError.classList.add("hidden");
+    elPriceUpdateModal.classList.remove("hidden");
+  }
+
+  function closePriceUpdateModal() {
+    elPriceUpdateModal.classList.add("hidden");
+    elPriceUpdateModalContent.classList.remove("hidden");
+    elPriceUpdateError.classList.add("hidden");
+  }
+
   async function handleUpdatePrices() {
     if (!portfolioData) return;
     const btn = elBtnUpdatePrices;
     btn.disabled = true;
-    btn.querySelector(".btn-label").textContent = "Updating...";
+    showPriceUpdateModal();
     try {
       const res = await apiFetch("/api/refresh-prices", { method: "POST" });
       if (!res.ok) {
@@ -309,12 +327,15 @@
         throw new Error(data.detail || "Price refresh failed");
       }
       await waitForEnrichment();
+      closePriceUpdateModal();
+      ToastManager.show("Prices updated successfully", "success");
     } catch (e) {
       console.error("Update prices failed", e);
-      ToastManager.show("Update prices failed: " + e.message, "error");
+      elPriceUpdateModalContent.classList.add("hidden");
+      elPriceUpdateErrorMsg.textContent = e.message;
+      elPriceUpdateError.classList.remove("hidden");
     } finally {
       btn.disabled = false;
-      btn.querySelector(".btn-label").textContent = "Update Prices";
     }
   }
 
