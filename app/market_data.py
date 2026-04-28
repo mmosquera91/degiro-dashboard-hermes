@@ -35,6 +35,9 @@ _price_cache: dict[str, dict] = {}
 _price_cache_lock = threading.RLock()
 _PRICE_CACHE_TTL = 900  # 15 minutes
 
+# Fundamentals cache: stored inside resolution cache entry, 24h TTL
+_FUNDAMENTALS_TTL = 86400  # 24 hours
+
 # ISIN → Yahoo ticker overrides (user-maintained, loaded from disk)
 SYMBOL_OVERRIDES_PATH = pathlib.Path(
     os.environ.get("SYMBOL_OVERRIDES_PATH", "/data/symbol_overrides.json")
@@ -827,6 +830,41 @@ def _update_price_cache(yf_symbol: str, price: float, currency: str) -> None:
         }
 
 
+def _get_cached_fundamentals(cache_key: str) -> Optional[dict]:
+    """Return cached fundamentals dict if fresh (< 24h), else None."""
+    with _resolution_cache_lock:
+        entry = _resolution_cache.get(cache_key)
+        if not entry or not isinstance(entry, dict):
+            return None
+        fundamentals = entry.get("fundamentals")
+        if not fundamentals or not isinstance(fundamentals, dict):
+            return None
+        if time.time() - fundamentals.get("cached_at", 0) >= _FUNDAMENTALS_TTL:
+            return None
+        return fundamentals
+
+
+def _update_fundamentals_cache(cache_key: str, sector: Optional[str],
+                               country: Optional[str], pe_ratio: Optional[float],
+                               week52_high: Optional[float], currency: str,
+                               short_name: Optional[str]) -> None:
+    """Update fundamentals in the resolution cache entry and persist to disk."""
+    with _resolution_cache_lock:
+        entry = _resolution_cache.get(cache_key)
+        if not entry or not isinstance(entry, dict):
+            return
+        entry["fundamentals"] = {
+            "sector": sector,
+            "country": country,
+            "pe_ratio": pe_ratio,
+            "week52_high": week52_high,
+            "currency": currency,
+            "short_name": short_name,
+            "cached_at": time.time(),
+        }
+    _save_symbol_cache()
+
+
 def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
     """Enrich a single position with yfinance data.
 
@@ -893,89 +931,126 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
     # Step 3: Check price cache for current price
     cached_price, cached_price_currency = _get_cached_price(yf_symbol)
 
+    # Step 4: Check fundamentals cache — skip ticker.info if fresh
+    cached_fundamentals = _get_cached_fundamentals(cache_key)
+    if cached_fundamentals:
+        logger.info("Fundamentals cache hit for %s, skipping ticker.info", symbol)
+        position["sector"] = cached_fundamentals.get("sector")
+        position["country"] = cached_fundamentals.get("country")
+        position["pe_ratio"] = cached_fundamentals.get("pe_ratio")
+        wk52_high = cached_fundamentals.get("week52_high")
+        yf_currency = cached_fundamentals.get("currency", "")
+    else:
+        logger.debug("Fundamentals cache miss for %s — calling ticker.info", symbol)
+
     try:
         ticker = yf.Ticker(yf_symbol)
 
-        # Get info dict for fundamental data
-        _yf_throttle()
-        try:
-            info = ticker.info or {}
-        except Exception as e:
-            err_str = str(e)
-            if "429" in err_str or "Too Many Requests" in err_str \
-                    or "Rate limited" in err_str:
-                position["_enrichment_error"] = "rate_limited"
-                logger.warning("Rate limited fetching info for %s", symbol)
-                return position
-            # Check for 404 — evict resolution cache entry
-            if "404" in err_str or "Not Found" in err_str or "not found" in err_str.lower():
-                with _resolution_cache_lock:
-                    _resolution_cache.pop(cache_key, None)
-                _save_symbol_cache()
-                logger.warning("yfinance 404 for %s (%s) — evicted resolution cache", symbol, yf_symbol)
-                position["_enrichment_error"] = "yfinance_error"
-                return position
-            logger.warning("ticker.info failed for %s: %s", symbol, e)
-            info = {}
-
-        # Sector — stocks use "sector"/"industry"; ETFs use "category" as proxy
-        if position.get("asset_type") == "ETF":
-            etf_name = info.get("longName") or info.get("shortName") or position.get("name", "")
-            position["sector"] = (
-                info.get("categoryName")
-                or info.get("category")
-                or info.get("industry")
-                or _infer_etf_category_from_name(etf_name)
-            )
-        else:
-            position["sector"] = (
-                info.get("sector")
-                or info.get("industry")
-                or None
-            )
-
-        # Country
-        if position.get("asset_type") == "ETF":
-            position["country"] = _infer_country_from_etf_name(
-                position.get("name", ""),
-                info.get("category", "") or ""
-            )
-        else:
-            position["country"] = info.get("country", None)
-
-        # P/E ratio (stocks only)
-        if position.get("asset_type") == "STOCK":
-            raw_pe = info.get("trailingPE", info.get("forwardPE", None))
+        # Get info dict for fundamental data (only when fundamentals cache miss)
+        if cached_fundamentals is None:
+            _yf_throttle()
             try:
-                position["pe_ratio"] = float(raw_pe) if raw_pe is not None else None
-            except (ValueError, TypeError):
-                position["pe_ratio"] = None
+                info = ticker.info or {}
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "Too Many Requests" in err_str \
+                        or "Rate limited" in err_str:
+                    position["_enrichment_error"] = "rate_limited"
+                    logger.warning("Rate limited fetching info for %s", symbol)
+                    return position
+                # Check for 404 — evict resolution cache entry
+                if "404" in err_str or "Not Found" in err_str or "not found" in err_str.lower():
+                    with _resolution_cache_lock:
+                        _resolution_cache.pop(cache_key, None)
+                    _save_symbol_cache()
+                    logger.warning("yfinance 404 for %s (%s) — evicted resolution cache", symbol, yf_symbol)
+                    position["_enrichment_error"] = "yfinance_error"
+                    return position
+                logger.warning("ticker.info failed for %s: %s", symbol, e)
+                info = {}
 
-        # 52-week high/low from info
-        wk52_high = info.get("fiftyTwoWeekHigh", None)
-        wk52_low = info.get("fiftyTwoWeekLow", None)
+            # Sector — stocks use "sector"/"industry"; ETFs use "category" as proxy
+            if position.get("asset_type") == "ETF":
+                etf_name = info.get("longName") or info.get("shortName") or position.get("name", "")
+                position["sector"] = (
+                    info.get("categoryName")
+                    or info.get("category")
+                    or info.get("industry")
+                    or _infer_etf_category_from_name(etf_name)
+                )
+            else:
+                position["sector"] = (
+                    info.get("sector")
+                    or info.get("industry")
+                    or None
+                )
 
-        # Determine trading currency from the resolved Yahoo ticker's exchange
-        # suffix — this is more reliable than fast_info.currency for ETFs, which
-        # reports the index denomination (USD for S&P 500 ETFs), not the listing
-        # currency (EUR on AMS/GER for UCITS ETFs).
-        yf_currency = ""
-        _price_currency_safe = True  # default: trust price if we can't determine
+            # Country
+            if position.get("asset_type") == "ETF":
+                position["country"] = _infer_country_from_etf_name(
+                    position.get("name", ""),
+                    info.get("category", "") or ""
+                )
+            else:
+                position["country"] = info.get("country", None)
 
-        _EUR_EXCHANGE_SUFFIXES = {".AS", ".PA", ".DE", ".F", ".MI", ".MC",
-                                   ".HE", ".SW", ".EAM", ".EPA", ".ETR"}
-        _GBP_EXCHANGE_SUFFIXES = {".L"}
+            # P/E ratio (stocks only)
+            if position.get("asset_type") == "STOCK":
+                raw_pe = info.get("trailingPE", info.get("forwardPE", None))
+                try:
+                    position["pe_ratio"] = float(raw_pe) if raw_pe is not None else None
+                except (ValueError, TypeError):
+                    position["pe_ratio"] = None
 
-        # Extract suffix from resolved symbol (e.g. "SXRU.AS" → ".AS", "QUBT" → "")
-        if "." in yf_symbol:
-            resolved_suffix = "." + yf_symbol.rsplit(".", 1)[-1]
+            # 52-week high/low from info
+            wk52_high = info.get("fiftyTwoWeekHigh", None)
+            wk52_low = info.get("fiftyTwoWeekLow", None)
+
+            # Determine trading currency from the resolved Yahoo ticker's exchange
+            # suffix — this is more reliable than fast_info.currency for ETFs, which
+            # reports the index denomination (USD for S&P 500 ETFs), not the listing
+            # currency (EUR on AMS/GER for UCITS ETFs).
+            yf_currency = ""
+            _price_currency_safe = True  # default: trust price if we can't determine
+
+            _EUR_EXCHANGE_SUFFIXES = {".AS", ".PA", ".DE", ".F", ".MI", ".MC",
+                                       ".HE", ".SW", ".EAM", ".EPA", ".ETR"}
+            _GBP_EXCHANGE_SUFFIXES = {".L"}
+
+            # Extract suffix from resolved symbol (e.g. "SXRU.AS" → ".AS", "QUBT" → "")
+            if "." in yf_symbol:
+                resolved_suffix = "." + yf_symbol.rsplit(".", 1)[-1]
+            else:
+                resolved_suffix = ""
+
+            if resolved_suffix in _EUR_EXCHANGE_SUFFIXES:
+                yf_currency = "EUR"
+            elif resolved_suffix in _GBP_EXCHANGE_SUFFIXES:
+                yf_currency = "GBP"
+
+            # Cache the fundamentals for future runs
+            short_name = info.get("shortName", None)
+            _update_fundamentals_cache(
+                cache_key,
+                position.get("sector"), position.get("country"),
+                position.get("pe_ratio"), wk52_high,
+                yf_currency, short_name,
+            )
         else:
-            resolved_suffix = ""
-
-        if resolved_suffix in _EUR_EXCHANGE_SUFFIXES:
-            yf_currency = "EUR"
-        elif resolved_suffix in _GBP_EXCHANGE_SUFFIXES:
-            yf_currency = "GBP"
+            # Fundamentals cache hit — determine currency from exchange suffix only
+            _EUR_EXCHANGE_SUFFIXES = {".AS", ".PA", ".DE", ".F", ".MI", ".MC",
+                                       ".HE", ".SW", ".EAM", ".EPA", ".ETR"}
+            _GBP_EXCHANGE_SUFFIXES = {".L"}
+            if "." in yf_symbol:
+                resolved_suffix = "." + yf_symbol.rsplit(".", 1)[-1]
+            else:
+                resolved_suffix = ""
+            if resolved_suffix in _EUR_EXCHANGE_SUFFIXES:
+                yf_currency = "EUR"
+            elif resolved_suffix in _GBP_EXCHANGE_SUFFIXES:
+                yf_currency = "GBP"
+            _price_currency_safe = True  # default when using cached fundamentals
+            wk52_low = None  # not cached, will be derived from history if available
 
         pos_currency = position.get("currency", "EUR").upper().strip()
         if yf_currency:
