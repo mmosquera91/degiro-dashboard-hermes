@@ -1052,6 +1052,12 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
             _price_currency_safe = True  # default when using cached fundamentals
             wk52_low = None  # not cached, will be derived from history if available
 
+        # Store the yf-derived currency so the FX conversion block (line 1308+) uses
+        # the correct price currency rather than the DeGiro-reported position currency,
+        # which can be wrong (e.g. USD for EUR-denominated Xetra UCITS ETFs).
+        if yf_currency:
+            position["currency"] = yf_currency
+
         pos_currency = position.get("currency", "EUR").upper().strip()
         if yf_currency:
             _price_currency_safe = (yf_currency == pos_currency)
@@ -1315,6 +1321,14 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             enriched_pos["fx_rate"] = fx_rate
             enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
             enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
+            logger.debug(
+                "[DEBUG] FX conversion applied for %s: %.4f %s → %.4f EUR (rate=%.4f)",
+                enriched_pos.get("symbol", yf_sym),
+                enriched_pos["current_value"],
+                pos_currency,
+                enriched_pos["current_value_eur"],
+                fx_rate,
+            )
         else:
             enriched_pos["fx_rate"] = 1.0
             enriched_pos["current_value_eur"] = enriched_pos["current_value"]
