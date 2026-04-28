@@ -76,6 +76,8 @@ progress:
 | 260427-brokr-empty-symbol-guard | Guard enrich_position() empty yf_symbol early exit | 2026-04-27 | e128e86 | [260427-brokr-empty-symbol-guard](./quick/260427-brokr-empty-symbol-guard/) |
 | 260427-brokr-benchmark-date-normalise | Normalise dates to YYYY-MM-DD in renderBenchmark() maps | 2026-04-27 | 74e8385 | [260427-brokr-benchmark-date-normalise](./quick/260427-brokr-benchmark-date-normalise/) |
 | 260427-brokr-layout-reorder | Reorder dashboard sections per reading hierarchy | 2026-04-27 | 9e1161e | [260427-brokr-layout-reorder](./quick/260427-brokr-layout-reorder/) |
+| 260428-upp | Update Prices button: modal progress overlay | 2026-04-28 | — | [260428-update-prices-modal-progress](./quick/260428-update-prices-modal-progress/) |
+| 260428-pfc | Swap modal/toast for Update Prices and Enrichment flows | 2026-04-28 | 334132c | |
 
 - **fix symbol vwdId fallback to yfinance (2026-04-26):** Removed `vwdId` and `vwd_id` from symbol fallback chain in `fetch_portfolio()`. vwdId is a Van der Moolen internal numeric ID (e.g. "72095021"), not a market ticker — using it as a yfinance symbol fallback caused symbol_cache.json poisoning and wasted 10 yfinance HTTP calls per leveraged product/turbo/warrant per enrichment run. `enrich_position()` already handles empty symbol with early return + warning log. `app/degiro_client.py` line 697.
 - **fix _yf_rate_limited race condition (2026-04-24):** Added `_yf_rate_limited_until` with 60s cooldown. `enrich_positions()` now conditionally resets flag only after cooldown expires. `_resolve_yf_symbol()` sets 60s cooldown on 429 detection and checks expiry before skipping. Prevents premature retry after rate limit hit. Commit: 68279c0
@@ -100,4 +102,4 @@ progress:
 
 ---
 
-*Last updated: 2026-04-27 — Completed quick task 260427-tve: Add total_value_eur to portfolio summary responses*
+*Last updated: 2026-04-28 — Completed quick task 260428-upp: Update Prices button modal progress overlay*
