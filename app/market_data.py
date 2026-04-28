@@ -1333,15 +1333,6 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     _batch_elapsed = time.time() - _batch_start
     logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
 
-    # Fix part 2 — GBp→GBP correction for .L tickers in batch:
-    # yf.download() returns LSE prices in pence (GBp) with no currency metadata,
-    # so the per-ticker GBp safety net never fires in the batch path.
-    # Halve .L prices here so they land in GBP before the FX→EUR conversion.
-    for sym in list(price_batch.keys()):
-        if sym.endswith(".L"):
-            price_batch[sym] = price_batch[sym] / 100.0
-            logger.info("[INFO] GBp→GBP correction applied for %s", sym)
-
     # Step 3: Enrich each position (now price-fetch is centralized, no more ThreadPoolExecutor)
     enriched = []
     _session_rate_limited = False
