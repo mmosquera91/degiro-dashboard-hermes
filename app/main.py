@@ -6,7 +6,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -332,7 +332,7 @@ def _restore_portfolio_from_snapshot():
         _session["portfolio_time"] = datetime.now()
         snap_date = snapshot.get("date")  # "YYYY-MM-DD"
         try:
-            _session["last_enriched_at"] = datetime.strptime(snap_date, "%Y-%m-%d")
+            _session["last_enriched_at"] = datetime.strptime(snap_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
             _session["last_enriched_at"] = None
 
@@ -566,8 +566,8 @@ async def get_portfolio():
 
         with _session_lock:
             _session["portfolio"] = portfolio
-            _session["portfolio_time"] = datetime.now()
-            _session["last_enriched_at"] = datetime.now()
+            _session["portfolio_time"] = datetime.now(timezone.utc)
+            _session["last_enriched_at"] = datetime.now(timezone.utc)
             portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
 
         return portfolio
@@ -637,7 +637,7 @@ def _do_enrich_session():
             logger.warning("Health alerts computation failed in enrich: %s", e)
             summary["health_alerts"] = []
 
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         with _session_lock:
             summary["last_enriched_at"] = now.isoformat()
             _session["portfolio"] = summary
