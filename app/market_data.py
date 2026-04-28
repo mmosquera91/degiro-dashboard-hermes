@@ -499,13 +499,23 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
                         cached_currency = (yf.Ticker(cached).fast_info.currency or "").upper()
                         pos_currency = position_currency.upper() if position_currency else "EUR"
                         if cached_currency and cached_currency != pos_currency:
-                            logger.info(
-                                "Evicting stale cache entry %s → %s (yfinance=%s, expected=%s)",
-                                cache_key, cached, cached_currency, pos_currency,
-                            )
-                            with _symbol_cache_lock:
-                                del _symbol_cache[cache_key]
-                            _save_symbol_cache()
+                            _bundled = _load_symbol_overrides()
+                            _isin = position.get("isin", "")
+                            if _isin and _isin in _bundled and _bundled[_isin] == cached:
+                                # Intentional cross-currency override — LSE ticker for metrics only.
+                                # Price stays from DeGiro. Don't evict, log at DEBUG.
+                                logger.debug(
+                                    "Cross-currency override %s → %s (metrics only, price from DeGiro)",
+                                    _isin, cached,
+                                )
+                            else:
+                                logger.info(
+                                    "Evicting stale cache entry %s → %s (yfinance=%s, expected=%s)",
+                                    cache_key, cached, cached_currency, pos_currency,
+                                )
+                                with _symbol_cache_lock:
+                                    del _symbol_cache[cache_key]
+                                _save_symbol_cache()
                         else:
                             return cached
                     except Exception:
