@@ -4,6 +4,7 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-28 | 260428-skip-yf-delay-on-batch-hit | complete |
 | 2026-04-27 | brokr-concentration-cards | complete |
 | 2026-04-27 | brokr-preserve-data-on-failure | complete |
 | 2026-04-27 | brokr-geo-currency-charts | complete |

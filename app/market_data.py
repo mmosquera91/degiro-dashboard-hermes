@@ -990,7 +990,6 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
             )
 
         # Get historical data for RSI and performance (always fresh — not cached)
-        _yf_throttle()
         hist = ticker.history(period="1y")
         if hist is not None and not hist.empty:
             close = hist["Close"]
@@ -1022,6 +1021,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                 yf_price = cached_price
             else:
                 # Price cache miss or stale/wrong currency — fetch from history
+                _yf_throttle()
                 if len(close) > 0 and _price_currency_safe:
                     yf_price = float(close.iloc[-1])
 
