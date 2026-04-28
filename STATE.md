@@ -33,3 +33,4 @@
 | 2026-04-28 | 260428-split-resolution-and-price-cache | complete |
 | 2026-04-28 | 260428-batch-price-fetch-yf-download | complete |
 | 2026-04-28 | 260428-fix-fx-double-conversion-after-batch-fetch | complete |
+| 2026-04-28 | 260428-fix-ucits-etf-gbp-pence-inflation | complete |
