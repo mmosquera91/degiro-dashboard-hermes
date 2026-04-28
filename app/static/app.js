@@ -207,7 +207,15 @@
       if (res.status === 401) {
         showEnriching(false);
         openModal();
-        disableUpdatePrices();
+        setOperationActive(false);
+        return;
+      }
+
+      if (res.status === 409) {
+        const data = await res.json();
+        showEnriching(false);
+        ToastManager.show(data.detail || "Another operation is already running, please wait", "error");
+        setOperationActive(false);
         return;
       }
 
@@ -233,6 +241,7 @@
       showEnriching(false);
       console.error("Portfolio load error:", err);
       markDataStale();
+      setOperationActive(false);
       if (ToastManager) ToastManager.show("Failed to refresh: " + err.message, "error");
       // Don't clear portfolioData — keep showing last valid data
     }
@@ -240,6 +249,7 @@
 
   async function loadPortfolioRaw() {
     showLoading(true);
+    setOperationActive(true);
     try {
       const res = await apiFetch("/api/portfolio-raw");
 
@@ -247,7 +257,15 @@
         showLoading(false);
         if (portfolioData) renderDashboard();
         openModal();
-        disableUpdatePrices();
+        setOperationActive(false);
+        return;
+      }
+
+      if (res.status === 409) {
+        const data = await res.json();
+        showLoading(false);
+        ToastManager.show(data.detail || "Another operation is already running, please wait", "error");
+        setOperationActive(false);
         return;
       }
 
@@ -266,6 +284,7 @@
     } catch (err) {
       showLoading(false);
       markDataStale();
+      setOperationActive(false);
       if (portfolioData) { renderDashboard(); }
       ToastManager.show("Error: " + err.message, "error");
     }
@@ -285,11 +304,23 @@
 
   async function handleUpdatePrices() {
     if (!portfolioData) return;
+    if (operationActive) {
+      showPriceUpdateToast("Another operation is already running, please wait", "error");
+      return;
+    }
     const btn = elBtnUpdatePrices;
     btn.disabled = true;
+    setOperationActive(true);
     showPriceUpdateToast("Updating prices…", "info");
+    const updateStart = Date.now();
     try {
       const res = await apiFetch("/api/refresh-prices", { method: "POST" });
+      if (res.status === 409) {
+        const data = await res.json();
+        showPriceUpdateToast(data.detail || "Another operation is already running, please wait", "error");
+        setOperationActive(false);
+        return;
+      }
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || "Price refresh failed");
@@ -298,13 +329,17 @@
       const done = await waitForEnrichmentToast();
       if (done) {
         showPriceUpdateToast("Prices updated", "success");
-        setTimeout(hidePriceUpdateToast, 3000);
+        // Ensure toast stays visible for at least 2s
+        const elapsed = Date.now() - updateStart;
+        setTimeout(hidePriceUpdateToast, Math.max(2000 - elapsed, 500));
       }
     } catch (e) {
       console.error("Update prices failed", e);
       showPriceUpdateToast(e.message, "error");
     } finally {
       btn.disabled = false;
+      // Only clear operation active after the toast has time to be seen
+      setTimeout(() => setOperationActive(false), 3000);
     }
   }
 
@@ -343,12 +378,19 @@
     return false;
   }
 
-  function enableUpdatePrices() {
-    if (elBtnUpdatePrices) elBtnUpdatePrices.disabled = false;
-  }
+  // Track active operation state across all buttons
+  let operationActive = false;
 
-  function disableUpdatePrices() {
-    if (elBtnUpdatePrices) elBtnUpdatePrices.disabled = true;
+  function setOperationActive(active) {
+    operationActive = active;
+    if (active) {
+      disableUpdatePrices();
+      if (elBtnRefresh) elBtnRefresh.disabled = true;
+    } else {
+      // Re-enable only if we have portfolio data
+      if (portfolioData) enableUpdatePrices();
+      if (elBtnRefresh && portfolioData) elBtnRefresh.disabled = false;
+    }
   }
 
   function showLoading(on) {

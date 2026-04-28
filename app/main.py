@@ -36,6 +36,19 @@ _session = {
 }
 _session_lock = threading.Lock()
 
+# Global operation lock — prevents concurrent enrichment, Update Prices, and DeGiro sync
+_operation_lock = threading.Event()
+
+def _is_operation_locked():
+    return _operation_lock.is_set()
+
+def _acquire_operation_lock():
+    """Attempt to acquire the operation lock. Returns True if acquired, False if already held."""
+    return not _operation_lock.is_set()
+
+def _release_operation_lock():
+    _operation_lock.clear()
+
 # Benchmark cache (1-hour TTL)
 _benchmark_cache: dict = {"series": None, "attribution": None}
 _benchmark_cache_time: float = 0.0
@@ -508,6 +521,9 @@ async def get_portfolio():
     Serves cached portfolio even if the DeGiro session has expired.
     Only requires a live session for the initial fetch.
     """
+    if _is_operation_locked():
+        raise HTTPException(status_code=409, detail="Another operation is already running")
+
     with _session_lock:
         portfolio = _session["portfolio"]
         if portfolio is not None:
@@ -584,6 +600,9 @@ async def get_portfolio_raw():
     Fast (~2-3s) — useful for showing basic data immediately while
     the full enrichment happens in the background.
     """
+    if _is_operation_locked():
+        raise HTTPException(status_code=409, detail="Another operation is already running")
+
     with _session_lock:
         # If we already have enriched data, return that
         portfolio = _session["portfolio"]
@@ -618,6 +637,7 @@ def _do_enrich_session():
     daily enrichment loop (via asyncio.to_thread). Does NOT call DeGiro.
     """
     try:
+        _operation_lock.set()
         with _session_lock:
             _session["enriching"] = True
 
@@ -646,6 +666,7 @@ def _do_enrich_session():
 
         _save_snapshot_for_portfolio(summary)
     finally:
+        _operation_lock.clear()
         with _session_lock:
             _session["enriching"] = False
 
@@ -657,6 +678,9 @@ async def refresh_prices():
     Does not require a DeGiro session — works from snapshot-restored portfolio.
     Runs enrichment in a background thread and returns immediately.
     """
+    if _is_operation_locked():
+        raise HTTPException(status_code=409, detail="Another operation is already running")
+
     with _session_lock:
         portfolio = _session.get("portfolio")
     if not portfolio or not portfolio.get("positions"):
