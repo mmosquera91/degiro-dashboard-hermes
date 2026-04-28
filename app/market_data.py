@@ -900,12 +900,22 @@ def enrich_position(position: dict) -> dict:
             _price_currency_safe = (yf_currency == pos_currency)
         # else: yf_currency unknown → keep _price_currency_safe = True (trust price)
 
+        _bundled = _load_symbol_overrides()
+        _isin_key = position.get("isin", "")
+        _from_override = _isin_key and _bundled.get(_isin_key) == yf_symbol
+
         if not _price_currency_safe:
-            logger.warning(
-                "Currency mismatch for %s: exchange=%s (%s), position=%s"
-                " — keeping DeGiro price",
-                symbol, resolved_suffix or "bare", yf_currency, pos_currency,
-            )
+            if _from_override:
+                logger.debug(
+                    "Known cross-currency override %s → %s: using DeGiro price, "
+                    "yfinance metrics retained", position.get("symbol"), yf_symbol,
+                )
+            else:
+                logger.warning(
+                    "Currency mismatch for %s: exchange=%s (%s), position=%s"
+                    " — keeping DeGiro price",
+                    symbol, resolved_suffix or "bare", yf_currency, pos_currency,
+                )
             # Self-heal: try EUR suffixes directly for IE/LU ISIN ETFs
             _isin = position.get("isin", "")
             if yf_currency and yf_currency.upper() != pos_currency and \
