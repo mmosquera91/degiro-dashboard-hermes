@@ -13,6 +13,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from yfinance.exceptions import YFTickerMissingError, YFRateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,18 @@ logger = logging.getLogger(__name__)
 _fx_cache: dict[str, float] = {}
 _fx_lock = threading.RLock()
 
-# Cache for resolved yfinance symbols (symbol:isin -> resolved_yf_symbol)
-_symbol_cache: dict[str, str] = {}
-_symbol_cache_lock = threading.RLock()
+# Cache for resolved yfinance symbols (symbol:isin -> ResolutionEntry)
+# Split into two layers:
+#   - Resolution cache (persistent, no TTL): yf_symbol, exchange, currency, method
+#   - Price cache (in-memory, 15-min TTL): current_price, price_currency, timestamp
+_resolution_cache: dict[str, dict] = {}
+_resolution_cache_lock = threading.RLock()
 _SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
+
+# Price cache: keyed by resolved yf_symbol, 15-min TTL
+_price_cache: dict[str, dict] = {}
+_price_cache_lock = threading.RLock()
+_PRICE_CACHE_TTL = 900  # 15 minutes
 
 # ISIN → Yahoo ticker overrides (user-maintained, loaded from disk)
 SYMBOL_OVERRIDES_PATH = pathlib.Path(
@@ -184,26 +193,26 @@ _yf_rate_limited_until: float = 0.0
 _yf_rate_limited_lock = threading.RLock()
 
 def _load_symbol_cache() -> None:
-    """Load persisted symbol cache from disk into _symbol_cache."""
-    global _symbol_cache
+    """Load persisted resolution cache from disk into _resolution_cache."""
+    global _resolution_cache
     _load_symbol_overrides()
     try:
         if os.path.exists(_SYMBOL_CACHE_PATH):
             with open(_SYMBOL_CACHE_PATH, "r") as f:
                 data = json.load(f)
-            with _symbol_cache_lock:
-                _symbol_cache.update(data)
-            logger.info("Loaded %d symbol cache entries from disk", len(data))
+            with _resolution_cache_lock:
+                _resolution_cache.update(data)
+            logger.info("Loaded %d resolution cache entries from disk", len(data))
     except Exception as e:
         logger.warning("Could not load symbol cache: %s", e)
 
 
 def _save_symbol_cache() -> None:
-    """Persist current symbol cache to disk."""
+    """Persist current resolution cache to disk."""
     try:
         os.makedirs(os.path.dirname(_SYMBOL_CACHE_PATH), exist_ok=True)
-        with _symbol_cache_lock:
-            data = dict(_symbol_cache)
+        with _resolution_cache_lock:
+            data = dict(_resolution_cache)
         tmp_path = _SYMBOL_CACHE_PATH + ".tmp"
         with open(tmp_path, "w") as f:
             json.dump(data, f)
@@ -436,11 +445,18 @@ def _get_suffix_order(isin: str, symbol: str) -> list[str]:
             ".HE", ".F", ".SW", ".TO", ".SI", ""]
 
 
-def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EUR", exchange_id: str = "") -> str:
+def _resolve_yf_symbol(
+    symbol: str,
+    isin: str = "",
+    position_currency: str = "EUR",
+    exchange_id: str = "",
+    evict_on_404: bool = False,
+) -> str:
     """Resolve a DeGiro symbol to a yfinance-compatible ticker.
 
     DeGiro symbols sometimes lack exchange suffixes. We try common ones.
-    Results are cached in memory and persisted to disk.
+    Results are cached in the resolution cache (persistent, no TTL).
+    On yfinance 404: if evict_on_404=True, entry is evicted and next run re-resolves.
     """
     global _yf_rate_limited, _yf_rate_limited_until
 
@@ -472,58 +488,52 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
             override = _symbol_overrides.get(isin.strip().upper(), "")
         if override:
             logger.debug("Symbol override for ISIN %s: %s", isin, override)
-            with _symbol_cache_lock:
-                _symbol_cache[cache_key] = override
+            with _resolution_cache_lock:
+                _resolution_cache[cache_key] = {
+                    "yf_symbol": override,
+                    "exchange": "",
+                    "currency": "",
+                    "method": "override",
+                }
             _save_symbol_cache()
             return override
 
-    # Check symbol resolution cache first
-    with _symbol_cache_lock:
-        if cache_key in _symbol_cache:
-            cached = _symbol_cache.get(cache_key)
-            if cached is not None:
-                # Check for 24h negative cache sentinel
-                if isinstance(cached, str) and cached.startswith("_notfound_"):
-                    try:
-                        cached_at = int(cached.split("_notfound_")[1])
-                        if time.time() - cached_at < 86400:  # 24 hours
-                            return ""  # still within TTL — skip resolution
-                        else:
-                            # Expired — evict and re-resolve
-                            with _symbol_cache_lock:
-                                del _symbol_cache[cache_key]
-                            _save_symbol_cache()
-                    except (IndexError, ValueError):
-                        return ""  # malformed sentinel — treat as not-found
-                elif cached and cached != symbol:
-                    try:
-                        _yf_throttle()
-                        cached_currency = (yf.Ticker(cached).fast_info.currency or "").upper()
-                        pos_currency = position_currency.upper() if position_currency else "EUR"
-                        if cached_currency and cached_currency != pos_currency:
-                            _bundled = _load_symbol_overrides()
-                            _isin = position.get("isin", "")
-                            if _isin and _isin in _bundled and _bundled[_isin] == cached:
-                                # Intentional cross-currency override — LSE ticker for metrics only.
-                                # Price stays from DeGiro. Don't evict, log at DEBUG.
-                                logger.debug(
-                                    "Cross-currency override %s → %s (metrics only, price from DeGiro)",
-                                    _isin, cached,
-                                )
-                            else:
-                                logger.info(
-                                    "Evicting stale cache entry %s → %s (yfinance=%s, expected=%s)",
-                                    cache_key, cached, cached_currency, pos_currency,
-                                )
-                                with _symbol_cache_lock:
-                                    del _symbol_cache[cache_key]
-                                _save_symbol_cache()
-                        else:
-                            return cached
-                    except Exception:
-                        return cached
-                else:
-                    return cached
+    # Check resolution cache first — return directly on hit (no re-validation call)
+    with _resolution_cache_lock:
+        if cache_key in _resolution_cache:
+            entry = _resolution_cache.get(cache_key)
+            if entry and isinstance(entry, dict):
+                cached_yf = entry.get("yf_symbol", "")
+                if cached_yf:
+                    return cached_yf
+                # Negative cache (no yf_symbol) — check if still valid
+                cached_at = entry.get("cached_at", 0)
+                if time.time() - cached_at < 86400:
+                    return ""  # still within 24h negative cache TTL
+                # Expired — evict and re-resolve
+                del _resolution_cache[cache_key]
+
+    def _cache_resolution(yf_sym: str, method: str, exchange: str = "", currency: str = "") -> str:
+        """Store successful resolution in cache and return the symbol."""
+        with _resolution_cache_lock:
+            _resolution_cache[cache_key] = {
+                "yf_symbol": yf_sym,
+                "exchange": exchange,
+                "currency": currency,
+                "method": method,
+                "cached_at": time.time(),
+            }
+        _save_symbol_cache()
+        return yf_sym
+
+    def _evict_and_return(empty_str: str) -> str:
+        """Evict stale/404'd entry and return empty string."""
+        if evict_on_404:
+            with _resolution_cache_lock:
+                _resolution_cache.pop(cache_key, None)
+            _save_symbol_cache()
+            logger.debug("Evicted resolution cache entry for %s (yfinance 404)", cache_key)
+        return empty_str
 
     # Step 0: Deterministic resolution from DeGiro exchangeId (best signal)
     if exchange_id:
@@ -539,13 +549,13 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
                         "Resolved %s via exchangeId %s → %s",
                         symbol, exchange_id, candidate,
                     )
-                    with _symbol_cache_lock:
-                        _symbol_cache[cache_key] = candidate
-                    _save_symbol_cache()
-                    return candidate
+                    return _cache_resolution(candidate, "exchange_id", suffix, "")
+            except YFTickerMissingError as e:
+                if "404" in str(e) or "Not Found" in str(e):
+                    return _evict_and_return("")
+                logger.debug("exchangeId candidate %s failed: %s", candidate, e)
             except Exception as e:
                 logger.debug("exchangeId candidate %s failed: %s", candidate, e)
-            # If candidate failed, fall through to ISIN search then suffix scan
 
     # Step 0.5: For Tradegate (196) US-ISIN stocks, resolve via direct ISIN
     # lookup. DeGiro's local symbol (NVD, PTX, 6RV, O9T) is a German market
@@ -557,20 +567,19 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
             t = yf.Ticker(isin)
             hist = t.history(period="5d")
             if not hist.empty:
-                # Extract the real ticker symbol from the resolved info
                 resolved = t.info.get("symbol", "")
                 if resolved:
                     logger.info(
                         "Resolved Tradegate US stock %s (ISIN %s) → %s via ISIN lookup",
                         symbol, isin, resolved,
                     )
-                    with _symbol_cache_lock:
-                        _symbol_cache[cache_key] = resolved
-                    _save_symbol_cache()
-                    return resolved
+                    return _cache_resolution(resolved, "tradegate_isin", "", "USD")
+        except YFTickerMissingError as e:
+            if "404" in str(e) or "Not Found" in str(e):
+                return _evict_and_return("")
+            logger.debug("ISIN direct lookup failed for %s (%s): %s", symbol, isin, e)
         except Exception as e:
             logger.debug("ISIN direct lookup failed for %s (%s): %s", symbol, isin, e)
-        # Fall through to suffix scan if ISIN lookup fails
 
     # Step 0: ISIN-based resolution (most accurate — resolves ETFs/ETPs whose
     # DeGiro symbol differs from Yahoo ticker, e.g. QDVD → QDVD.L)
@@ -581,10 +590,7 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
             else:
                 isin_result = _resolve_by_isin(isin, position_currency)
                 if isin_result:
-                    with _symbol_cache_lock:
-                        _symbol_cache[cache_key] = isin_result
-                    _save_symbol_cache()
-                    return isin_result
+                    return _cache_resolution(isin_result, "isin", "", position_currency)
 
     # European suffixes tried first so dual-listed stocks (ASML, TDIV) resolve
     # to the EUR-denominated listing before the bare symbol hits NASDAQ.
@@ -595,17 +601,28 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
         with _yf_rate_limited_lock:
             if _yf_rate_limited and time.time() < _yf_rate_limited_until:
                 logger.warning("Rate limited — skipping suffix scan for %s", symbol)
-                return symbol
+                return ""
         candidate = symbol + suffix
         try:
             ticker = yf.Ticker(candidate)
             _yf_throttle()
             info = ticker.info or {}
             if info.get("regularMarketPrice"):
-                with _symbol_cache_lock:
-                    _symbol_cache[cache_key] = candidate
-                _save_symbol_cache()
-                return candidate
+                return _cache_resolution(candidate, "suffix_scan", suffix, "")
+        except YFTickerMissingError as e:
+            if "404" in str(e) or "Not Found" in str(e):
+                return _evict_and_return("")
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str \
+                    or "Rate limited" in err_str or "YFRateLimitError" in err_str:
+                with _yf_rate_limited_lock:
+                    _yf_rate_limited = True
+                    _yf_rate_limited_until = time.time() + 60.0
+                logger.warning(
+                    "Rate limit detected resolving %s — aborting suffix scan", symbol
+                )
+                return ""
+            # Other error — continue to next suffix
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "Too Many Requests" in err_str \
@@ -616,13 +633,18 @@ def _resolve_yf_symbol(symbol: str, isin: str = "", position_currency: str = "EU
                 logger.warning(
                     "Rate limit detected resolving %s — aborting suffix scan", symbol
                 )
-                return symbol
+                return ""
             # 404 or other error — continue to next suffix
 
     # All suffixes exhausted — cache the negative result for 24h so next run skips scan
-    negative_entry = f"_notfound_{int(time.time())}"
-    with _symbol_cache_lock:
-        _symbol_cache[cache_key] = negative_entry
+    with _resolution_cache_lock:
+        _resolution_cache[cache_key] = {
+            "yf_symbol": "",
+            "exchange": "",
+            "currency": "",
+            "method": "notfound",
+            "cached_at": time.time(),
+        }
     _save_symbol_cache()
     logger.debug("Symbol %s exhausted all suffixes — cached negative result for 24h", symbol)
     return ""
@@ -784,8 +806,32 @@ def _infer_country_from_etf_name(name: str, category: str) -> str:
         return "Global"
     return "Other"
 
+def _get_cached_price(yf_symbol: str) -> tuple[Optional[float], Optional[str]]:
+    """Check price cache for a fresh entry. Returns (price, currency) or (None, None) if missing/expired."""
+    with _price_cache_lock:
+        entry = _price_cache.get(yf_symbol)
+        if entry and isinstance(entry, dict):
+            if time.time() - entry.get("timestamp", 0) < _PRICE_CACHE_TTL:
+                return entry.get("current_price"), entry.get("price_currency")
+    return None, None
+
+
+def _update_price_cache(yf_symbol: str, price: float, currency: str) -> None:
+    """Update price cache with fresh price data."""
+    with _price_cache_lock:
+        _price_cache[yf_symbol] = {
+            "current_price": price,
+            "price_currency": currency,
+            "timestamp": time.time(),
+        }
+
+
 def enrich_position(position: dict) -> dict:
     """Enrich a single position with yfinance data.
+
+    Uses two-layer caching:
+    - Resolution cache (persistent, no TTL): skips ISIN/suffix/Tradegate resolution on hit
+    - Price cache (in-memory, 15-min TTL): stores current_price to avoid redundant yfinance calls
 
     If yfinance fails for a position, affected fields are set to None.
     The position dict is updated in place and returned.
@@ -812,16 +858,38 @@ def enrich_position(position: dict) -> dict:
         logger.warning("No symbol for position: %s (ISIN: %s)", position.get("name"), isin)
         return position
 
-    yf_symbol = _resolve_yf_symbol(
-        symbol, isin, position.get("currency", "EUR"), position.get("exchange_id", "")
-    )
+    cache_key = f"{symbol}:{isin}"
+    yf_symbol = ""
 
+    # Step 1: Check resolution cache
+    with _resolution_cache_lock:
+        entry = _resolution_cache.get(cache_key)
+        if entry and isinstance(entry, dict):
+            cached_yf = entry.get("yf_symbol", "")
+            if cached_yf:
+                yf_symbol = cached_yf
+                cached_at = entry.get("cached_at", 0)
+                if time.time() - cached_at >= 86400:
+                    # 24h negative cache expired — clear and re-resolve
+                    del _resolution_cache[cache_key]
+                    yf_symbol = ""
+                else:
+                    logger.info("Resolution cache hit for %s, skipping lookup", symbol)
+
+    # Step 2: Resolution cache miss — resolve symbol
     if not yf_symbol:
-        logger.debug("No yfinance symbol resolved for %s (ISIN: %s) — skipping enrichment", symbol, isin)
-        return position
+        yf_symbol = _resolve_yf_symbol(
+            symbol, isin, position.get("currency", "EUR"), position.get("exchange_id", ""),
+            evict_on_404=True,
+        )
+        if not yf_symbol:
+            logger.debug("No yfinance symbol resolved for %s (ISIN: %s) — skipping enrichment", symbol, isin)
+            return position
+
+    # Step 3: Check price cache for current price
+    cached_price, cached_price_currency = _get_cached_price(yf_symbol)
 
     try:
-        _yf_throttle()
         ticker = yf.Ticker(yf_symbol)
 
         # Get info dict for fundamental data
@@ -834,6 +902,14 @@ def enrich_position(position: dict) -> dict:
                     or "Rate limited" in err_str:
                 position["_enrichment_error"] = "rate_limited"
                 logger.warning("Rate limited fetching info for %s", symbol)
+                return position
+            # Check for 404 — evict resolution cache entry
+            if "404" in err_str or "Not Found" in err_str or "not found" in err_str.lower():
+                with _resolution_cache_lock:
+                    _resolution_cache.pop(cache_key, None)
+                _save_symbol_cache()
+                logger.warning("yfinance 404 for %s (%s) — evicted resolution cache", symbol, yf_symbol)
+                position["_enrichment_error"] = "yfinance_error"
                 return position
             logger.warning("ticker.info failed for %s: %s", symbol, e)
             info = {}
@@ -908,7 +984,8 @@ def enrich_position(position: dict) -> dict:
                 " — keeping DeGiro price, yfinance metrics retained",
                 symbol, resolved_suffix or "bare", yf_currency, pos_currency,
             )
-        # Get historical data for RSI and performance
+
+        # Get historical data for RSI and performance (always fresh — not cached)
         _yf_throttle()
         hist = ticker.history(period="1y")
         if hist is not None and not hist.empty:
@@ -932,26 +1009,30 @@ def enrich_position(position: dict) -> dict:
             position["perf_90d"] = perf["perf_90d"]
             position["perf_ytd"] = perf["perf_ytd"]
 
-            # Update current price from yfinance only when currencies match.
-            # If currencies differ (e.g. USD ticker resolved for a EUR position),
-            # keep DeGiro's price — it is always in the correct currency.
-            if len(close) > 0 and _price_currency_safe:
-                yf_price = float(close.iloc[-1])
-                if yf_price > 0:
-                    position["current_price"] = round(yf_price, 4)
-                    position["current_value"] = round(yf_price * position["quantity"], 2)
-                    if position["avg_buy_price"] > 0:
-                        position["unrealized_pl_pct"] = round(
-                            ((yf_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
-                        )
-                        position["unrealized_pl"] = round(
-                            (yf_price - position["avg_buy_price"]) * position["quantity"], 2
-                        )
+            # Price: use price cache if fresh, otherwise fetch and cache
+            if cached_price is not None and cached_price_currency == yf_currency and _price_currency_safe:
+                # Fresh price cache hit — use cached price
+                yf_price = cached_price
+            else:
+                # Price cache miss or stale/wrong currency — fetch fresh
+                if len(close) > 0 and _price_currency_safe:
+                    yf_price = float(close.iloc[-1])
+                else:
+                    yf_price = 0.0
+
+            if yf_price > 0:
+                position["current_price"] = round(yf_price, 4)
+                position["current_value"] = round(yf_price * position["quantity"], 2)
+                _update_price_cache(yf_symbol, yf_price, yf_currency)
+                if position["avg_buy_price"] > 0:
+                    position["unrealized_pl_pct"] = round(
+                        ((yf_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
+                    )
+                    position["unrealized_pl"] = round(
+                        (yf_price - position["avg_buy_price"]) * position["quantity"], 2
+                    )
 
         # 52w high/low and distance — only write when currencies match.
-        # If yfinance price is in a different currency than the position, the
-        # 52w absolute values are in the wrong unit and distance_from_52w_high_pct
-        # would be a meaningless cross-currency ratio.
         if _price_currency_safe:
             if wk52_high is not None:
                 position["52w_high"] = round(float(wk52_high), 4)
@@ -971,6 +1052,15 @@ def enrich_position(position: dict) -> dict:
                 symbol
             )
         else:
+            # Check for 404 — evict resolution cache entry
+            if "404" in err_str or "Not Found" in err_str or "not found" in err_str.lower():
+                with _resolution_cache_lock:
+                    _resolution_cache.pop(cache_key, None)
+                _save_symbol_cache()
+                logger.warning(
+                    "yfinance 404 for %s (%s) — evicted resolution cache",
+                    symbol, yf_symbol,
+                )
             position["_enrichment_error"] = "yfinance_error"
             logger.warning(
                 "yfinance enrichment failed for %s (%s): %s",
@@ -992,11 +1082,13 @@ def clear_symbol_cache() -> int:
     """Clear the symbol resolution cache (both memory and disk).
 
     Call this after a yfinance upgrade or when all per-stock metrics show None
-    due to poisoned cache entries.
+    due to poisoned cache entries. Clears both resolution and price caches.
     """
-    with _symbol_cache_lock:
-        count = len(_symbol_cache)
-        _symbol_cache.clear()
+    with _resolution_cache_lock:
+        count = len(_resolution_cache)
+        _resolution_cache.clear()
+    with _price_cache_lock:
+        _price_cache.clear()
     try:
         if os.path.exists(_SYMBOL_CACHE_PATH):
             os.remove(_SYMBOL_CACHE_PATH)
@@ -1006,7 +1098,7 @@ def clear_symbol_cache() -> int:
 
 
 def audit_symbol_cache() -> int:
-    """Check symbol cache for entries that resolved to bare symbols (no exchange suffix).
+    """Check resolution cache for entries that resolved to bare symbols (no exchange suffix).
 
     Such entries indicate the suffix scan was aborted by rate limiting before
     finding a valid suffix — they poison the cache across restarts.
@@ -1014,9 +1106,12 @@ def audit_symbol_cache() -> int:
     Returns the count of suspicious entries. Logs a WARNING with remediation advice.
     """
     suspicious = 0
-    for bare_symbol, resolved in _symbol_cache.items():
-        # resolved has no "." suffix means it was cached as the bare symbol
-        if "." not in resolved:
+    for key, entry in _resolution_cache.items():
+        if not isinstance(entry, dict):
+            continue
+        yf_sym = entry.get("yf_symbol", "")
+        # Bare symbol (no ".") may indicate rate-limiting abortion
+        if yf_sym and "." not in yf_sym:
             suspicious += 1
     if suspicious:
         logger.warning(
