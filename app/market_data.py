@@ -732,7 +732,8 @@ def _infer_country_from_etf_name(name: str, category: str) -> str:
                               "msci world", "msci acwi"]):
         return "Global"
     if any(k in n for k in ["s&p 500", "sp500", "s&p500", "nasdaq", "us equity",
-                              "united states", "usa", "north america"]):
+                              "united states", "usa", "north america",
+                              "dow jones", "russell", "russell 2000", "us small cap"]):
         return "United States"
     if any(k in n for k in ["europe", "european", "euro stoxx", "stoxx",
                               "euronext", "ftse europe"]):
@@ -754,10 +755,13 @@ def _infer_country_from_etf_name(name: str, category: str) -> str:
                               "battery", "esg", "sustainable", "green"]):
         return "Global"  # thematic ETFs are inherently global
     if any(k in n for k in ["technology", "tech", "semiconductor", "cyber",
-                              "robotics", "artificial intelligence", "ai "]):
+                              "robotics", "artificial intelligence", "ai ",
+                              "gaming", "esport", "wide moat", "moat"]):
         return "Global"  # sector ETFs typically global
     if any(k in n for k in ["gold", "silver", "commodity", "commodities",
                               "oil", "energy commodity"]):
+        return "Global"
+    if any(k in n for k in ["glb", "gl wide", "screened"]):
         return "Global"
     return "Other"
 
