@@ -322,6 +322,11 @@ def _restore_portfolio_from_snapshot():
             logger.info("Re-scored %d restored positions from snapshot", len(portfolio_data["positions"]))
         except Exception as e:
             logger.warning("Could not re-score restored positions: %s", e)
+        try:
+            portfolio_data["health_alerts"] = compute_health_alerts(portfolio_data)
+        except Exception as e:
+            logger.warning("Health alerts computation failed on restore: %s", e)
+            portfolio_data["health_alerts"] = []
     with _session_lock:
         _session["portfolio"] = portfolio_data
         _session["portfolio_time"] = datetime.now()
@@ -626,6 +631,11 @@ def _do_enrich_session():
         enriched = compute_scores(enriched)
         summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
         summary = _sanitize_floats_deep(summary)
+        try:
+            summary["health_alerts"] = compute_health_alerts(summary)
+        except Exception as e:
+            logger.warning("Health alerts computation failed in enrich: %s", e)
+            summary["health_alerts"] = []
 
         now = datetime.now()
         with _session_lock:
