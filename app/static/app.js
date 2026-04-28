@@ -359,6 +359,19 @@
     }
   }
 
+  function showEnrichmentModal(msg) {
+    elEnrichmentStatus.textContent = msg;
+    elEnrichmentModalContent.classList.remove("hidden");
+    elEnrichmentError.classList.add("hidden");
+    elEnrichmentModal.classList.remove("hidden");
+  }
+
+  function closeEnrichmentModal() {
+    elEnrichmentModal.classList.add("hidden");
+    elEnrichmentModalContent.classList.remove("hidden");
+    elEnrichmentError.classList.add("hidden");
+  }
+
   function showEnriching(on) {
     if (on) {
       showEnrichmentModal("Enriching with market data…");
