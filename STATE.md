@@ -13,6 +13,9 @@
 | 2026-04-27 | fix-resolve-by-isin-global | complete |
 | 2026-04-27 | fix-resolve-by-isin-second-pass | complete |
 | 2026-04-27 | benchmark-ttl-cache | complete |
+| 2026-04-27 | fix-benchmark-cache-stale-on-ratelimit | complete |
 | 2026-04-27 | last-enriched-at | complete |
 | 2026-04-27 | refresh-prices-endpoint-and-daily-enrichment | complete |
 | 2026-04-27 | snapshot-management-api-and-ui | complete |
+| 2026-04-27 | manual-snapshot-button | complete |
+| 2026-04-27 | fix-benchmark-date-range | complete |

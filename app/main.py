@@ -37,7 +37,7 @@ _session = {
 _session_lock = threading.Lock()
 
 # Benchmark cache (1-hour TTL)
-_benchmark_cache: dict = {"series": None, "snapshots": None, "attribution": None}
+_benchmark_cache: dict = {"series": None, "attribution": None}
 _benchmark_cache_time: float = 0.0
 _BENCHMARK_TTL: int = 3600  # 1 hour
 
@@ -283,8 +283,6 @@ def _save_snapshot_for_portfolio(portfolio: dict) -> None:
             benchmark_return_pct,
             safe_portfolio,
         )
-        global _benchmark_cache_time
-        _benchmark_cache_time = 0.0
     except Exception as e:
         logger.warning("Snapshot save failed (non-blocking): %s", str(e))
 
@@ -731,11 +729,11 @@ async def get_benchmark():
     if not snapshots:
         return {"snapshots": [], "benchmark_series": [], "attribution": [], "message": "No snapshots yet"}
 
-    # Check cache before hitting yfinance
+    # Check cache before hitting yfinance (only series cached, snapshots always fresh)
     if _benchmark_cache["series"] is not None and \
             _time.time() - _benchmark_cache_time < _BENCHMARK_TTL:
         return {
-            "snapshots": _benchmark_cache["snapshots"],
+            "snapshots": snapshots,   # always fresh from disk
             "benchmark_series": _benchmark_cache["series"],
             "attribution": _benchmark_cache["attribution"],
         }
@@ -746,6 +744,10 @@ async def get_benchmark():
 
     # Fetch benchmark series (fresh, not stored)
     benchmark_series = fetch_benchmark_series(first_date, today)
+    if not benchmark_series and _benchmark_cache["series"]:
+        # Rate limited — serve stale series rather than returning empty
+        logger.warning("Benchmark fetch returned empty — serving stale cache")
+        benchmark_series = _benchmark_cache["series"]
 
     # Get current portfolio for attribution
     with _session_lock:
@@ -763,9 +765,8 @@ async def get_benchmark():
     latest_benchmark_return = snapshots[-1].get("benchmark_return_pct", 0) if snapshots else 0
     attribution = compute_attribution(portfolio.get("positions", []), latest_benchmark_return)
 
-    # Populate cache
+    # Populate cache (series + attribution only; snapshots always served fresh)
     _benchmark_cache["series"] = benchmark_series
-    _benchmark_cache["snapshots"] = snapshots
     _benchmark_cache["attribution"] = attribution
     _benchmark_cache_time = _time.time()
 
