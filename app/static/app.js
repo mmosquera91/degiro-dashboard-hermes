@@ -35,9 +35,6 @@
   const elEmptyState = $("#empty-state");
   const elCredModal = $("#cred-modal");
   const elLoadingOverlay = $("#loading-overlay");
-  const elPriceUpdateToast = $("#price-update-toast");
-  const elPriceUpdateToastMsg = $("#price-update-toast-msg");
-  const elPriceUpdateToastClose = $("#price-update-toast-close");
   const elCredError = $("#cred-error");
   const elBtnConnect = $("#btn-connect");
   const elConnectText = $("#connect-text");
@@ -71,7 +68,6 @@
     elBtnExport.addEventListener("click", exportHermesContext);
     elBtnPrivacy.addEventListener("click", togglePrivacyMode);
     $("#modal-close").addEventListener("click", closeModal);
-    elPriceUpdateToastClose.addEventListener("click", hidePriceUpdateToast);
     elEnrichmentClose.addEventListener("click", closeEnrichmentModal);
     elCredModal.addEventListener("click", (e) => {
       if (e.target === elCredModal) closeModal();
@@ -291,34 +287,24 @@
     }
   }
 
+  
   // ─── Update Prices (non-blocking) ───
-  function showPriceUpdateToast(msg, variant) {
-    elPriceUpdateToastMsg.textContent = msg;
-    elPriceUpdateToast.className = "toast toast-" + (variant || "info");
-    elPriceUpdateToast.style.display = "flex";
-    lucide.createIcons({ nodes: [elPriceUpdateToast] });
-  }
-
-  function hidePriceUpdateToast() {
-    elPriceUpdateToast.style.display = "none";
-  }
-
   async function handleUpdatePrices() {
     if (!portfolioData) return;
     if (operationActive) {
-      showPriceUpdateToast("Another operation is already running, please wait", "error");
+      ToastManager.show("Another operation is already running, please wait", "error");
       return;
     }
     const btn = elBtnUpdatePrices;
     btn.disabled = true;
     setOperationActive(true);
-    showPriceUpdateToast("Updating prices…", "info");
+    ToastManager.show("Updating prices…", "info");
     const updateStart = Date.now();
     try {
       const res = await apiFetch("/api/refresh-prices", { method: "POST" });
       if (res.status === 409) {
         const data = await res.json();
-        showPriceUpdateToast(data.detail || "Another operation is already running, please wait", "error");
+        ToastManager.show(data.detail || "Another operation is already running, please wait", "error");
         setOperationActive(false);
         return;
       }
@@ -326,21 +312,18 @@
         const data = await res.json();
         throw new Error(data.detail || "Price refresh failed");
       }
-      // Poll enrichment status, update toast with progress
       const done = await waitForEnrichmentToast();
       if (done) {
-        showPriceUpdateToast("Prices updated", "success");
-        // Ensure toast stays visible for at least 2s
+        ToastManager.show("Prices updated", "success");
         const elapsed = Date.now() - updateStart;
-        setTimeout(hidePriceUpdateToast, Math.max(2000 - elapsed, 500));
+        setTimeout(() => setOperationActive(false), Math.max(3000 - elapsed, 500));
       }
     } catch (e) {
       console.error("Update prices failed", e);
-      showPriceUpdateToast(e.message, "error");
+      ToastManager.show(e.message, "error");
+      setOperationActive(false);
     } finally {
       btn.disabled = false;
-      // Only clear operation active after the toast has time to be seen
-      setTimeout(() => setOperationActive(false), 3000);
     }
   }
 
@@ -375,7 +358,8 @@
         }
       } catch (_) {}
     }
-    showPriceUpdateToast("Timed out — refresh manually", "error");
+    ToastManager.show("Timed out — refresh manually", "error");
+    setOperationActive(false);
     return false;
   }
 
