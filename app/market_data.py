@@ -1107,6 +1107,19 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     yf_price = float(close.iloc[-1])
 
             if yf_price > 0:
+                # GBp (pence) safety net: yfinance returns LSE prices in GBp (pence),
+                # but fast_info.currency / info.currency correctly reports "GBp".
+                # Convert pence → pounds before storing so FX conversion works correctly.
+                ticker_currency = ""
+                try:
+                    ticker_currency = ticker.info.get("currency", "") or ""
+                    if not ticker_currency:
+                        ticker_currency = getattr(ticker.fast_info, "currency", "") or ""
+                except Exception:
+                    pass
+                if ticker_currency == "GBp":
+                    yf_price = yf_price / 100.0
+                    yf_currency = "GBP"
                 position["current_price"] = round(yf_price, 4)
                 position["current_value"] = round(yf_price * position["quantity"], 2)
                 _update_price_cache(yf_symbol, yf_price, yf_currency)
