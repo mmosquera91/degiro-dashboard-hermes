@@ -149,7 +149,7 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         p["weight"] = None
 
     return {
-        "date": datetime.now().isoformat(),
+        "date": datetime.now(timezone.utc).isoformat(),
         "total_value": round(total_value, 2),
         "total_value_eur": round(total_value, 2),
         "total_invested": round(total_invested, 2),
@@ -225,7 +225,7 @@ def _build_portfolio_summary(positions: list, cash_available: float, raw: dict |
         true_total_pl_pct = None
 
     return {
-        "date": datetime.now().isoformat(),
+        "date": datetime.now(timezone.utc).isoformat(),
         "total_value": round(total_value, 2),
         "total_value_eur": round(total_value, 2),
         "total_invested": round(total_invested, 2),
