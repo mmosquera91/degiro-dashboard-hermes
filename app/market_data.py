@@ -908,32 +908,6 @@ def enrich_position(position: dict) -> dict:
                 " — keeping DeGiro price, yfinance metrics retained",
                 symbol, resolved_suffix or "bare", yf_currency, pos_currency,
             )
-            # Self-heal: try EUR suffixes directly for IE/LU ISIN ETFs
-            _isin = position.get("isin", "")
-            if yf_currency and yf_currency.upper() != pos_currency and \
-                    pos_currency == "EUR" and _isin[:2].upper() in ("IE", "LU"):
-                _base = position.get("symbol", "")
-                for _suffix in (".AS", ".DE", ".PA", ".MI"):
-                    _candidate = _base + _suffix
-                    try:
-                        _yf_throttle()
-                        _t = yf.Ticker(_candidate)
-                        _fi = _t.fast_info
-                        _c = getattr(_fi, "currency", None)
-                        if _c and _c.upper() == "EUR":
-                            _cache_key = f"{position.get('symbol','')}:{_isin}"
-                            with _symbol_cache_lock:
-                                _symbol_cache[_cache_key] = _candidate
-                            yf_symbol = _candidate
-                            ticker = yf.Ticker(yf_symbol)
-                            logger.info(
-                                "Self-healed %s → %s via EUR suffix retry",
-                                position.get("symbol"), _candidate,
-                            )
-                            break
-                    except Exception:
-                        continue
-
         # Get historical data for RSI and performance
         _yf_throttle()
         hist = ticker.history(period="1y")
