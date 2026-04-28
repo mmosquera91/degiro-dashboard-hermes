@@ -331,8 +331,9 @@
     while (Date.now() - started < STARTED_TIMEOUT) {
       await new Promise(r => setTimeout(r, POLL_MS));
       try {
-        const status = await apiFetch("/api/enrichment-status");
-        if (status.enriching) break;
+        const res1 = await apiFetch("/api/enrichment-status");
+        const status1 = await res1.json();
+        if (status1.enriching) break;
       } catch (_) {}
     }
 
@@ -340,11 +341,13 @@
     while (Date.now() - started < MAX_WAIT_MS) {
       await new Promise(r => setTimeout(r, POLL_MS));
       try {
-        const status = await apiFetch("/api/enrichment-status");
-        if (!status.enriching) {
+        const res2 = await apiFetch("/api/enrichment-status");
+        const status2 = await res2.json();
+        if (!status2.enriching) {
           const res = await apiFetch("/api/portfolio");
           portfolioData = await res.json();
           renderDashboard();
+          ToastManager.show("Prices updated successfully", "success");
           const bmData = await fetchBenchmarkData();
           if (bmData) { benchmarkData = bmData; renderBenchmark(bmData); renderAttribution(bmData); }
           return;

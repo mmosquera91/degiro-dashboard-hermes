@@ -627,10 +627,12 @@ def _do_enrich_session():
         summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
         summary = _sanitize_floats_deep(summary)
 
+        now = datetime.now()
         with _session_lock:
+            summary["last_enriched_at"] = now.isoformat()
             _session["portfolio"] = summary
-            _session["portfolio_time"] = datetime.now()
-            _session["last_enriched_at"] = datetime.now()
+            _session["portfolio_time"] = now
+            _session["last_enriched_at"] = now
 
         _save_snapshot_for_portfolio(summary)
     finally:
