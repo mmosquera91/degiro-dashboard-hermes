@@ -105,22 +105,22 @@
 
       <!-- ALLOCATION BAR -->
       <section class="allocation-bar-row">
-        <div class="allocation-bar-left">
-          <span id="alloc-stocks-label" class="allocation-bar-label private-value">Stocks  —</span>
-          <span class="allocation-dot dot-teal"></span>
-          <span class="allocation-footer-label">Stocks</span>
-        </div>
-        <div class="bar-container">
-          <div id="alloc-bar" class="allocation-bar">
-            <div id="alloc-stocks-bar" class="bar-stocks" style="width:0%"></div>
-            <div id="alloc-etfs-bar" class="bar-etfs" style="width:0%"></div>
+        <div class="allocation-bar-header">
+          <div class="left">
+            <span class="allocation-dot dot-teal"></span>
+            <span id="alloc-stocks-label" class="allocation-bar-label private-value">—</span>
+            <span class="allocation-footer-label">Stocks</span>
           </div>
-          <span id="alloc-bar-title" class="allocation-bar-title">ALLOCATION — STOCKS VS ETFS</span>
+          <span class="allocation-bar-title">ALLOCATION — STOCKS VS ETFS</span>
+          <div class="right">
+            <span class="allocation-footer-label">ETFs</span>
+            <span id="alloc-etfs-label" class="allocation-bar-label private-value">—</span>
+            <span class="allocation-dot dot-gold"></span>
+          </div>
         </div>
-        <div class="allocation-bar-right">
-          <span id="alloc-etfs-label" class="allocation-bar-label private-value">—  ETFs</span>
-          <span class="allocation-dot dot-gold"></span>
-          <span class="allocation-footer-label">ETFs</span>
+        <div id="alloc-bar" class="allocation-bar">
+          <div id="alloc-stocks-bar" class="bar-stocks" style="width:0%"></div>
+          <div id="alloc-etfs-bar" class="bar-etfs" style="width:0%"></div>
         </div>
       </section>
 

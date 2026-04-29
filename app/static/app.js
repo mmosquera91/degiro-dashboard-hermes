@@ -748,6 +748,16 @@
     cashEl.textContent = fmtEur(cash);
     const cashPct = portfolioTotal > 0 ? (cash / portfolioTotal * 100) : 0;
     $("#kpi-cash-sub").textContent = `${cashPct.toFixed(1)}% of portfolio`;
+    const cashCard = $("#kpi-cash").closest(".kpi-card");
+    if (cashPct < 1) {
+      cashCard.style.borderTopColor = "var(--gold)";
+      cashCard.style.background = "rgba(217,119,6,0.05)";
+      $("#kpi-cash-sub").style.color = "var(--gold)";
+    } else {
+      cashCard.style.borderTopColor = "";
+      cashCard.style.background = "";
+      $("#kpi-cash-sub").style.color = "";
+    }
 
     // Card 4 — Unrealized P&L
     const unrealEl = $("#kpi-unrealized");
@@ -1060,29 +1070,56 @@
   function renderWinnersLosers() {
     const winners = portfolioData.top_5_winners || [];
     const losers = portfolioData.top_5_losers || [];
+    const positions = portfolioData.positions || [];
+
+    // Build a symbol->position lookup for deriving unrealized_pl_eur
+    const posBySymbol = {};
+    positions.forEach(p => { if (p.symbol) posBySymbol[p.symbol] = p; });
+
+    function deriveEurPl(item) {
+      const pos = posBySymbol[item.symbol];
+      if (pos && pos.current_price != null && pos.avg_buy_price != null && pos.quantity != null) {
+        return (pos.current_price - pos.avg_buy_price) * pos.quantity;
+      }
+      return null;
+    }
 
     const winnersEl = $("#top-winners");
     const losersEl = $("#top-losers");
 
     winnersEl.innerHTML = winners
       .map(
-        (w) => `
+        (w) => {
+          const pl_pct = w.pl_pct != null ? w.pl_pct.toFixed(2) + "%" : "—";
+          const pl_eur = deriveEurPl(w);
+          return `
       <div class="wl-item">
-        <span>${esc(w.name)}</span>
-        <span class="wl-item-pl pl-positive">${w.pl_pct != null ? w.pl_pct.toFixed(2) + "%" : "—"}</span>
+        <span>${esc(w.name)} (${esc(w.symbol || "")})</span>
+        <div style="text-align:right">
+          <span class="wl-item-pl pl-positive">${pl_pct}</span>
+          <span style="display:block;font-size:0.68rem;color:var(--text-dim)">${fmtEur(pl_eur)}</span>
+        </div>
       </div>
-    `
+    `;
+        }
       )
       .join("");
 
     losersEl.innerHTML = losers
       .map(
-        (l) => `
+        (l) => {
+          const pl_pct = l.pl_pct != null ? l.pl_pct.toFixed(2) + "%" : "—";
+          const pl_eur = deriveEurPl(l);
+          return `
       <div class="wl-item">
-        <span>${esc(l.name)}</span>
-        <span class="wl-item-pl pl-negative">${l.pl_pct != null ? l.pl_pct.toFixed(2) + "%" : "—"}</span>
+        <span>${esc(l.name)} (${esc(l.symbol || "")})</span>
+        <div style="text-align:right">
+          <span class="wl-item-pl pl-negative">${pl_pct}</span>
+          <span style="display:block;font-size:0.68rem;color:var(--text-dim)">${fmtEur(pl_eur)}</span>
+        </div>
       </div>
-    `
+    `;
+        }
       )
       .join("");
   }

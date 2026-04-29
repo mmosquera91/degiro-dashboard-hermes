@@ -328,7 +328,6 @@ body {
   border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-sm);
-  margin-bottom: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -339,28 +338,16 @@ body {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
 }
-
-.allocation-bar-left,
-.allocation-bar-right {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 100px;
+.allocation-bar-header .left {
+  display: flex; align-items: center; gap: 6px; justify-self: start;
 }
-
-.allocation-bar-left { justify-self: start; align-items: flex-start; }
-.allocation-bar-right { justify-self: end; align-items: flex-end; text-align: right; }
-
-.allocation-bar-label {
-  font-size: 0.78rem;
-  color: var(--text-dim);
-  letter-spacing: 0.3px;
-  white-space: nowrap;
+.allocation-bar-header .center {
+  font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-text-muted); text-transform: uppercase;
+  letter-spacing: 0.05em; white-space: nowrap;
 }
-
-.allocation-bar-label strong {
-  color: var(--text);
-  font-weight: 600;
+.allocation-bar-header .right {
+  display: flex; align-items: center; gap: 6px; justify-self: end;
 }
 
 .allocation-dot {
@@ -380,44 +367,19 @@ body {
   letter-spacing: 0.05em;
 }
 
-.bar-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 200px;
-}
-
 .allocation-bar-title {
-  font-size: var(--text-xs, 0.72rem);
-  font-weight: 600;
-  color: var(--color-text-muted, #555555);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-#alloc-bar {
-  width: 100%;
+  font-size: var(--text-xs); font-weight: 600;
+  color: var(--color-text-muted); text-transform: uppercase;
+  letter-spacing: 0.05em; white-space: nowrap;
 }
 
 .allocation-bar {
-  display: flex;
-  height: 8px;
-  border-radius: 999px;
+  height: 8px; border-radius: 999px;
   background: var(--surface-offset);
-  overflow: hidden;
+  overflow: hidden; display: flex; width: 100%;
 }
-
-.bar-stocks {
-  background: var(--teal);
-  transition: width 0.4s ease;
-}
-
-.bar-etfs {
-  background: #d97706;
-  transition: width 0.4s ease;
-}
+.bar-stocks { background: var(--teal); }
+.bar-etfs   { background: var(--gold, #d97706); }
 
 /* ─── SUMMARY ROW CENTERED (Row 2) ─── */
 .summary-row-centered {
@@ -568,8 +530,16 @@ body {
 .section-title {
   font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 12px;
   color: var(--text);
+  padding-top: 4px;
+  margin-bottom: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.buy-radar-section .section-title,
+.winners-losers-section .section-title {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
 }
 
 .radar-panels {
@@ -1051,21 +1021,13 @@ body {
 .alert-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 3px solid #d97706;
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  margin-bottom: 8px;
+  border-top: 2px solid var(--gold);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
 }
-
-.alert-card.warn {
-  border-left-color: #d97706;
-  background: rgba(217, 119, 6, 0.08);
-}
-
-.alert-card.critical {
-  border-left-color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-}
+.alert-card.warn     { border-top-color: var(--gold); background: rgba(217,119,6,0.06); }
+.alert-card.critical { border-top-color: var(--red);  background: rgba(239,68,68,0.06); }
 
 .alert-header {
   display: flex;
