@@ -15,6 +15,16 @@
   let lastSuccessfulRefresh = null;
   let privacyMode = false;
 
+  // ─── Render caches (throttle/chrome) ───
+  let _lastPositionsHash = null;
+  let _lastTableHash = null;
+
+  function positionsHash(positions) {
+    return positions.map(p =>
+      `${p.product_id}:${p.current_price}:${p.weight}`
+    ).join('|');
+  }
+
   // ─── Auth ───
   const AUTH_TOKEN = "dev-secret-change-in-production";
   const authHeaders = { "Authorization": `Bearer ${AUTH_TOKEN}` };
@@ -62,7 +72,7 @@
   });
 
   function bindEvents() {
-    elBtnRefresh.addEventListener("click", openModal);
+    elBtnRefresh.addEventListener("click", () => { _lastTableHash = null; openModal(); });
     elBtnUpdatePrices.addEventListener("click", handleUpdatePrices);
     elBtnEmptyConnect.addEventListener("click", openModal);
     elBtnExport.addEventListener("click", exportHermesContext);
@@ -696,8 +706,12 @@
     // Concentration metrics
     renderConcentration();
 
-    // Charts
-    renderCharts();
+    // Charts — only re-render if positions actually changed
+    const hash = positionsHash(portfolioData.positions || []);
+    if (hash !== _lastPositionsHash) {
+      _lastPositionsHash = hash;
+      renderCharts();
+    }
 
     // Positions table
     renderPositions();
@@ -952,6 +966,11 @@
 
   // ─── Positions Table ───
   function renderPositions() {
+    const tableHash = (currentFilter + sortKey + sortDir) +
+      positionsHash(portfolioData.positions || []);
+    if (tableHash === _lastTableHash) return;
+    _lastTableHash = tableHash;
+
     if (!portfolioData || !portfolioData.positions) {
       elPositionsBody.innerHTML = '<tr><td colspan="11"><div class="positions-error"><i data-lucide="alert-circle" class="icon-sm"></i><span>Failed to load positions</span><button class="btn btn-outline btn-sm" onclick="loadPortfolioRaw()">Retry</button></div></td></tr>';
       lucide.createIcons();
@@ -1097,7 +1116,7 @@
         <span>${esc(w.name)} (${esc(w.symbol || "")})</span>
         <div style="text-align:right">
           <span class="wl-item-pl pl-positive">${pl_pct}</span>
-          <span style="display:block;font-size:0.68rem;color:var(--text-dim)">${fmtEur(pl_eur)}</span>
+          <span class="private-value" style="display:block;font-size:0.68rem;color:var(--text-dim)">${fmtEur(pl_eur)}</span>
         </div>
       </div>
     `;
@@ -1115,7 +1134,7 @@
         <span>${esc(l.name)} (${esc(l.symbol || "")})</span>
         <div style="text-align:right">
           <span class="wl-item-pl pl-negative">${pl_pct}</span>
-          <span style="display:block;font-size:0.68rem;color:var(--text-dim)">${fmtEur(pl_eur)}</span>
+          <span class="private-value" style="display:block;font-size:0.68rem;color:var(--text-dim)">${fmtEur(pl_eur)}</span>
         </div>
       </div>
     `;
