@@ -11,8 +11,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from .degiro_client import DeGiroClient
@@ -387,6 +388,35 @@ async def _daily_enrichment_loop():
 
 
 app = FastAPI(title="Brokr", lifespan=lifespan)
+
+# Jinja2 templates for rendered pages (login)
+templates = Jinja2Templates(directory="app/templates")
+
+
+# ─── Auth Middleware ───
+@app.middleware("http")
+async def check_session_cookie(request: Request, call_next):
+    """Redirect unauthenticated requests to /login. Exempts /login, /static/*, and /health."""
+    path = request.url.path
+    if (
+        path == "/login"
+        or path.startswith("/static/")
+        or path == "/health"
+        or path == "/logout"
+    ):
+        return await call_next(request)
+
+    cookie_value = request.cookies.get("brokr_session")
+    if not cookie_value:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from .auth import verify_session_cookie
+    if not verify_session_cookie(cookie_value):
+        response = RedirectResponse(url="/login", status_code=303)
+        response.delete_cookie("brokr_session")
+        return response
+
+    return await call_next(request)
 
 
 @app.on_event("startup")
@@ -868,6 +898,48 @@ async def save_snapshot_now():
     except Exception as e:
         logger.warning("Manual snapshot save failed: %s", e)
         raise HTTPException(status_code=500, detail="Snapshot save failed")
+
+
+# ─── Login / Logout ───
+
+@app.get("/login")
+async def login_get(request: Request):
+    """Serve the login page."""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.post("/login")
+async def login_post(request: Request):
+    """Authenticate: check password, set signed session cookie on success."""
+    form = await request.form()
+    password = form.get("password", "")
+
+    app_password = os.getenv("APP_PASSWORD", "")
+    secret_key = os.getenv("SECRET_KEY", "")
+
+    if not app_password or not secret_key:
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Server misconfigured — APP_PASSWORD not set"},
+        )
+
+    if password == app_password:
+        from .auth import make_session_cookie
+        token, cookie_kwargs = make_session_cookie()
+        response = RedirectResponse(url="/", status_code=303)
+        response.set_cookie("brokr_session", token, **cookie_kwargs)
+        return response
+
+    return RedirectResponse(url="/login?failedattempt=yes", status_code=303)
+
+
+@app.get("/logout")
+async def logout():
+    """Clear session cookie and redirect to /login."""
+    from .auth import clear_session_cookie
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("brokr_session", **clear_session_cookie())
+    return response
 
 
 # ─── Static Files ───
