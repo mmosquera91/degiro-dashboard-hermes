@@ -884,6 +884,26 @@ def _update_fundamentals_cache(cache_key: str, sector: Optional[str],
     _save_symbol_cache()
 
 
+def _is_cache_warm(symbol: str, isin: str) -> bool:
+    """Return True if both resolution and fundamentals are fresh in cache (no yfinance call needed)."""
+    cache_key = f"{symbol}:{isin}"
+    with _resolution_cache_lock:
+        entry = _resolution_cache.get(cache_key)
+        if not entry or not isinstance(entry, dict):
+            return False
+        cached_yf = entry.get("yf_symbol", "")
+        if not cached_yf:
+            return False
+        if time.time() - entry.get("cached_at", 0) >= 86400:
+            return False
+        fundamentals = entry.get("fundamentals")
+        if not fundamentals or not isinstance(fundamentals, dict):
+            return False
+        if time.time() - fundamentals.get("cached_at", 0) >= _FUNDAMENTALS_TTL:
+            return False
+    return True
+
+
 def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
     """Enrich a single position with yfinance data.
 
@@ -917,6 +937,47 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
 
     if not symbol:
         logger.warning("No symbol for position: %s (ISIN: %s)", position.get("name"), isin)
+        return position
+
+    # Fast path: if both resolution and fundamentals are cached, skip all yfinance calls
+    if _is_cache_warm(symbol, isin):
+        cache_key = f"{symbol}:{isin}"
+        with _resolution_cache_lock:
+            entry = _resolution_cache.get(cache_key)
+            if entry:
+                position["sector"] = entry.get("fundamentals", {}).get("sector")
+                position["country"] = entry.get("fundamentals", {}).get("country")
+                position["pe_ratio"] = entry.get("fundamentals", {}).get("pe_ratio")
+                yf_sym = entry.get("yf_symbol", "")
+                yf_currency = entry.get("fundamentals", {}).get("currency", "EUR")
+                # Derive currency from exchange suffix
+                if yf_sym:
+                    if "." in yf_sym:
+                        suffix = "." + yf_sym.rsplit(".", 1)[-1]
+                    else:
+                        suffix = ""
+                    _EUR_EXCH = {".AS", ".PA", ".DE", ".F", ".MI", ".MC", ".HE", ".SW"}
+                    _GBP_EXCH = {".L"}
+                    if suffix in _EUR_EXCH:
+                        yf_currency = "EUR"
+                    elif suffix in _GBP_EXCH:
+                        yf_currency = "GBP"
+                # Use price cache for current price
+                cached_price, _ = _get_cached_price(yf_sym)
+                if cached_price:
+                    position["current_price"] = round(cached_price, 4)
+                    position["current_value"] = round(cached_price * position.get("quantity", 0), 2)
+                    position["currency"] = yf_currency
+                    if position.get("avg_buy_price", 0) > 0:
+                        position["unrealized_pl_pct"] = round(
+                            ((cached_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
+                        )
+                        position["unrealized_pl"] = round(
+                            (cached_price - position["avg_buy_price"]) * position.get("quantity", 0), 2
+                        )
+                    position["52w_high"] = entry.get("fundamentals", {}).get("week52_high")
+                    position["52w_low"] = None  # not cached
+        logger.info("Cache hit for %s — returning enriched from cache", symbol)
         return position
 
     cache_key = f"{symbol}:{isin}"
@@ -1333,14 +1394,15 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     _batch_elapsed = time.time() - _batch_start
     logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
 
-    # Step 3: Enrich each position (now price-fetch is centralized, no more ThreadPoolExecutor)
-    enriched = []
-    _session_rate_limited = False
+    # Step 3: Enrich all positions in parallel using asyncio.gather
+    import asyncio
 
-    for idx, pos in enumerate(positions):
+    async def _enrich_one(idx: int, pos: dict) -> dict:
+        """Async wrapper for enrich_position to enable parallel execution."""
         yf_sym = resolved_symbols[idx]
         pos["_resolved_yf_symbol"] = yf_sym
-        enriched_pos = enrich_position(pos, price_batch=price_batch)
+        loop = asyncio.get_running_loop()
+        enriched_pos = await loop.run_in_executor(None, enrich_position, pos, price_batch)
         is_rl = enriched_pos.get("_enrichment_error") == "rate_limited"
 
         # FX conversion to EUR
@@ -1353,23 +1415,21 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             enriched_pos["fx_rate"] = fx_rate
             enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
             enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
-            logger.debug(
-                "[DEBUG] FX conversion applied for %s: %.4f %s → %.4f EUR (rate=%.4f)",
-                enriched_pos.get("symbol", yf_sym),
-                enriched_pos["current_value"],
-                pos_currency,
-                enriched_pos["current_value_eur"],
-                fx_rate,
-            )
         else:
             enriched_pos["fx_rate"] = 1.0
             enriched_pos["current_value_eur"] = enriched_pos["current_value"]
             enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
 
-        if is_rl:
-            _session_rate_limited = True
+        return _sanitize_floats(enriched_pos), is_rl
 
-        enriched.append(_sanitize_floats(enriched_pos))
+    async def _run_all() -> tuple[list[dict], bool]:
+        tasks = [_enrich_one(i, pos) for i, pos in enumerate(positions)]
+        results = await asyncio.gather(*tasks)
+        all_enriched = [r[0] for r in results]
+        any_rate_limited = any(r[1] for r in results)
+        return all_enriched, any_rate_limited
+
+    enriched, _session_rate_limited = asyncio.run(_run_all())
 
     elapsed = time.time() - _enrich_start
     logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)
