@@ -1018,9 +1018,15 @@ body {
 
 .toast-top-center {
   position: fixed;
-  top: 16px;
+  top: calc(56px + 0.75rem);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 1000;
+  justify-content: center;
+}
+
+.toast-top-center .toast-message {
+  text-align: center;
 }
 
 /* ─── PRIVACY MODE ─── */
