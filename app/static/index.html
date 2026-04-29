@@ -43,6 +43,12 @@
       <button id="btn-privacy" aria-label="Toggle privacy mode" title="Privacy mode">
         <i data-lucide="eye" class="icon-sm"></i>
       </button>
+      <a href="/logout" class="lock-btn" title="Lock session">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </a>
     </div>
   </header>
 
@@ -63,44 +69,57 @@
     <!-- DASHBOARD -->
     <div id="dashboard" class="dashboard hidden">
 
-      <!-- SUMMARY CARDS -->
-      <section class="summary-cards">
-        <div class="card card-value">
-          <span class="card-label">Total Value</span>
-          <span id="total-value" class="card-value-main">—</span>
+      <!-- KPI CARDS ROW 1 -->
+      <section class="kpi-grid">
+        <div class="card kpi-card accent-teal">
+          <span class="card-label">Portfolio</span>
+          <span id="kpi-portfolio" class="card-value private-value">—</span>
+          <span id="kpi-portfolio-sub" class="card-sub private-value">—</span>
         </div>
-        <div class="card card-pl">
-          <span class="card-label">Total P&L</span>
-          <span id="total-pl" class="card-value-main private-value">—</span>
-          <span id="total-pl-pct" class="card-sub private-value">—</span>
-          <span class="card-sub private-value">incl. realized gains</span>
+        <div class="card kpi-card">
+          <span class="card-label">Invested</span>
+          <span id="kpi-invested" class="card-value private-value">—</span>
+          <span id="kpi-invested-sub" class="card-sub private-value">—</span>
         </div>
-        <div class="card card-pl">
-          <span class="card-label">Unrealized P&L</span>
-          <span id="total-pl-combined" class="card-value-main private-value">—</span>
-          <span id="total-pl-combined-pct" class="card-sub private-value">—</span>
+        <div class="card kpi-card">
+          <span class="card-label">Cash</span>
+          <span id="kpi-cash" class="card-value private-value">—</span>
+          <span id="kpi-cash-sub" class="card-sub private-value">—</span>
         </div>
-        <div class="card card-allocation">
-          <span class="card-label">ETF / Stock Split</span>
-          <div class="allocation-bar-wrap">
-            <div id="allocation-bar" class="allocation-bar">
-              <div id="etf-bar" class="allocation-bar-etf" style="width:0%"></div>
-              <div id="stock-bar" class="allocation-bar-stock" style="width:0%"></div>
-            </div>
-            <div class="allocation-labels">
-              <span id="etf-pct" class="alloc-label">ETF —</span>
-              <span id="stock-pct" class="alloc-label">Stock —</span>
-            </div>
-            <div class="allocation-target">Target: 70% ETF / 30% Stock</div>
+        <div class="card kpi-card accent-green">
+          <span class="card-label">Unrealized P&amp;L</span>
+          <span id="kpi-unrealized" class="card-value private-value">—</span>
+          <span id="kpi-unrealized-sub" class="card-sub private-value">—</span>
+        </div>
+        <div class="card kpi-card accent-gold">
+          <span class="card-label">Realized P&amp;L</span>
+          <span id="kpi-realized" class="card-value private-value">—</span>
+          <span id="kpi-realized-sub" class="card-sub private-value">—</span>
+        </div>
+        <div class="card kpi-card">
+          <span class="card-label">Positions</span>
+          <span id="kpi-positions" class="card-value private-value">—</span>
+          <span id="kpi-positions-sub" class="card-sub private-value">—</span>
+        </div>
+      </section>
+
+      <!-- ALLOCATION BAR -->
+      <section class="allocation-bar-row">
+        <div class="allocation-bar-left">
+          <span class="allocation-bar-label">Stocks</span>
+          <span id="alloc-stocks-euro" class="allocation-bar-euro private-value">—</span>
+          <span id="alloc-stocks-pct" class="allocation-bar-pct private-value">—</span>
+        </div>
+        <div class="bar-container">
+          <div id="alloc-bar" class="allocation-bar">
+            <div id="alloc-stocks-bar" class="bar-stocks" style="width:0%"></div>
+            <div id="alloc-etfs-bar" class="bar-etfs" style="width:0%"></div>
           </div>
         </div>
-        <div class="card card-cash">
-          <span class="card-label">Cash Available</span>
-          <span id="cash-available" class="card-value-main">—</span>
-        </div>
-        <div class="card card-positions">
-          <span class="card-label">Positions</span>
-          <span id="num-positions" class="card-value-main">—</span>
+        <div class="allocation-bar-right">
+          <span class="allocation-bar-label">ETFs</span>
+          <span id="alloc-etfs-euro" class="allocation-bar-euro private-value">—</span>
+          <span id="alloc-etfs-pct" class="allocation-bar-pct private-value">—</span>
         </div>
       </section>
 

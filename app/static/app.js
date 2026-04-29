@@ -722,52 +722,77 @@
   // ─── Summary ───
   function renderSummary() {
     const d = portfolioData;
+    const positions = d.positions || [];
+    const cash = d.cash_available || 0;
+    const totalValue = d.total_value || 0;
+    const portfolioTotal = totalValue + cash;
 
-    const totalValueEl = $("#total-value");
-    totalValueEl.textContent = fmtEur(d.total_value);
-    totalValueEl.classList.add("private-value");
-
-    const plEl = $("#total-pl");
-    if (plEl && d.true_total_pl != null) {
-        plEl.textContent = fmtEur(d.true_total_pl);
-        setSignClass(plEl, d.true_total_pl);
-    } else if (plEl) {
-        plEl.textContent = "—";
+    // Card 1 — Portfolio (incl. cash)
+    const portfolioEl = $("#kpi-portfolio");
+    portfolioEl.textContent = fmtEur(portfolioTotal);
+    const dailyBadge = $("#kpi-portfolio-sub");
+    if (d.daily_change_pct != null) {
+      const sign = d.daily_change_pct >= 0 ? "▲" : "▼";
+      dailyBadge.innerHTML = `<span class="badge ${d.daily_change_pct >= 0 ? "badge-positive" : "badge-negative"}">${sign} ${fmtPct(d.daily_change_pct)} today</span>`;
+    } else {
+      dailyBadge.textContent = "—";
     }
 
-    const plPctEl = $("#total-pl-pct");
-    if (plPctEl && d.true_total_pl_pct != null) {
-        plPctEl.textContent = fmtPct(d.true_total_pl_pct);
-        setSignClass(plPctEl, d.true_total_pl_pct);
-    } else if (plPctEl) {
-        plPctEl.textContent = "—";
+    // Card 2 — Invested (excl. cash)
+    const investedEl = $("#kpi-invested");
+    investedEl.textContent = fmtEur(totalValue);
+    $("#kpi-invested-sub").textContent = `${d.num_positions || 0} positions`;
+
+    // Card 3 — Cash
+    const cashEl = $("#kpi-cash");
+    cashEl.textContent = fmtEur(cash);
+    const cashPct = portfolioTotal > 0 ? (cash / portfolioTotal * 100) : 0;
+    $("#kpi-cash-sub").textContent = `${cashPct.toFixed(1)}% of portfolio`;
+
+    // Card 4 — Unrealized P&L
+    const unrealEl = $("#kpi-unrealized");
+    unrealEl.textContent = fmtEur(d.unrealized_pl_total);
+    setSignClass(unrealEl, d.unrealized_pl_total);
+    const unrealSub = $("#kpi-unrealized-sub");
+    if (d.unrealized_pl_total_pct != null) {
+      const sign = d.unrealized_pl_total >= 0 ? "▲" : "▼";
+      unrealSub.innerHTML = `<span class="badge ${d.unrealized_pl_total >= 0 ? "badge-positive" : "badge-negative"}">${sign} ${fmtPct(d.unrealized_pl_total_pct)} vs cost basis</span>`;
+    } else {
+      unrealSub.textContent = "—";
     }
 
-    const totalPlCombined = document.getElementById('total-pl-combined');
-    const totalPlCombinedPct = document.getElementById('total-pl-combined-pct');
-    if (totalPlCombined) {
-      totalPlCombined.textContent = fmtEur(d.unrealized_pl_total);
-      totalPlCombined.classList.add("private-value");
-      setSignClass(totalPlCombined, d.unrealized_pl_total);
-    }
-    if (totalPlCombinedPct) {
-      totalPlCombinedPct.textContent = fmtPct(d.unrealized_pl_total_pct);
-      totalPlCombinedPct.classList.add("private-value");
-      setSignClass(totalPlCombinedPct, d.unrealized_pl_total_pct);
+    // Card 5 — Realized P&L (DeGiro doesn't expose realized gains; use true_total_pl as proxy)
+    const realizedEl = $("#kpi-realized");
+    const realizedSub = $("#kpi-realized-sub");
+    if (d.true_total_pl != null) {
+      realizedEl.textContent = fmtEur(d.true_total_pl);
+      setSignClass(realizedEl, d.true_total_pl);
+      realizedSub.textContent = "closed trades";
+    } else {
+      realizedEl.textContent = "—";
+      realizedSub.textContent = "no deposit data";
     }
 
-    // Allocation bar
+    // Card 6 — Positions
+    const etfCount = positions.filter(p => p.asset_type === "ETF").length;
+    const stockCount = positions.filter(p => p.asset_type === "STOCK").length;
+    $("#kpi-positions").textContent = d.num_positions || 0;
+    $("#kpi-positions-sub").textContent = `${etfCount} ETFs · ${stockCount} stocks`;
+
+    // Allocation bar row
     const etfPct = d.etf_allocation_pct || 0;
     const stockPct = d.stock_allocation_pct || 0;
-    $("#etf-bar").style.width = etfPct + "%";
-    $("#stock-bar").style.width = stockPct + "%";
-    $("#etf-pct").innerHTML = `ETF <span>${etfPct.toFixed(1)}%</span>`;
-    $("#stock-pct").innerHTML = `Stock <span>${stockPct.toFixed(1)}%</span>`;
+    const etfValue = totalValue * (etfPct / 100);
+    const stockValue = totalValue * (stockPct / 100);
 
-    const cashEl = $("#cash-available");
-    cashEl.textContent = fmtEur(d.cash_available);
-    cashEl.classList.add("private-value");
-    $("#num-positions").textContent = d.num_positions;
+    $("#alloc-stocks-euro").textContent = fmtEur(stockValue);
+    $("#alloc-stocks-pct").textContent = `${stockPct.toFixed(1)}%`;
+    $("#alloc-etfs-euro").textContent = fmtEur(etfValue);
+    $("#alloc-etfs-pct").textContent = `${etfPct.toFixed(1)}%`;
+
+    // Bar: stocks on left (orange), etfs on right (teal)
+    $("#alloc-stocks-bar").style.width = stockPct + "%";
+    $("#alloc-etfs-bar").style.width = etfPct + "%";
   }
 
   // ─── Charts ───
@@ -1099,12 +1124,15 @@
     if (hhiEl) {
       const val = hhiEl.querySelector('.card-value');
       val.textContent = hhi.toLocaleString();
-      val.className = 'card-value ' + (hhi < 1500 ? 'positive' :
-                       hhi < 2500 ? '' : 'negative');
-      if (hhi >= 1500 && hhi < 2500) val.style.color = '#d97706';
-      else val.style.color = '';
+      if (hhi < 1000) {
+        val.style.color = 'var(--green)';
+      } else if (hhi <= 1800) {
+        val.style.color = '#d97706';
+      } else {
+        val.style.color = 'var(--red)';
+      }
       hhiEl.querySelector('.card-sub').textContent =
-        hhi < 1500 ? 'Diversified' : hhi < 2500 ? 'Moderate' : 'Concentrated';
+        hhi < 1000 ? 'Low concentration' : hhi <= 1800 ? 'Moderate' : 'High concentration';
     }
   }
 
