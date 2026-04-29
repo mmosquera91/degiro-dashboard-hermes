@@ -1016,6 +1016,13 @@ body {
 }
 .toast-close:hover { color: var(--text); }
 
+.toast-top-center {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* ─── PRIVACY MODE ─── */
 .private-value {
   transition: filter 0.2s ease;

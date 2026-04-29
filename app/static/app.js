@@ -298,7 +298,7 @@
     const btn = elBtnUpdatePrices;
     btn.disabled = true;
     setOperationActive(true);
-    ToastManager.show("Updating prices…", "info");
+    const progressToast = ToastManager.showProgressToast("Updating prices…");
     const updateStart = Date.now();
     try {
       const res = await apiFetch("/api/refresh-prices", { method: "POST" });
@@ -306,6 +306,7 @@
         const data = await res.json();
         ToastManager.show(data.detail || "Another operation is already running, please wait", "error");
         setOperationActive(false);
+        btn.disabled = false;
         return;
       }
       if (!res.ok) {
@@ -314,17 +315,18 @@
       }
       const done = await waitForEnrichmentToast();
       if (done) {
-        ToastManager.show("Prices updated", "success");
+        ToastManager.updateToast(progressToast, { message: "Prices updated", icon: "check-circle", variant: "success" });
+        setTimeout(() => { ToastManager.dismiss(progressToast); setOperationActive(false); }, 2500);
         const elapsed = Date.now() - updateStart;
-        setTimeout(() => setOperationActive(false), Math.max(3000 - elapsed, 500));
+        setTimeout(() => { setOperationActive(false); btn.disabled = false; }, Math.max(3000 - elapsed, 500));
+        return;
       }
     } catch (e) {
       console.error("Update prices failed", e);
-      ToastManager.show(e.message, "error");
+      ToastManager.updateToast(progressToast, { message: e.message, icon: "alert-circle", variant: "error" });
       setOperationActive(false);
-    } finally {
-      btn.disabled = false;
     }
+    btn.disabled = false;
   }
 
   async function waitForEnrichmentToast() {
@@ -1359,6 +1361,46 @@ function renderHealthAlerts() {
       }, { once: true });
     }
 
-    return { show: show, dismiss: dismiss };
+    function showProgressToast(message) {
+      const toast = document.createElement("div");
+      toast.className = "toast toast-top-center toast-info";
+      toast.setAttribute("role", "alert");
+      toast.innerHTML =
+        '<div class="enrichment-spinner"></div>' +
+        '<span class="toast-message">' + esc(message) + '</span>';
+      document.body.appendChild(toast);
+      requestAnimationFrame(function() { toast.classList.add("toast-enter"); });
+      return toast;
+    }
+
+    function updateToast(toast, opts) {
+      if (!toast || !toast.parentNode) return;
+      if (opts.message !== undefined) {
+        var msgEl = toast.querySelector(".toast-message");
+        if (msgEl) msgEl.textContent = opts.message;
+      }
+      if (opts.icon !== undefined || opts.variant !== undefined) {
+        var iconName = opts.icon || "info";
+        var variantClass = "toast-" + (opts.variant || "info");
+        toast.className = "toast toast-top-center " + variantClass;
+        var iconEl = toast.querySelector(".toast-icon");
+        if (iconEl) {
+          iconEl.setAttribute("data-lucide", iconName);
+        } else {
+          var spinner = toast.querySelector(".enrichment-spinner");
+          if (spinner) {
+            spinner.remove();
+            toast.innerHTML = '<i data-lucide="' + iconName + '" class="toast-icon"></i>' +
+              '<span class="toast-message">' + (toast.querySelector(".toast-message") || {}).textContent + '</span>' +
+              '<button class="toast-close" aria-label="Dismiss">' +
+              '<i data-lucide="x" class="icon-sm"></i></button>';
+            toast.querySelector(".toast-close").addEventListener("click", function() { dismiss(toast); });
+          }
+        }
+        lucide.createIcons({ nodes: [toast] });
+      }
+    }
+
+    return { show: show, dismiss: dismiss, showProgressToast: showProgressToast, updateToast: updateToast };
   })();
 })();

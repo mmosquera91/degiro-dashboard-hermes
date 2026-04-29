@@ -4,6 +4,8 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-29 | 260429-update-prices-persistent-toast | complete |
+| 2026-04-28 | 260428-fix-ucits-etf-pence-in-batch-path | complete |
 | 2026-04-28 | 260428-skip-yf-delay-on-batch-hit | complete |
 | 2026-04-27 | brokr-concentration-cards | complete |
 | 2026-04-27 | brokr-preserve-data-on-failure | complete |
@@ -34,3 +36,4 @@
 | 2026-04-28 | 260428-batch-price-fetch-yf-download | complete |
 | 2026-04-28 | 260428-fix-fx-double-conversion-after-batch-fetch | complete |
 | 2026-04-28 | 260428-fix-ucits-etf-gbp-pence-inflation | complete |
+| 2026-04-28 | 260428-remove-gbp-correction-batch-path | complete |
