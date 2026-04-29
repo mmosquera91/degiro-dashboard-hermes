@@ -4,6 +4,7 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-29 | 260429-dashboard-rows-redesign | complete |
 | 2026-04-29 | 260429-final-log-cleanup | complete |
 | 2026-04-29 | 260429-fix-724-resolution | complete |
 | 2026-04-29 | 260429-fix-diag-degiro-total-log | complete |
@@ -11,7 +12,7 @@
 | 2026-04-29 | 260429-parallelize-enrichment | complete |
 | 2026-04-29 | 260429-login-screen | complete |
 | 2026-04-29 | 260429-fix-stamp-log-nameerror | complete |
-| 2026-04-29 | 260429-fix-update-prices-toast-z-index | complete |
+| 2026-04-29 | 260429-fix-double-degiro-fetch | complete |
 | 2026-04-29 | 260429-update-prices-persistent-toast | complete |
 | 2026-04-29 | 260429-fix-logout-delete-cookie | complete |
 | 2026-04-29 | 260429-fix-usd-batch-fetch-and-stamp | complete |
