@@ -211,6 +211,8 @@ def _load_symbol_cache() -> None:
         if os.path.exists(_SYMBOL_CACHE_PATH):
             with open(_SYMBOL_CACHE_PATH, "r") as f:
                 data = json.load(f)
+            # Filter out ghost keys: empty ISIN slot (e.g. "724:") and keys ending with ":"
+            data = {k: v for k, v in data.items() if k and not k.endswith(":")}
             with _resolution_cache_lock:
                 for key, entry in list(data.items()):
                     if isinstance(entry, dict) and entry.get("yf_symbol", "").endswith(".L"):
@@ -1403,10 +1405,7 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                     evict_on_404=True,
                 )
 
-        # Step 1: Expose what DeGiro sends for numeric broker symbols (product IDs)
-        if sym.isdigit():
-            logger.info(f"[POS_RAW_724] raw_position={pos}")
-
+    
         resolved_symbols.append(yf_sym)
         resolved_yf_symbols.append(yf_sym)
         if yf_sym:
@@ -1416,13 +1415,6 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     unique_yf_symbols = [s for s in dict.fromkeys(resolved_yf_symbols) if s]  # deduplicate, skip empty
     price_batch: dict[str, float] = {}
     _batch_start = time.time()
-
-    # RES_PROBE: diagnose position 724 resolution cache lookup
-    logger.info(f"[RES_PROBE] '724' → {_resolution_cache.get('724')}")
-    logger.info(f"[RES_PROBE] '724:*' keys: {[k for k in _resolution_cache if k.startswith('724')]}")
-
-    # DIAG: probe resolution cache for US stock IONQ
-    logger.info(f"[YFSYM] IONQ → {_resolution_cache.get('IONQ:ISIN', {}).get('yf_symbol')}")
 
     if unique_yf_symbols:
         # Split into EU (suffix, e.g. VUSA.AS) and US (plain, e.g. IONQ) —

@@ -4,6 +4,8 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-29 | 260429-final-log-cleanup | complete |
+| 2026-04-29 | 260429-fix-724-resolution | complete |
 | 2026-04-29 | 260429-fix-diag-degiro-total-log | complete |
 | 2026-04-29 | 260429-portfolio-deviation-diagnostic | complete |
 | 2026-04-29 | 260429-parallelize-enrichment | complete |
