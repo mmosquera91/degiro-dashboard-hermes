@@ -792,10 +792,6 @@
     // Bar: stocks on left (orange), etfs on right (teal)
     $("#alloc-stocks-bar").style.width = stockPct + "%";
     $("#alloc-etfs-bar").style.width = etfPct + "%";
-
-    // Full-width bar below header
-    $(".fw-stocks").forEach(el => el.style.width = stockPct + "%");
-    $(".fw-etfs").forEach(el => el.style.width = etfPct + "%");
   }
 
   // ─── Charts ───
