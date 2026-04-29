@@ -4,6 +4,9 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-29 | 260429-cleanup-dead-delta-only | complete |
+| 2026-04-29 | 260429-rollback-alloc-bar | complete |
+| 2026-04-29 | 260429-allocation-bar-css-fix | complete |
 | 2026-04-29 | 260429-dashboard-polish | complete |
 | 2026-04-29 | 260429-dashboard-rows-redesign | complete |
 | 2026-04-29 | 260429-final-log-cleanup | complete |
@@ -50,3 +53,9 @@
 | 2026-04-28 | 260428-fix-fx-double-conversion-after-batch-fetch | complete |
 | 2026-04-28 | 260428-fix-ucits-etf-gbp-pence-inflation | complete |
 | 2026-04-28 | 260428-remove-gbp-correction-batch-path | complete |
+| 2026-04-29 | 260429-ui-polish-batch | complete |
+| 2026-04-29 | 260429-ui-polish-fixes | complete |
+| 2026-04-29 | 260429-rsi-momentum-enrichment-fix | complete |
+| 2026-04-29 | 260429-daily-change-and-total-pl | complete |
+| 2026-04-29 | 260429-daily-change-cache-fix | complete |
+| 2026-04-29 | 260429-portfolio-card-fixes | complete |
