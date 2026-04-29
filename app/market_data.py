@@ -969,7 +969,8 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         yf_currency = "EUR"
                     elif suffix in _GBP_EXCH:
                         yf_currency = "GBP"
-                # Use price from batch fetch first (fresh), then fall back to stale _price_cache
+                # Use price from batch fetch first (then fall back to stale _price_cache)
+                old_price = result.get("current_price")
                 fresh_price = price_batch.get(yf_sym) if price_batch else None
                 if fresh_price is None:
                     fresh_price, _ = _get_cached_price(yf_sym)
@@ -979,6 +980,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     position["current_price"] = round(fresh_price, 4)
                     position["current_value"] = round(fresh_price * position.get("quantity", 0), 2)
                     position["currency"] = yf_currency
+                    logger.debug(f"[STAMP] {symbol}: {old_price} → {fresh_price}")
                     if position.get("avg_buy_price", 0) > 0:
                         position["unrealized_pl_pct"] = round(
                             ((fresh_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
@@ -988,6 +990,8 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         )
                     position["52w_high"] = entry.get("fundamentals", {}).get("week52_high")
                     position["52w_low"] = None  # not cached
+                else:
+                    logger.warning(f"[STAMP] {symbol}: no batch price found, using cached {position.get('current_price')}")
         logger.info("Cache hit for %s — returning enriched from cache", symbol)
         return position
 
