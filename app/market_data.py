@@ -33,6 +33,7 @@ _SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
 # Price cache: keyed by resolved yf_symbol, 15-min TTL
 _price_cache: dict[str, dict] = {}
 _price_cache_lock = threading.RLock()
+_SYMBOL_CACHE_FILE_LOCK = threading.Lock()
 _PRICE_CACHE_TTL = 900  # 15 minutes
 
 # Fundamentals cache: stored inside resolution cache entry, 24h TTL
@@ -226,15 +227,21 @@ def _load_symbol_cache() -> None:
 
 
 def _save_symbol_cache() -> None:
-    """Persist current resolution cache to disk."""
+    """Persist current resolution cache to disk.
+
+    Must be called with _resolution_cache_lock held, or from a context where
+    no other thread may write to _resolution_cache (all resolution cache
+    writers are serialized by this function).
+    """
     try:
         os.makedirs(os.path.dirname(_SYMBOL_CACHE_PATH), exist_ok=True)
-        with _resolution_cache_lock:
-            data = dict(_resolution_cache)
-        tmp_path = _SYMBOL_CACHE_PATH + ".tmp"
-        with open(tmp_path, "w") as f:
-            json.dump(data, f)
-        os.replace(tmp_path, _SYMBOL_CACHE_PATH)
+        with _SYMBOL_CACHE_FILE_LOCK:
+            with _resolution_cache_lock:
+                data = dict(_resolution_cache)
+                tmp_path = _SYMBOL_CACHE_PATH + ".tmp"
+            with open(tmp_path, "w") as f:
+                json.dump(data, f)
+            os.replace(tmp_path, _SYMBOL_CACHE_PATH)
     except Exception as e:
         logger.warning("Could not save symbol cache: %s", e)
 
@@ -962,18 +969,22 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         yf_currency = "EUR"
                     elif suffix in _GBP_EXCH:
                         yf_currency = "GBP"
-                # Use price cache for current price
-                cached_price, _ = _get_cached_price(yf_sym)
-                if cached_price:
-                    position["current_price"] = round(cached_price, 4)
-                    position["current_value"] = round(cached_price * position.get("quantity", 0), 2)
+                # Use price from batch fetch first (fresh), then fall back to stale _price_cache
+                fresh_price = price_batch.get(yf_sym) if price_batch else None
+                if fresh_price is None:
+                    fresh_price, _ = _get_cached_price(yf_sym)
+                # Always stamp price_source so it's set even if fresh_price is None
+                position["price_source"] = "batch" if price_batch and yf_sym in price_batch else "cache"
+                if fresh_price:
+                    position["current_price"] = round(fresh_price, 4)
+                    position["current_value"] = round(fresh_price * position.get("quantity", 0), 2)
                     position["currency"] = yf_currency
                     if position.get("avg_buy_price", 0) > 0:
                         position["unrealized_pl_pct"] = round(
-                            ((cached_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
+                            ((fresh_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
                         )
                         position["unrealized_pl"] = round(
-                            (cached_price - position["avg_buy_price"]) * position.get("quantity", 0), 2
+                            (fresh_price - position["avg_buy_price"]) * position.get("quantity", 0), 2
                         )
                     position["52w_high"] = entry.get("fundamentals", {}).get("week52_high")
                     position["52w_low"] = None  # not cached
@@ -1202,6 +1213,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     yf_currency = "GBP"
                 position["current_price"] = round(yf_price, 4)
                 position["current_value"] = round(yf_price * position["quantity"], 2)
+                position["price_source"] = "batch"
                 _update_price_cache(yf_symbol, yf_price, yf_currency)
                 if position["avg_buy_price"] > 0:
                     position["unrealized_pl_pct"] = round(
@@ -1433,5 +1445,21 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
 
     elapsed = time.time() - _enrich_start
     logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)
+
+    # Diagnostic summary — log every position's computed value for deviation debugging
+    total_computed = 0.0
+    for r in enriched:
+        sym = r.get("symbol", "?")
+        qty = r.get("quantity", 0)
+        price = r.get("current_price")
+        value = r.get("current_value_eur") or r.get("current_value", 0)
+        source = r.get("price_source", "?")
+        currency = r.get("currency", "?")
+        logger.info(
+            f"[DIAG] {sym:8s}  qty={qty:8.4f}  price={price!s:10s}  "
+            f"value={value:10.2f}  src={source}  ccy={currency}"
+        )
+        total_computed += value or 0
+    logger.info(f"[DIAG] TOTAL COMPUTED: {total_computed:.2f} {base_currency}")
 
     return enriched

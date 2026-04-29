@@ -681,6 +681,7 @@ def _do_enrich_session():
         enriched = compute_scores(enriched)
         summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
         summary = _sanitize_floats_deep(summary)
+        logger.info(f"[DIAG] DEGIRO REPORTED TOTAL: {summary.get('total_value_eur', 0):.2f} EUR")
         try:
             summary["health_alerts"] = compute_health_alerts(summary)
         except Exception as e:
@@ -936,9 +937,13 @@ async def login_post(request: Request):
 @app.get("/logout")
 async def logout():
     """Clear session cookie and redirect to /login."""
-    from .auth import clear_session_cookie
     response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie("brokr_session", **clear_session_cookie())
+    response.delete_cookie(
+        "brokr_session",
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
     return response
 
 
