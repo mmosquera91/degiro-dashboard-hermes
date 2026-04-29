@@ -1192,8 +1192,24 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                 if wk52_low is None:
                     wk52_low = hist_low
 
-            # RSI
-            position["rsi"] = compute_rsi(close, period=14)
+            # RSI — fallback if 1y history is sparse
+            rsi = compute_rsi(close, period=14)
+            if rsi is None:
+                _yf_throttle()
+                fallback_hist = yf.Ticker(yf_symbol).history(period="3mo", interval="1d")
+                if fallback_hist is not None and len(fallback_hist) >= 14:
+                    fc = fallback_hist["Close"]
+                    delta = fc.diff()
+                    gain = delta.clip(lower=0).rolling(14).mean()
+                    loss = (-delta.clip(upper=0)).rolling(14).mean()
+                    if loss.iloc[-1] > 0:
+                        rs = gain.iloc[-1] / loss.iloc[-1]
+                        rsi = float(100 - (100 / (1 + rs)))
+                        rsi = round(rsi, 2)
+                if rsi is None:
+                    logger.warning("RSI unavailable for %s — insufficient history (1y=%d, 3mo=%d)",
+                        symbol, len(close), len(fallback_hist) if fallback_hist is not None else 0)
+            position["rsi"] = rsi
 
             # Performance
             perf = _compute_performance(close)
