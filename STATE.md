@@ -8,10 +8,11 @@
 | 2026-04-29 | 260429-portfolio-deviation-diagnostic | complete |
 | 2026-04-29 | 260429-parallelize-enrichment | complete |
 | 2026-04-29 | 260429-login-screen | complete |
-| 2026-04-29 | 260429-fix-update-prices-toast-position | complete |
+| 2026-04-29 | 260429-fix-stamp-log-nameerror | complete |
 | 2026-04-29 | 260429-fix-update-prices-toast-z-index | complete |
 | 2026-04-29 | 260429-update-prices-persistent-toast | complete |
 | 2026-04-29 | 260429-fix-logout-delete-cookie | complete |
+| 2026-04-29 | 260429-fix-usd-batch-fetch-and-stamp | complete |
 | 2026-04-28 | 260428-fix-ucits-etf-pence-in-batch-path | complete |
 | 2026-04-28 | 260428-skip-yf-delay-on-batch-hit | complete |
 | 2026-04-27 | brokr-concentration-cards | complete |
