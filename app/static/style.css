@@ -323,16 +323,30 @@ body {
 
 /* ─── ALLOCATION BAR ROW ─── */
 .allocation-bar-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-sm);
   margin-bottom: var(--space-3, 12px);
+}
+
+.allocation-bar-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 20px;
+}
+
+.allocation-bar-fullwidth {
+  margin-top: 12px;
+}
+
+.allocation-bar-fullwidth .allocation-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-offset);
+  overflow: hidden;
 }
 
 .allocation-bar-left,

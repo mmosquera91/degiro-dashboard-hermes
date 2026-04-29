@@ -105,38 +105,46 @@
 
       <!-- ALLOCATION BAR -->
       <section class="allocation-bar-row">
-        <div class="allocation-bar-left">
-          <span id="alloc-stocks-label" class="allocation-bar-label private-value">Stocks  —</span>
-          <span class="allocation-dot dot-teal"></span>
-          <span class="allocation-footer-label">Stocks</span>
-        </div>
-        <div class="bar-container">
-          <div id="alloc-bar" class="allocation-bar">
-            <div id="alloc-stocks-bar" class="bar-stocks" style="width:0%"></div>
-            <div id="alloc-etfs-bar" class="bar-etfs" style="width:0%"></div>
+        <div class="allocation-bar-header">
+          <div class="allocation-bar-left">
+            <span id="alloc-stocks-label" class="allocation-bar-label private-value">Stocks  —</span>
+            <span class="allocation-dot dot-teal"></span>
+            <span class="allocation-footer-label">Stocks</span>
           </div>
-          <span id="alloc-bar-title" class="allocation-bar-title">ALLOCATION — STOCKS VS ETFS</span>
+          <div class="bar-container">
+            <div id="alloc-bar" class="allocation-bar">
+              <div id="alloc-stocks-bar" class="bar-stocks" style="width:0%"></div>
+              <div id="alloc-etfs-bar" class="bar-etfs" style="width:0%"></div>
+            </div>
+            <span id="alloc-bar-title" class="allocation-bar-title">ALLOCATION — STOCKS VS ETFS</span>
+          </div>
+          <div class="allocation-bar-right">
+            <span id="alloc-etfs-label" class="allocation-bar-label private-value">—  ETFs</span>
+            <span class="allocation-dot dot-gold"></span>
+            <span class="allocation-footer-label">ETFs</span>
+          </div>
         </div>
-        <div class="allocation-bar-right">
-          <span id="alloc-etfs-label" class="allocation-bar-label private-value">—  ETFs</span>
-          <span class="allocation-dot dot-gold"></span>
-          <span class="allocation-footer-label">ETFs</span>
+        <div class="allocation-bar-fullwidth">
+          <div class="allocation-bar">
+            <div class="bar-stocks fw-stocks" style="width:0%"></div>
+            <div class="bar-etfs fw-etfs" style="width:0%"></div>
+          </div>
         </div>
       </section>
 
       <!-- CONCENTRATION CARDS -->
       <section class="summary-row-centered">
-        <div id="card-top-holding" class="card">
+        <div id="card-top-holding" class="card kpi-card">
           <span class="card-label">Top Holding</span>
           <span class="card-value">—</span>
           <span class="card-sub">—</span>
         </div>
-        <div id="card-top5-weight" class="card">
+        <div id="card-top5-weight" class="card kpi-card">
           <span class="card-label">Top 5 Weight</span>
           <span class="card-value">—</span>
           <span class="card-sub">—</span>
         </div>
-        <div id="card-hhi" class="card">
+        <div id="card-hhi" class="card kpi-card">
           <span class="card-label">HHI Concentration</span>
           <span class="card-value">—</span>
           <span class="card-sub hhi-pill">—</span>
