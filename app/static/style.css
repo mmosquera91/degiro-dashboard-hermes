@@ -274,9 +274,9 @@ body {
 
 /* ─── ALLOCATION BAR ROW ─── */
 .allocation-bar-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -293,32 +293,40 @@ body {
   min-width: 100px;
 }
 
-.allocation-bar-right {
-  text-align: right;
-}
+.allocation-bar-left { justify-self: start; }
+.allocation-bar-right { justify-self: end; text-align: right; }
 
 .allocation-bar-label {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
-.allocation-bar-euro {
-  font-size: 1rem;
-  font-weight: 600;
+.allocation-bar-label strong {
   color: var(--text);
-}
-
-.allocation-bar-pct {
-  font-size: 0.75rem;
-  color: var(--text-dim);
+  font-weight: 600;
 }
 
 .bar-container {
-  flex: 1;
-  max-width: 400px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.allocation-bar-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+#alloc-bar {
+  width: 100%;
 }
 
 .allocation-bar {
@@ -820,9 +828,12 @@ body {
   .header { padding: 10px 14px; }
   .main { padding: 14px; }
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
-  .allocation-bar-row { flex-wrap: wrap; gap: 12px; }
+  .allocation-bar-row { flex-wrap: wrap; gap: 12px; grid-template-columns: 1fr; }
   .allocation-bar-left, .allocation-bar-right { min-width: 80px; }
-  .bar-container { order: -1; width: 100%; max-width: none; }
+  .allocation-bar-left { justify-self: start; }
+  .allocation-bar-right { justify-self: end; }
+  .bar-container { width: 100%; max-width: none; order: -1; }
+  .allocation-bar-title { display: none; }
   .charts-section { grid-template-columns: 1fr; }
   .radar-panels { grid-template-columns: 1fr; }
   .winners-losers-section { grid-template-columns: 1fr; }

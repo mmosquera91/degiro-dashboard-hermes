@@ -761,12 +761,13 @@
       unrealSub.textContent = "—";
     }
 
-    // Card 5 — Realized P&L (DeGiro doesn't expose realized gains; use true_total_pl as proxy)
+    // Card 5 — Realized P&L (derived: true_total_pl - unrealized_pl_total)
     const realizedEl = $("#kpi-realized");
     const realizedSub = $("#kpi-realized-sub");
-    if (d.true_total_pl != null) {
-      realizedEl.textContent = fmtEur(d.true_total_pl);
-      setSignClass(realizedEl, d.true_total_pl);
+    if (d.true_total_pl != null && d.unrealized_pl_total != null) {
+      const realizedPl = d.true_total_pl - d.unrealized_pl_total;
+      realizedEl.textContent = fmtEur(realizedPl);
+      setSignClass(realizedEl, realizedPl);
       realizedSub.textContent = "closed trades";
     } else {
       realizedEl.textContent = "—";
@@ -785,10 +786,8 @@
     const etfValue = totalValue * (etfPct / 100);
     const stockValue = totalValue * (stockPct / 100);
 
-    $("#alloc-stocks-euro").textContent = fmtEur(stockValue);
-    $("#alloc-stocks-pct").textContent = `${stockPct.toFixed(1)}%`;
-    $("#alloc-etfs-euro").textContent = fmtEur(etfValue);
-    $("#alloc-etfs-pct").textContent = `${etfPct.toFixed(1)}%`;
+    $("#alloc-stocks-label").innerHTML = `Stocks  <strong>${fmtEur(stockValue)}</strong> · ${stockPct.toFixed(1)}%`;
+    $("#alloc-etfs-label").innerHTML = `<strong>${fmtEur(etfValue)}</strong> · ${etfPct.toFixed(1)}%  ETFs`;
 
     // Bar: stocks on left (orange), etfs on right (teal)
     $("#alloc-stocks-bar").style.width = stockPct + "%";
@@ -1126,13 +1125,14 @@
       val.textContent = hhi.toLocaleString();
       if (hhi < 1000) {
         val.style.color = 'var(--green)';
+        hhiEl.querySelector('.card-sub').textContent = 'Diversified';
       } else if (hhi <= 1800) {
         val.style.color = '#d97706';
+        hhiEl.querySelector('.card-sub').textContent = 'Concentrated';
       } else {
         val.style.color = 'var(--red)';
+        hhiEl.querySelector('.card-sub').textContent = 'High Risk';
       }
-      hhiEl.querySelector('.card-sub').textContent =
-        hhi < 1000 ? 'Low concentration' : hhi <= 1800 ? 'Moderate' : 'High concentration';
     }
   }
 
