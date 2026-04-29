@@ -986,7 +986,11 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                 if fresh_price:
                     position["current_price"] = round(fresh_price, 4)
                     position["current_value"] = round(fresh_price * position.get("quantity", 0), 2)
-                    position["currency"] = yf_currency
+                    # US batch symbols (no exchange suffix) are always USD
+                    if yf_currency:
+                        position["currency"] = yf_currency
+                    else:
+                        position["currency"] = "USD"
                     logger.debug(f"[STAMP] {symbol}: {old_price} → {fresh_price}")
                     if position.get("avg_buy_price", 0) > 0:
                         position["unrealized_pl_pct"] = round(
@@ -1385,10 +1389,13 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     price_batch: dict[str, float] = {}
     _batch_start = time.time()
 
+    # RES_PROBE: diagnose position 724 resolution cache lookup
+    logger.info(f"[RES_PROBE] '724' → {_resolution_cache.get('724')}")
+    logger.info(f"[RES_PROBE] '724:*' keys: {[k for k in _resolution_cache if k.startswith('724')]}")
+
     # DIAG: probe resolution cache for US stock IONQ
     logger.info(f"[YFSYM] IONQ → {_resolution_cache.get('IONQ:ISIN', {}).get('yf_symbol')}")
 
-    logger.info(f"[BATCH_INPUT] {unique_yf_symbols}")
     if unique_yf_symbols:
         # Split into EU (suffix, e.g. VUSA.AS) and US (plain, e.g. IONQ) —
         # yf.download drops plain US tickers when the list also contains
@@ -1425,14 +1432,6 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             return result
 
         price_batch = {**_fetch_and_unpack(eu_symbols), **_fetch_and_unpack(us_symbols)}
-
-    logger.info(f"[BATCH_OUTPUT] {list(price_batch.keys())}")
-
-    # === DIAG: reveal batch dict key format ===
-    sample_keys = list(price_batch.keys())[:10]
-    logger.info(f"[BATCH_KEYS] {sample_keys}")
-    for probe in ["IONQ", "AMZN", "VUSA"]:
-        logger.info(f"[BATCH_PROBE] '{probe}' → {price_batch.get(probe, 'MISS')}")
 
     _batch_elapsed = time.time() - _batch_start
     logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
