@@ -786,8 +786,8 @@
     const etfValue = totalValue * (etfPct / 100);
     const stockValue = totalValue * (stockPct / 100);
 
-    $("#alloc-stocks-label").innerHTML = `Stocks  <strong>${fmtEur(stockValue)}</strong> · ${stockPct.toFixed(1)}%`;
-    $("#alloc-etfs-label").innerHTML = `<strong>${fmtEur(etfValue)}</strong> · ${etfPct.toFixed(1)}%  ETFs`;
+    $("#alloc-stocks-label").innerHTML = `<strong>${fmtEur(stockValue)}</strong> · ${stockPct.toFixed(1)}%`;
+    $("#alloc-etfs-label").innerHTML = `<strong>${fmtEur(etfValue)}</strong> · ${etfPct.toFixed(1)}%`;
 
     // Bar: stocks on left (orange), etfs on right (teal)
     $("#alloc-stocks-bar").style.width = stockPct + "%";
@@ -1110,10 +1110,7 @@
     if (top5El) {
       const val = top5El.querySelector('.card-value');
       val.textContent = top5.toFixed(1) + '%';
-      val.className = 'card-value ' + (top5 < 40 ? 'positive' :
-                       top5 < 60 ? '' : 'negative');
-      if (top5 >= 40 && top5 < 60) val.style.color = '#d97706';
-      else val.style.color = '';
+      val.style.color = ''; // neutral — no colour
     }
 
     // HHI
@@ -1122,16 +1119,18 @@
     const hhiEl = document.getElementById('card-hhi');
     if (hhiEl) {
       const val = hhiEl.querySelector('.card-value');
+      const pill = hhiEl.querySelector('.hhi-pill');
       val.textContent = hhi.toLocaleString();
+      val.style.color = '';
       if (hhi < 1000) {
-        val.style.color = 'var(--green)';
-        hhiEl.querySelector('.card-sub').textContent = 'Diversified';
+        pill.className = 'card-sub hhi-pill diversified';
+        pill.textContent = 'Diversified';
       } else if (hhi <= 1800) {
-        val.style.color = '#d97706';
-        hhiEl.querySelector('.card-sub').textContent = 'Concentrated';
+        pill.className = 'card-sub hhi-pill concentrated';
+        pill.textContent = 'Concentrated';
       } else {
-        val.style.color = 'var(--red)';
-        hhiEl.querySelector('.card-sub').textContent = 'High Risk';
+        pill.className = 'card-sub hhi-pill high-risk';
+        pill.textContent = 'High Risk';
       }
     }
   }

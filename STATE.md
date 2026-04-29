@@ -4,6 +4,7 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-29 | 260429-dashboard-polish | complete |
 | 2026-04-29 | 260429-dashboard-rows-redesign | complete |
 | 2026-04-29 | 260429-final-log-cleanup | complete |
 | 2026-04-29 | 260429-fix-724-resolution | complete |
