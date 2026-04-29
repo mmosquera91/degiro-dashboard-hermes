@@ -1374,10 +1374,38 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                         yf_sym = cached_yf
 
         if not yf_sym:
-            yf_sym = _resolve_yf_symbol(
-                sym, isin, pos.get("currency", "EUR"), pos.get("exchange_id", ""),
-                evict_on_404=True,
-            )
+            if sym.isdigit():
+                # Numeric broker symbol = DeGiro internal product ID, never a valid
+                # yfinance ticker. Fall through to ISIN-based resolution directly.
+                pos_isin = isin or pos.get("isin", "") or pos.get("ISIN", "")
+                if pos_isin:
+                    yf_sym = _resolve_by_isin(pos_isin, pos.get("currency", "EUR"))
+                    if yf_sym:
+                        logger.info(
+                            "Resolved numeric DeGiro symbol %s (ISIN %s) → %s",
+                            sym, pos_isin, yf_sym,
+                        )
+                        # Cache under both "724:ISIN" and "724:" keys so future runs
+                        # hit the cache without re-resolving.
+                        for ck in (f"{sym}:{pos_isin}", f"{sym}:"):
+                            with _resolution_cache_lock:
+                                _resolution_cache[ck] = {
+                                    "yf_symbol": yf_sym,
+                                    "exchange": "",
+                                    "currency": "",
+                                    "method": "numeric_isin",
+                                    "cached_at": time.time(),
+                                }
+                        _save_symbol_cache()
+            else:
+                yf_sym = _resolve_yf_symbol(
+                    sym, isin, pos.get("currency", "EUR"), pos.get("exchange_id", ""),
+                    evict_on_404=True,
+                )
+
+        # Step 1: Expose what DeGiro sends for numeric broker symbols (product IDs)
+        if sym.isdigit():
+            logger.info(f"[POS_RAW_724] raw_position={pos}")
 
         resolved_symbols.append(yf_sym)
         resolved_yf_symbols.append(yf_sym)
