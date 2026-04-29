@@ -2,11 +2,12 @@
 
 import asyncio
 import hmac
+import json
 import logging
 import os
 import threading
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -54,6 +55,42 @@ def _release_operation_lock():
 _benchmark_cache: dict = {"series": None, "attribution": None}
 _benchmark_cache_time: float = 0.0
 _BENCHMARK_TTL: int = 3600  # 1 hour
+
+# Daily valuation log for daily_change_pct / daily_change_eur
+VALUATION_FILE = "/data/daily_valuations.json"
+
+
+def _record_daily_valuation(total_eur: float) -> None:
+    """Append or update today's portfolio valuation to the daily valuations log."""
+    today = date.today().isoformat()
+    try:
+        data = json.load(open(VALUATION_FILE)) if os.path.exists(VALUATION_FILE) else {}
+    except Exception:
+        data = {}
+    data[today] = round(total_eur, 2)
+    with open(VALUATION_FILE, "w") as f:
+        json.dump(data, f)
+
+
+def _get_daily_change(curr: float):
+    """Read the most recent prior valuation and compute pct/eur delta vs today."""
+    try:
+        if not os.path.exists(VALUATION_FILE):
+            return None, None
+        data = json.load(open(VALUATION_FILE))
+        today = date.today().isoformat()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        prev = data.get(yesterday)
+        # Walk back up to 4 days for weekend/holiday gap
+        if not prev:
+            for d in sorted(data.keys()):
+                if d < today:
+                    prev = data[d]
+        if prev and curr:
+            return round((curr - prev) / prev * 100, 2), round(curr - prev, 2)
+    except Exception:
+        pass
+    return None, None
 
 
 async def verify_brok_token(request: Request):
@@ -180,7 +217,6 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         "top_5_losers": top_5_losers,
         "sector_breakdown": {},
         "cash_available": round(cash_available, 2),
-        "daily_change_pct": None,
         "positions": positions_copy,
         "top_candidates": {"etfs": [], "stocks": []},
         "top5_holdings": [
@@ -571,6 +607,9 @@ async def get_portfolio():
     with _session_lock:
         portfolio = _session["portfolio"]
         if portfolio is not None:
+            pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
+            portfolio["daily_change_pct"] = pct
+            portfolio["daily_change_eur"] = eur
             return portfolio
 
         # No cached portfolio — need active session to fetch
@@ -630,6 +669,9 @@ async def get_portfolio():
             _session["last_enriched_at"] = datetime.now(timezone.utc)
             portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
 
+        pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
+        portfolio["daily_change_pct"] = pct
+        portfolio["daily_change_eur"] = eur
         return portfolio
 
     except Exception as e:
@@ -649,28 +691,12 @@ async def get_portfolio_raw():
 
     with _session_lock:
         # If we already have enriched data, return that
-        portfolio = _session["portfolio"]
-        if portfolio is not None:
-            # Always compute snapshot-based daily change on top of cached data
-            snaps = load_snapshots()
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            yesterday_snap = None
-            for s in reversed(snaps):
-                if s["date"][:10] < today_str:
-                    yesterday_snap = s
-                    break
-            if yesterday_snap and yesterday_snap.get("total_value_eur"):
-                prev = yesterday_snap["total_value_eur"]
-                curr = portfolio.get("total_value_eur")
-                if curr is not None and prev != 0:
-                    portfolio["daily_change_pct"] = round((curr - prev) / prev * 100, 2)
-                    portfolio["daily_change_eur"] = round(curr - prev, 2)
-                else:
-                    portfolio["daily_change_pct"] = None
-                    portfolio["daily_change_eur"] = None
-            else:
-                portfolio["daily_change_pct"] = None
-                portfolio["daily_change_eur"] = None
+        raw_session = _session["portfolio"]
+        if raw_session:
+            portfolio = raw_session.copy()
+            pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
+            portfolio["daily_change_pct"] = pct
+            portfolio["daily_change_eur"] = eur
             return portfolio
 
         if not _is_session_valid():
@@ -688,22 +714,9 @@ async def get_portfolio_raw():
         )
         portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
 
-        # snapshot-based daily change
-        snaps = load_snapshots()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        yesterday_snap = None
-        for s in reversed(snaps):
-            if s["date"][:10] < today_str:
-                yesterday_snap = s
-                break
-        if yesterday_snap and yesterday_snap.get("total_value_eur"):
-            prev = yesterday_snap["total_value_eur"]
-            curr = portfolio["total_value_eur"]
-            portfolio["daily_change_pct"] = round((curr - prev) / prev * 100, 2)
-            portfolio["daily_change_eur"] = round(curr - prev, 2)
-        else:
-            portfolio["daily_change_pct"] = None
-            portfolio["daily_change_eur"] = None
+        pct, eur = _get_daily_change(portfolio["total_value_eur"])
+        portfolio["daily_change_pct"] = pct
+        portfolio["daily_change_eur"] = eur
 
         return portfolio
 
@@ -733,6 +746,7 @@ def _do_enrich_session():
         enriched = compute_scores(enriched)
         summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
         summary = _sanitize_floats_deep(summary)
+        _record_daily_valuation(summary["total_value_eur"])
         logger.info(f"[DIAG] DEGIRO REPORTED TOTAL: {summary.get('total_value_eur', 0):.2f} EUR")
         try:
             summary["health_alerts"] = compute_health_alerts(summary)
