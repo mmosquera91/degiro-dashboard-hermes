@@ -969,13 +969,20 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         yf_currency = "EUR"
                     elif suffix in _GBP_EXCH:
                         yf_currency = "GBP"
-                # Use price from batch fetch first (then fall back to stale _price_cache)
+                # Use price from THIS run's batch fetch (price_batch) first,
+                # then fall back to yf_symbol key (handles suffix variants like IONQ.NQ → IONQ)
                 old_price = position.get("current_price")
-                fresh_price = price_batch.get(yf_sym) if price_batch else None
+                fresh_price = None
+                if price_batch is not None:
+                    fresh_price = price_batch.get(yf_sym)
+                    if fresh_price is None:
+                        # Fallback: try broker_symbol key in batch (works for EUR ETFs where broker=yf without suffix)
+                        fresh_price = price_batch.get(symbol)
                 if fresh_price is None:
                     fresh_price, _ = _get_cached_price(yf_sym)
                 # Always stamp price_source so it's set even if fresh_price is None
-                position["price_source"] = "batch" if price_batch and yf_sym in price_batch else "cache"
+                in_batch = price_batch is not None and yf_sym in price_batch
+                position["price_source"] = "batch" if in_batch else "cache"
                 if fresh_price:
                     position["current_price"] = round(fresh_price, 4)
                     position["current_value"] = round(fresh_price * position.get("quantity", 0), 2)
@@ -1377,6 +1384,11 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     unique_yf_symbols = [s for s in dict.fromkeys(resolved_yf_symbols) if s]  # deduplicate, skip empty
     price_batch: dict[str, float] = {}
     _batch_start = time.time()
+
+    # DIAG: probe resolution cache for US stock IONQ
+    logger.info(f"[YFSYM] IONQ → {_resolution_cache.get('IONQ:ISIN', {}).get('yf_symbol')}")
+
+    logger.info(f"[BATCH_INPUT] {unique_yf_symbols}")
     if unique_yf_symbols:
         try:
             batch = yf.download(
@@ -1406,6 +1418,8 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                         pass
         except Exception as e:
             logger.warning("Batch price fetch failed: %s", e)
+
+    logger.info(f"[BATCH_OUTPUT] {list(price_batch.keys())}")
 
     # === DIAG: reveal batch dict key format ===
     sample_keys = list(price_batch.keys())[:10]
