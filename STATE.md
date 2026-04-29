@@ -4,6 +4,8 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-04-29 | 260429-fix-diag-degiro-total-log | complete |
+| 2026-04-29 | 260429-portfolio-deviation-diagnostic | complete |
 | 2026-04-29 | 260429-parallelize-enrichment | complete |
 | 2026-04-29 | 260429-login-screen | complete |
 | 2026-04-29 | 260429-fix-update-prices-toast-position | complete |
