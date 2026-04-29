@@ -653,6 +653,24 @@ async def get_portfolio_raw():
             raw.get("cash_available", 0),
         )
         portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
+
+        # snapshot-based daily change
+        snaps = load_snapshots()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        yesterday_snap = None
+        for s in reversed(snaps):
+            if s["date"][:10] < today_str:
+                yesterday_snap = s
+                break
+        if yesterday_snap and yesterday_snap.get("total_value_eur"):
+            prev = yesterday_snap["total_value_eur"]
+            curr = portfolio["total_value_eur"]
+            portfolio["daily_change_pct"] = round((curr - prev) / prev * 100, 2)
+            portfolio["daily_change_eur"] = round(curr - prev, 2)
+        else:
+            portfolio["daily_change_pct"] = None
+            portfolio["daily_change_eur"] = None
+
         return portfolio
 
     except Exception as e:

@@ -538,8 +538,11 @@
             label: "Portfolio",
             data: mergedPortfolio.map(p => p?.value ?? null),
             borderColor: "#01696f",
-            backgroundColor: "transparent",
-            tension: 0.1,
+            backgroundColor: "rgba(1,105,111,0.08)",
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            borderWidth: 2,
             spanGaps: true,
           },
           {
@@ -547,7 +550,11 @@
             data: mergedBenchmark.map(b => b?.value ?? null),
             borderColor: "#d97706",
             backgroundColor: "transparent",
-            tension: 0.1,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 3,
+            borderWidth: 2,
+            borderDash: [4, 3],
             spanGaps: true,
           },
         ],
@@ -556,20 +563,8 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, labels: { color: "#888", font: { family: "Inter", size: 11 } } },
-          tooltip: {
-            callbacks: {
-              title: (items) => items[0]?.label || "",
-              label: (item) => {
-                const raw = mergedPortfolio[item.dataIndex];
-                if (item.datasetIndex === 0 && raw) {
-                  const eur = raw.raw != null ? raw.raw.toLocaleString("de-DE", { style: "currency", currency: "EUR" }) : "—";
-                  return `Portfolio: ${item.parsed.y.toFixed(2)} (${eur})`;
-                }
-                return `${item.dataset.label}: ${item.parsed.y.toFixed(2)}`;
-              }
-            }
-          },
+          legend: { display: true, position: "bottom", labels: { color: "#888", font: { family: "Inter", size: 10 } } },
+          tooltip: { enabled: true },
         },
         scales: {
           x: {
@@ -577,9 +572,8 @@
             grid: { color: "#2a2a2a" },
           },
           y: {
-            ticks: { color: "#888", font: { family: "Inter", size: 10 }, callback: (v) => v.toFixed(0) },
+            ticks: { color: "#888", font: { family: "Inter", size: 10 }, callback: (v) => "€" + Math.round(v / 1000) + "k" },
             grid: { color: "#2a2a2a" },
-            title: { display: true, text: "Indexed return (base 100) — 100 = start", color: "#666" },
           },
         },
       },
