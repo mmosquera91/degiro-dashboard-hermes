@@ -970,7 +970,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     elif suffix in _GBP_EXCH:
                         yf_currency = "GBP"
                 # Use price from batch fetch first (then fall back to stale _price_cache)
-                old_price = result.get("current_price")
+                old_price = position.get("current_price")
                 fresh_price = price_batch.get(yf_sym) if price_batch else None
                 if fresh_price is None:
                     fresh_price, _ = _get_cached_price(yf_sym)
@@ -1406,6 +1406,12 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                         pass
         except Exception as e:
             logger.warning("Batch price fetch failed: %s", e)
+
+    # === DIAG: reveal batch dict key format ===
+    sample_keys = list(price_batch.keys())[:10]
+    logger.info(f"[BATCH_KEYS] {sample_keys}")
+    for probe in ["IONQ", "AMZN", "VUSA"]:
+        logger.info(f"[BATCH_PROBE] '{probe}' → {price_batch.get(probe, 'MISS')}")
 
     _batch_elapsed = time.time() - _batch_start
     logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
