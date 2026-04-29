@@ -183,6 +183,13 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         "daily_change_pct": None,
         "positions": positions_copy,
         "top_candidates": {"etfs": [], "stocks": []},
+        "top5_holdings": [
+            {"ticker": p.get("symbol") or p.get("name", ""), "weight": round(p.get("weight", 0) or 0, 1)}
+            for p in sorted(
+                [{"symbol": p.get("symbol") or p.get("name", ""), "weight": p.get("weight", 0) or 0} for p in positions_copy],
+                key=lambda x: x["weight"], reverse=True
+            )[:5]
+        ],
     }
 
 
@@ -259,6 +266,13 @@ def _build_portfolio_summary(positions: list, cash_available: float, raw: dict |
         "daily_change_pct": daily_change_pct,
         "positions": positions,
         "top_candidates": top_candidates,
+        "top5_holdings": [
+            {"ticker": p["ticker"], "weight": round(p["weight_pct"], 1)}
+            for p in sorted(
+                [{"ticker": p.get("symbol") or p.get("name", ""), "weight_pct": p.get("weight", 0) or 0} for p in positions],
+                key=lambda x: x.get("weight_pct") or 0, reverse=True
+            )[:5]
+        ],
     }
 
 
@@ -637,6 +651,26 @@ async def get_portfolio_raw():
         # If we already have enriched data, return that
         portfolio = _session["portfolio"]
         if portfolio is not None:
+            # Always compute snapshot-based daily change on top of cached data
+            snaps = load_snapshots()
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            yesterday_snap = None
+            for s in reversed(snaps):
+                if s["date"][:10] < today_str:
+                    yesterday_snap = s
+                    break
+            if yesterday_snap and yesterday_snap.get("total_value_eur"):
+                prev = yesterday_snap["total_value_eur"]
+                curr = portfolio.get("total_value_eur")
+                if curr is not None and prev != 0:
+                    portfolio["daily_change_pct"] = round((curr - prev) / prev * 100, 2)
+                    portfolio["daily_change_eur"] = round(curr - prev, 2)
+                else:
+                    portfolio["daily_change_pct"] = None
+                    portfolio["daily_change_eur"] = None
+            else:
+                portfolio["daily_change_pct"] = None
+                portfolio["daily_change_eur"] = None
             return portfolio
 
         if not _is_session_valid():
