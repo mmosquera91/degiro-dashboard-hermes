@@ -315,6 +315,7 @@
       if (res.status === 409) {
         const data = await res.json();
         ToastManager.show(data.detail || "Another operation is already running, please wait", "error");
+        ToastManager.dismiss(progressToast);
         setOperationActive(false);
         btn.disabled = false;
         return;
@@ -330,10 +331,13 @@
         const elapsed = Date.now() - updateStart;
         setTimeout(() => { setOperationActive(false); btn.disabled = false; }, Math.max(3000 - elapsed, 500));
         return;
+      } else {
+        ToastManager.dismiss(progressToast);
       }
     } catch (e) {
       console.error("Update prices failed", e);
       ToastManager.updateToast(progressToast, { message: e.message, icon: "alert-circle", variant: "error" });
+      setTimeout(function() { ToastManager.dismiss(progressToast); }, 3000);
       setOperationActive(false);
     }
     btn.disabled = false;
