@@ -57,7 +57,7 @@ _benchmark_cache_time: float = 0.0
 _BENCHMARK_TTL: int = 3600  # 1 hour
 
 # Daily valuation log for daily_change_pct / daily_change_eur
-VALUATION_FILE = "/data/daily_valuations.json"
+VALUATION_FILE = "/data/snapshots/daily_valuations.json"
 
 
 def _record_daily_valuation(total_eur: float) -> None:
@@ -391,6 +391,7 @@ def _restore_portfolio_from_snapshot():
         except Exception as e:
             logger.warning("Health alerts computation failed on restore: %s", e)
             portfolio_data["health_alerts"] = []
+    portfolio_data = _sanitize_floats(portfolio_data)
     with _session_lock:
         _session["portfolio"] = portfolio_data
         _session["portfolio_time"] = datetime.now()
@@ -413,6 +414,8 @@ async def lifespan(app: FastAPI):
         audit_symbol_cache()
         # Daily auto-enrichment at ~08:00 local time
         asyncio.create_task(_daily_enrichment_loop())
+        # End-of-day valuation at ~23:00 local time
+        asyncio.create_task(_daily_eod_loop())
         yield
     except Exception as e:
         logger.error("Unhandled exception during request: %s", str(e))
@@ -435,6 +438,22 @@ async def _daily_enrichment_loop():
                 await asyncio.to_thread(_do_enrich_session)
             except Exception as e:
                 logger.warning("Daily enrichment failed: %s", e)
+
+
+async def _daily_eod_loop():
+    """Re-enrich portfolio once per day at 23:00 local time and record valuation."""
+    while True:
+        now = datetime.now()
+        target = now.replace(hour=23, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        sleep_seconds = (target - now).total_seconds()
+        await asyncio.sleep(sleep_seconds)
+        try:
+            logger.info("Daily EOD valuation task running")
+            await asyncio.to_thread(_do_enrich_session)
+        except Exception as e:
+            logger.warning("Daily EOD valuation failed: %s", e)
 
 
 app = FastAPI(title="Brokr", lifespan=lifespan)
@@ -697,6 +716,7 @@ async def get_portfolio_raw():
             pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
             portfolio["daily_change_pct"] = pct
             portfolio["daily_change_eur"] = eur
+            portfolio = _sanitize_floats(portfolio)
             return portfolio
 
         if not _is_session_valid():
@@ -718,7 +738,11 @@ async def get_portfolio_raw():
         portfolio["daily_change_pct"] = pct
         portfolio["daily_change_eur"] = eur
 
-        return portfolio
+        try:
+            return portfolio
+        except ValueError as e:
+            logger.error("JSON serialization error in portfolio-raw: %s", e)
+            return _sanitize_floats(portfolio)
 
     except Exception as e:
         logger.error("Raw portfolio fetch error: %s", str(e))
