@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Dashboard & Persistence Fix
-status: ready_to_plan
-last_updated: "2026-04-27"
+status: complete
+last_updated: "2026-04-30"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
-  percent: 50
+  completed_plans: 8
+  percent: 100
 ---
 
 # State
@@ -33,10 +33,10 @@ progress:
 
 | Phase | Name | Plans | Status |
 |-------|------|-------|--------|
-| 7 | Snapshot Format Extension | 0 | Not started |
-| 8 | Startup Portfolio Restoration | 0 | Not started |
-| 9 | Data Enrichment & Scoring Fixes | 0 | Not started |
-| 10 | Frontend Dashboard Verification | 0 | Not started |
+| 7 | Snapshot Format Extension | 3 | Complete |
+| 8 | Startup Portfolio Restoration | 3 | Complete |
+| 9 | Data Enrichment & Scoring Fixes | 2 | Complete |
+| 10 | Frontend Dashboard Verification | 0 | Complete |
 
 ## Problems to Diagnose
 
@@ -81,6 +81,8 @@ progress:
 | 260428-fix-frontend-js-crash-after-modal-refactor | Add missing showEnrichmentModal/closeEnrichmentModal functions | 2026-04-28 | — | [260428-fix-frontend-js-crash-after-modal-refactor](./quick/260428-fix-frontend-js-crash-after-modal-refactor/) |
 | 260428-parallelize-enrichment | Parallelize yfinance price fetches in enrich_positions() with ThreadPoolExecutor(max_workers=8) | 2026-04-28 | c1d4002 | [260428-parallelize-enrichment](./quick/260428-parallelize-enrichment/) |
 | 260429-oyv | daily_change_pct from snapshot delta + benchmark chart restyle | 2026-04-29 | 0aefb4f | [260429-oyv](./quick/260429-oyv-260429-daily-change-and-benchmark-style/) |
+| 260430-benchmark-nan-fix | Fix NaN/inf in /api/benchmark route and snapshot writes | 2026-04-30 | — | |
+| 260430-toast-dismiss-fix | Fix progress toast leaking on 409/catch/timeout paths in handleUpdatePrices | 2026-04-30 | — | |
 
 - **fix symbol vwdId fallback to yfinance (2026-04-26):** Removed `vwdId` and `vwd_id` from symbol fallback chain in `fetch_portfolio()`. vwdId is a Van der Moolen internal numeric ID (e.g. "72095021"), not a market ticker — using it as a yfinance symbol fallback caused symbol_cache.json poisoning and wasted 10 yfinance HTTP calls per leveraged product/turbo/warrant per enrichment run. `enrich_position()` already handles empty symbol with early return + warning log. `app/degiro_client.py` line 697.
 - **fix _yf_rate_limited race condition (2026-04-24):** Added `_yf_rate_limited_until` with 60s cooldown. `enrich_positions()` now conditionally resets flag only after cooldown expires. `_resolve_yf_symbol()` sets 60s cooldown on 429 detection and checks expiry before skipping. Prevents premature retry after rate limit hit. Commit: 68279c0
@@ -105,4 +107,4 @@ progress:
 
 ---
 
-*Last updated: 2026-04-28 — Completed quick task 260428-parallelize-enrichment: parallelize yfinance price fetches in enrich_positions()*
+*Last updated: 2026-04-30 — v1.1 complete*

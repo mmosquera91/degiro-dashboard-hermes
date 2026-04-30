@@ -455,7 +455,7 @@
       const chartWrap = $(".benchmark-chart-wrap");
       if (chartWrap) {
         chartWrap.classList.remove("hidden");
-        chartWrap.innerHTML = '<div class="benchmark-empty">No snapshots yet. Refresh your portfolio to record a baseline.</div>';
+        chartWrap.innerHTML = '<div class="chart-empty"><span class="chart-empty-icon">📊</span><span class="chart-empty-text">No data available</span><span class="chart-empty-sub">Refresh portfolio to populate charts</span></div>';
       }
       const comparisonDiv = $("#benchmark-comparison-table");
       if (comparisonDiv) comparisonDiv.classList.add("hidden");
@@ -499,11 +499,7 @@
 
     if (benchmarkSeries.length === 0) {
       if (chartWrap) {
-        chartWrap.innerHTML =
-          '<div class="benchmark-empty">Benchmark data unavailable ' +
-          '(rate limited or network error). Portfolio has ' +
-          snapshots.length + ' snapshot' + (snapshots.length !== 1 ? 's' : '') +
-          '. The S&P 500 line will appear after the next portfolio refresh.</div>';
+        chartWrap.innerHTML = '<div class="chart-empty"><span class="chart-empty-icon">📊</span><span class="chart-empty-text">No data available</span><span class="chart-empty-sub">Refresh portfolio to populate charts</span></div>';
       }
       return;
     }
@@ -853,63 +849,71 @@
     const sectorData = d.sector_breakdown || {};
     const sectorLabels = Object.keys(sectorData);
     const sectorValues = Object.values(sectorData);
-    const sectorColors = generateColors(sectorLabels.length);
 
-    charts.sector = new Chart($("#chart-sector"), {
-      type: "doughnut",
-      data: {
-        labels: sectorLabels,
-        datasets: [{
-          data: sectorValues,
-          backgroundColor: sectorColors,
-          borderColor: "#1a1a1a",
-          borderWidth: 2,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "55%",
-        plugins: {
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const pct = total > 0
-                  ? ((context.parsed / total) * 100).toFixed(1) + '%'
-                  : '0%';
-                if (document.body.classList.contains('privacy-mode')) {
-                  return context.label + ': ' + pct;
-                }
-                const eur = context.parsed.toLocaleString('de-DE', {
-                  style: 'currency', currency: 'EUR',
-                  minimumFractionDigits: 0, maximumFractionDigits: 0
-                });
-                return context.label + ': ' + eur + ' (' + pct + ')';
-              }
-            }
-          },
-          legend: {
-            display: true,
-            position: "bottom",
-            labels: {
-              color: "#888",
-              font: { family: "Inter", size: 10 },
-              boxWidth: 12,
-              generateLabels: function(chart) {
-                const defaults = Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart);
-                defaults.forEach(lbl => {
-                  if (lbl.text && lbl.text.length > 24) {
-                    lbl.text = lbl.text.substring(0, 22) + "…";
+    if (sectorLabels.length === 0) {
+      const sectorWrap = $("#chart-sector")?.parentElement;
+      if (sectorWrap) {
+        sectorWrap.innerHTML = '<div class="chart-empty"><span class="chart-empty-icon">📊</span><span class="chart-empty-text">No data available</span><span class="chart-empty-sub">Refresh portfolio to populate charts</span></div>';
+      }
+    } else {
+      const sectorColors = generateColors(sectorLabels.length);
+
+      charts.sector = new Chart($("#chart-sector"), {
+        type: "doughnut",
+        data: {
+          labels: sectorLabels,
+          datasets: [{
+            data: sectorValues,
+            backgroundColor: sectorColors,
+            borderColor: "#1a1a1a",
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: "55%",
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                  const pct = total > 0
+                    ? ((context.parsed / total) * 100).toFixed(1) + '%'
+                    : '0%';
+                  if (document.body.classList.contains('privacy-mode')) {
+                    return context.label + ': ' + pct;
                   }
-                });
-                return defaults;
+                  const eur = context.parsed.toLocaleString('de-DE', {
+                    style: 'currency', currency: 'EUR',
+                    minimumFractionDigits: 0, maximumFractionDigits: 0
+                  });
+                  return context.label + ': ' + eur + ' (' + pct + ')';
+                }
               }
-            }
+            },
+            legend: {
+              display: true,
+              position: "bottom",
+              labels: {
+                color: "#888",
+                font: { family: "Inter", size: 10 },
+                boxWidth: 12,
+                generateLabels: function(chart) {
+                  const defaults = Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart);
+                  defaults.forEach(lbl => {
+                    if (lbl.text && lbl.text.length > 24) {
+                      lbl.text = lbl.text.substring(0, 22) + "…";
+                    }
+                  });
+                  return defaults;
+                }
+              }
+            },
           },
         },
-      },
-    });
+      });
+    }
 
     // 4. Geographic breakdown
     const geoMap = {};
@@ -1145,6 +1149,23 @@
   function renderConcentration() {
     if (!portfolioData?.positions) return;
     const positions = portfolioData.positions;
+
+    if (!positions || positions.length === 0) {
+      const topEl = document.getElementById('card-top-holding');
+      if (topEl) {
+        topEl.querySelector('.card-value').textContent = '—';
+        topEl.querySelector('.card-sub').textContent = 'No positions';
+      }
+      const top5El = document.getElementById('card-top5-weight');
+      if (top5El) top5El.querySelector('.card-value').textContent = '—';
+      const hhiEl = document.getElementById('card-hhi');
+      if (hhiEl) {
+        hhiEl.querySelector('.card-value').textContent = '—';
+        const pill = hhiEl.querySelector('.hhi-pill');
+        if (pill) { pill.className = 'card-sub hhi-pill'; pill.textContent = 'No data'; }
+      }
+      return;
+    }
 
     // Top holding
     const top = positions.reduce((a, b) =>

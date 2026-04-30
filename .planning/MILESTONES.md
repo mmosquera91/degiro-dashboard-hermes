@@ -21,3 +21,20 @@
 - No persistent storage — session lost on restart
 
 ---
+
+## v1.1 Dashboard & Persistence Fix — COMPLETE
+
+**Phases:** 7-10 | **Plans:** 8 | **Quick tasks:** 260426–260430 (17 quick tasks)
+**Timeline:** 2026-04-24 → 2026-04-30
+
+### Key Accomplishments
+
+1. **Phase 7: Snapshot Format Extension** — Atomic snapshot writes, portfolio data persistence
+2. **Phase 8: Startup Portfolio Restoration** — Portfolio restored on restart, no 401 errors on cached session
+3. **Phase 9: Data Enrichment & Scoring Fixes** — `enrichment_error` field on yfinance failure, NaN/inf sanitization, parallel enrichment, benchmark date normalization
+4. **Phase 10: Frontend Dashboard Verification** — chart-empty state for empty benchmark/sector charts, modal/toast refactor, daily change %
+
+### Gaps Closed
+
+1. `enrichment_error` field added to positions on yfinance symbol resolution failure
+2. "No data available" message rendered in UI for charts with no data (benchmark, sector)

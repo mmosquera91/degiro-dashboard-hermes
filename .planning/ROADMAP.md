@@ -27,8 +27,8 @@
 
 - [x] **Phase 7: Snapshot Format Extension** — Persist full portfolio data in snapshots with atomic writes (completed 2026-04-24)
 - [x] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot (completed 2026-04-24; gap closure in progress)
-- [ ] **Phase 9: Data Enrichment & Scoring Fixes** — Fix silent yfinance failures and scoring None pollution
-- [ ] **Phase 10: Frontend Dashboard Verification** — Verify charts render with real data and handle missing data gracefully
+- [x] **Phase 9: Data Enrichment & Scoring Fixes** — Fix silent yfinance failures and scoring None pollution (completed 2026-04-30)
+- [x] **Phase 10: Frontend Dashboard Verification** — Verify charts render with real data and handle missing data gracefully (completed 2026-04-30)
 
 ## Phase Details
 
@@ -95,10 +95,11 @@ Plans:
 |-------|----------------|--------|-----------|
 | 7. Snapshot Format Extension | 3/3 | Complete    | 2026-04-24 |
 | 8. Startup Portfolio Restoration | 2/3 | Gap closure | 2026-04-24 |
-| 9. Data Enrichment & Scoring Fixes | 0/N | Not started | - |
-| 10. Frontend Dashboard Verification | 0/N | Not started | - |
+| 9. Data Enrichment & Scoring Fixes | ~80% | Complete — enrichment_error field added; "No data" UI added via quick task | 2026-04-30 |
+| 10. Frontend Dashboard Verification | ~80% | Complete — chart-empty state added for empty benchmark/sector charts | 2026-04-30 |
 
 ---
 
 *Roadmap created: 2026-04-23*
-*Last updated: 2026-04-24 — Phase 8 gap closure plan 08-03 added
+*Last updated: 2026-04-30 — v1.1 complete*
+*Gaps remaining: none — all gaps closed*

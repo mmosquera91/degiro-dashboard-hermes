@@ -1034,6 +1034,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
         )
         if not yf_symbol:
             logger.debug("No yfinance symbol resolved for %s (ISIN: %s) — skipping enrichment", symbol, isin)
+            position["enrichment_error"] = f"Symbol resolution failed: {symbol}"
             return position
 
     # Step 3: Check price cache for current price
