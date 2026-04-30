@@ -1,6 +1,8 @@
 """DeGiro authentication and portfolio fetching (degiro-connector v3 API)."""
 
 import logging
+import threading
+import time
 from typing import Optional
 
 import requests
@@ -14,6 +16,11 @@ from degiro_connector.core.constants import urls
 from degiro_connector.core.abstracts.abstract_action import AbstractAction
 
 logger = logging.getLogger(__name__)
+
+# ─── Module-level fetch cache (prevents duplicate DeGiro calls within TTL) ───
+_fetch_cache: dict[int, tuple[dict, float]] = {}
+_fetch_lock = threading.Lock()
+_FETCH_TTL = 30.0  # seconds
 
 
 def _extract_error_message(login_error: LoginError) -> str:
@@ -647,250 +654,277 @@ class DeGiroClient:
             - positions: list of position dicts
             - cash_available: float
             - currency: str (account base currency, typically EUR)
+
+        Caches result for _FETCH_TTL seconds (default 30s) to deduplicate
+        concurrent calls from the request handler and background poller.
         """
-        try:
-            # Fetch update with portfolio, totalPortfolio, and cashFunds
-            request_list = [
-                UpdateRequest(option=UpdateOption.PORTFOLIO, last_updated=0),
-                UpdateRequest(option=UpdateOption.TOTAL_PORTFOLIO, last_updated=0),
-                UpdateRequest(option=UpdateOption.CASH_FUNDS, last_updated=0),
-            ]
-            update = trading_api.get_update.call(request_list=request_list)
+        cache_key = id(trading_api)
+        now = time.monotonic()
 
-            if update is None:
-                raise RuntimeError("DeGiro returned empty update.")
+        # Fast path: return cached result if still fresh (no lock needed)
+        with _fetch_lock:
+            if cache_key in _fetch_cache:
+                result, fetch_time = _fetch_cache[cache_key]
+                if now - fetch_time < _FETCH_TTL:
+                    return result
 
-            # The update object might be an AccountUpdate model or a raw dict
-            if hasattr(update, "model_dump"):
-                update_dict = update.model_dump(mode="python", by_alias=True)
-            elif hasattr(update, "portfolio"):
-                update_dict = {
-                    "portfolio": update.portfolio,
-                    "totalPortfolio": update.total_portfolio,
-                    "cashFunds": update.cash_funds,
-                }
-            else:
-                update_dict = update if isinstance(update, dict) else {}
+        # Slow path: fetch under lock (prevents duplicate concurrent fetches)
+        with _fetch_lock:
+            # Re-check inside lock — another coroutine may have just fetched
+            now = time.monotonic()
+            if cache_key in _fetch_cache:
+                result, fetch_time = _fetch_cache[cache_key]
+                if now - fetch_time < _FETCH_TTL:
+                    return result
 
-            portfolio_data = update_dict.get("portfolio", {})
-            cash_funds_data = update_dict.get("cashFunds", update_dict.get("cash_funds", {}))
-            total_portfolio_data = update_dict.get("totalPortfolio", update_dict.get("total_portfolio", {}))
+            # ── actual fetch ──────────────────────────────────────────────
+            try:
+                # Fetch update with portfolio, totalPortfolio, and cashFunds
+                request_list = [
+                    UpdateRequest(option=UpdateOption.PORTFOLIO, last_updated=0),
+                    UpdateRequest(option=UpdateOption.TOTAL_PORTFOLIO, last_updated=0),
+                    UpdateRequest(option=UpdateOption.CASH_FUNDS, last_updated=0),
+                ]
+                update = trading_api.get_update.call(request_list=request_list)
 
-            # Safe defaults — overwritten below once total_portfolio_flat is parsed
-            total_deposit_withdrawal_val = 0.0
-            total_cash_val = 0.0
-            total_fees_val = 0.0
-            positions = []
-            product_ids = []
-            raw_positions = []
+                if update is None:
+                    raise RuntimeError("DeGiro returned empty update.")
 
-            position_list = portfolio_data.get("value", []) if isinstance(portfolio_data, dict) else []
-            if not position_list and isinstance(portfolio_data, list):
-                position_list = portfolio_data
-
-            for pos in position_list:
-                if not isinstance(pos, dict):
-                    continue
-
-                # Detect and convert DeGiro key-value list format if needed
-                if pos.get("name") == "positionrow" and isinstance(pos.get("value"), list):
-                    flat_pos = _kv_list_to_dict(pos.get("value"))
+                # The update object might be an AccountUpdate model or a raw dict
+                if hasattr(update, "model_dump"):
+                    update_dict = update.model_dump(mode="python", by_alias=True)
+                elif hasattr(update, "portfolio"):
+                    update_dict = {
+                        "portfolio": update.portfolio,
+                        "totalPortfolio": update.total_portfolio,
+                        "cashFunds": update.cash_funds,
+                    }
                 else:
-                    flat_pos = pos
+                    update_dict = update if isinstance(update, dict) else {}
 
-                # Skip non-product entries (like cash lines)
-                position_type = flat_pos.get("positionType", flat_pos.get("position_type", "")).upper()
-                if position_type and position_type not in ("PRODUCT", "STOCK", "ETF", "FUND"):
-                    continue
+                portfolio_data = update_dict.get("portfolio", {})
+                cash_funds_data = update_dict.get("cashFunds", update_dict.get("cash_funds", {}))
+                total_portfolio_data = update_dict.get("totalPortfolio", update_dict.get("total_portfolio", {}))
 
-                pid = flat_pos.get("id", flat_pos.get("productId", flat_pos.get("product_id", 0)))
-                if not pid:
-                    continue
+                # Safe defaults — overwritten below once total_portfolio_flat is parsed
+                total_deposit_withdrawal_val = 0.0
+                total_cash_val = 0.0
+                total_fees_val = 0.0
+                positions = []
+                product_ids = []
+                raw_positions = []
 
-                product_ids.append(int(pid))
-                raw_positions.append(flat_pos)
+                position_list = portfolio_data.get("value", []) if isinstance(portfolio_data, dict) else []
+                if not position_list and isinstance(portfolio_data, list):
+                    position_list = portfolio_data
 
-            # Fetch product details
-            products_map = {}
-            if product_ids:
-                try:
-                    products_info = trading_api.get_products_info.call(product_list=product_ids)
-                    if products_info:
-                        if hasattr(products_info, "model_dump"):
-                            pinfo = products_info.model_dump(mode="python", by_alias=True)
-                        elif hasattr(products_info, "data"):
-                            pinfo = products_info.data if hasattr(products_info.data, "__iter__") else {}
-                        else:
-                            pinfo = products_info if isinstance(products_info, dict) else {}
+                for pos in position_list:
+                    if not isinstance(pos, dict):
+                        continue
 
-                        if isinstance(pinfo, dict):
-                            products_list = pinfo.get("data", pinfo.get("products", []))
-                            if isinstance(products_list, dict):
-                                # Products might be a dict keyed by ID
-                                for k, v in products_list.items():
-                                    try:
-                                        products_map[int(k)] = v if isinstance(v, dict) else v.__dict__ if hasattr(v, "__dict__") else {}
-                                    except (ValueError, TypeError):
-                                        pass
-                            elif isinstance(products_list, list):
-                                for prod in products_list:
-                                    if isinstance(prod, dict):
-                                        pid = prod.get("id", prod.get("productId", 0))
-                                        if pid:
-                                            products_map[int(pid)] = prod
-                except Exception as e:
-                    logger.warning("Failed to fetch product info: %s", str(e))
-
-            # Combine position + product data
-            for pos in raw_positions:
-                pid = int(pos.get("id", pos.get("productId", pos.get("product_id", 0))))
-                prod = products_map.get(pid, {})
-
-                quantity = float(pos.get("size", pos.get("quantity", 0)))
-                if quantity <= 0:
-                    continue  # skip closed/sold positions
-                current_price = float(pos.get("price", pos.get("currentPrice", 0)))
-                # Always compute from price × quantity so current_value is in native
-                # trading currency. DeGiro's `value` field is pre-converted to EUR
-                # and must NOT be used directly — enrich_positions() applies FX once.
-                if current_price > 0 and quantity > 0:
-                    current_value = round(current_price * quantity, 2)
-                else:
-                    # Fallback only when price is absent — accept DeGiro's value as-is
-                    current_value = float(pos.get("value", pos.get("currentValue", 0)))
-                avg_buy_price = float(pos.get("breakEvenPrice", pos.get("break_even_price", pos.get("averagePrice", 0))))
-
-                # plBase comes as {"EUR": -29.98} in newer DeGiro format
-                pl_base = pos.get("plBase", pos.get("pl", pos.get("unrealizedPl", 0)))
-                if isinstance(pl_base, dict):
-                    unrealized_pl = float(pl_base.get("EUR", list(pl_base.values())[0] if pl_base else 0))
-                else:
-                    unrealized_pl = float(pl_base or 0)
-
-                unrealized_pl_pct = 0.0
-                if avg_buy_price > 0:
-                    unrealized_pl_pct = ((current_price - avg_buy_price) / avg_buy_price) * 100
-
-                if unrealized_pl == 0 and avg_buy_price > 0:
-                    unrealized_pl = (current_price - avg_buy_price) * quantity
-
-                # Determine asset type
-                product_type_raw = str(prod.get("productType", prod.get("product_type", ""))).lower()
-                if "etf" in product_type_raw or prod.get("etf", False):
-                    asset_type = "ETF"
-                elif "stock" in product_type_raw or "share" in product_type_raw:
-                    asset_type = "STOCK"
-                else:
-                    name = (prod.get("name") or "").upper()
-                    if "ETF" in name or "UCITS" in name or "TRACK" in name:
-                        asset_type = "ETF"
+                    # Detect and convert DeGiro key-value list format if needed
+                    if pos.get("name") == "positionrow" and isinstance(pos.get("value"), list):
+                        flat_pos = _kv_list_to_dict(pos.get("value"))
                     else:
-                        asset_type = "STOCK"
+                        flat_pos = pos
 
-                # Build exchange_id once — used for both post-correction and dict entry
-                exchange_id = str(
-                    prod.get("exchangeId")
-                    or prod.get("exchange_id")
-                    or pos.get("exchangeId")
-                    or pos.get("exchange_id")
-                    or ""
-                )
+                    # Skip non-product entries (like cash lines)
+                    position_type = flat_pos.get("positionType", flat_pos.get("position_type", "")).upper()
+                    if position_type and position_type not in ("PRODUCT", "STOCK", "ETF", "FUND"):
+                        continue
 
-                # Currency resolution chain
-                pos_currency = (
-                    prod.get("currency")
-                    or prod.get("tradingCurrency")
-                    or pos.get("currency")
-                    or pos.get("currencyCode")
-                    or _currency_from_exchange_id(pos.get("exchangeId", ""))
-                    or _infer_currency_from_isin(prod.get("isin", ""))
-                    or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
-                    or "EUR"
-                )
+                    pid = flat_pos.get("id", flat_pos.get("productId", flat_pos.get("product_id", 0)))
+                    if not pid:
+                        continue
 
-                # Tradegate US stocks trade in USD on NASDAQ — override currency to prevent
-                # EUR-converted prices from being applied to USD-denominated yfinance data.
-                pos_isin = prod.get("isin", "")
-                if exchange_id == "196" and pos_isin.upper().startswith("US"):
-                    pos_currency = "USD"
+                    product_ids.append(int(pid))
+                    raw_positions.append(flat_pos)
 
-                position = {
-                    "id": str(pos.get("id", pid)),
-                    "product_id": pid,
-                    "name": prod.get("name", f"Product {pid}"),
-                    "isin": prod.get("isin", ""),
-                    "symbol": prod.get("symbol", ""),
-                    "exchange_id": exchange_id,
-                    "currency": pos_currency,
-                    "asset_type": asset_type,
-                    "quantity": quantity,
-                    "avg_buy_price": round(avg_buy_price, 4),
-                    "current_price": round(current_price, 4),
-                    "current_value": round(current_value, 2),
-                    "unrealized_pl": round(unrealized_pl, 2),
-                    "unrealized_pl_pct": round(unrealized_pl_pct, 2),
-                    "sector": "",
-                    "country": "",
-                }
-                positions.append(position)
-
-            # Extract cash available
-            cash_available = 0.0
-            if isinstance(cash_funds_data, dict):
-                cash_list = cash_funds_data.get("value", cash_funds_data.get("cashFunds", []))
-                if isinstance(cash_list, list):
-                    for cash in cash_list:
-                        if isinstance(cash, dict):
-                            # Detect and convert DeGiro key-value list format if needed
-                            if cash.get("name") == "cashFund" and isinstance(cash.get("value"), list):
-                                flat_cash = _kv_list_to_dict(cash.get("value"))
+                # Fetch product details
+                products_map = {}
+                if product_ids:
+                    try:
+                        products_info = trading_api.get_products_info.call(product_list=product_ids)
+                        if products_info:
+                            if hasattr(products_info, "model_dump"):
+                                pinfo = products_info.model_dump(mode="python", by_alias=True)
+                            elif hasattr(products_info, "data"):
+                                pinfo = products_info.data if hasattr(products_info.data, "__iter__") else {}
                             else:
-                                flat_cash = cash
+                                pinfo = products_info if isinstance(products_info, dict) else {}
 
-                            # Find EUR cash, or use the first available
-                            curr = flat_cash.get("currencyCode", flat_cash.get("currency", ""))
-                            val = float(flat_cash.get("value", 0))
-                            if curr == "EUR":
-                                cash_available = val
-                                break
-                            elif cash_available == 0:
-                                cash_available = val
+                            if isinstance(pinfo, dict):
+                                products_list = pinfo.get("data", pinfo.get("products", []))
+                                if isinstance(products_list, dict):
+                                    # Products might be a dict keyed by ID
+                                    for k, v in products_list.items():
+                                        try:
+                                            products_map[int(k)] = v if isinstance(v, dict) else v.__dict__ if hasattr(v, "__dict__") else {}
+                                        except (ValueError, TypeError):
+                                            pass
+                                elif isinstance(products_list, list):
+                                    for prod in products_list:
+                                        if isinstance(prod, dict):
+                                            pid = prod.get("id", prod.get("productId", 0))
+                                            if pid:
+                                                products_map[int(pid)] = prod
+                    except Exception as e:
+                        logger.warning("Failed to fetch product info: %s", str(e))
 
-            logger.info("Fetched %d positions from DeGiro", len(positions))
+                # Combine position + product data
+                for pos in raw_positions:
+                    pid = int(pos.get("id", pos.get("productId", pos.get("product_id", 0))))
+                    prod = products_map.get(pid, {})
 
-            # Parse total_portfolio kv-list (same format as positions)
-            total_portfolio_flat = {}
-            if isinstance(total_portfolio_data, dict):
-                tp_values = (total_portfolio_data.get("value")
-                             or total_portfolio_data.get("values")
-                             or [])
-                if tp_values:
-                    total_portfolio_flat = _kv_list_to_dict(tp_values)
-                else:
-                    # Already flat dict (newer degiro-connector versions)
-                    total_portfolio_flat = total_portfolio_data
+                    quantity = float(pos.get("size", pos.get("quantity", 0)))
+                    if quantity <= 0:
+                        continue  # skip closed/sold positions
+                    current_price = float(pos.get("price", pos.get("currentPrice", 0)))
+                    # Always compute from price × quantity so current_value is in native
+                    # trading currency. DeGiro's `value` field is pre-converted to EUR
+                    # and must NOT be used directly — enrich_positions() applies FX once.
+                    if current_price > 0 and quantity > 0:
+                        current_value = round(current_price * quantity, 2)
+                    else:
+                        # Fallback only when price is absent — accept DeGiro's value as-is
+                        current_value = float(pos.get("value", pos.get("currentValue", 0)))
+                    avg_buy_price = float(pos.get("breakEvenPrice", pos.get("break_even_price", pos.get("averagePrice", 0))))
 
-            # Extract key aggregates
-            def _safe_float(val, default=0.0):
-                try:
-                    return float(val) if val is not None else default
-                except (TypeError, ValueError):
-                    return default
+                    # plBase comes as {"EUR": -29.98} in newer DeGiro format
+                    pl_base = pos.get("plBase", pos.get("pl", pos.get("unrealizedPl", 0)))
+                    if isinstance(pl_base, dict):
+                        unrealized_pl = float(pl_base.get("EUR", list(pl_base.values())[0] if pl_base else 0))
+                    else:
+                        unrealized_pl = float(pl_base or 0)
 
-            total_deposit_withdrawal = _safe_float(
-                total_portfolio_flat.get("totalDepositWithdrawal")
-            )
-            total_cash = _safe_float(total_portfolio_flat.get("totalCash", 0))
-            total_fees = _safe_float(total_portfolio_flat.get("totalNonProductFees", 0))
-            total_deposit_withdrawal_val = total_deposit_withdrawal
+                    unrealized_pl_pct = 0.0
+                    if avg_buy_price > 0:
+                        unrealized_pl_pct = ((current_price - avg_buy_price) / avg_buy_price) * 100
 
-            return {
-                "positions": positions,
-                "cash_available": round(cash_available, 2),
-                "currency": "EUR",
-                "total_deposit_withdrawal": round(total_deposit_withdrawal_val, 2),
-            }
+                    if unrealized_pl == 0 and avg_buy_price > 0:
+                        unrealized_pl = (current_price - avg_buy_price) * quantity
 
-        except Exception as e:
-            logger.error("Failed to fetch portfolio: %s", str(e))
-            raise RuntimeError(f"Failed to fetch portfolio: {str(e)}") from e
+                    # Determine asset type
+                    product_type_raw = str(prod.get("productType", prod.get("product_type", ""))).lower()
+                    if "etf" in product_type_raw or prod.get("etf", False):
+                        asset_type = "ETF"
+                    elif "stock" in product_type_raw or "share" in product_type_raw:
+                        asset_type = "STOCK"
+                    else:
+                        name = (prod.get("name") or "").upper()
+                        if "ETF" in name or "UCITS" in name or "TRACK" in name:
+                            asset_type = "ETF"
+                        else:
+                            asset_type = "STOCK"
+
+                    # Build exchange_id once — used for both post-correction and dict entry
+                    exchange_id = str(
+                        prod.get("exchangeId")
+                        or prod.get("exchange_id")
+                        or pos.get("exchangeId")
+                        or pos.get("exchange_id")
+                        or ""
+                    )
+
+                    # Currency resolution chain
+                    pos_currency = (
+                        prod.get("currency")
+                        or prod.get("tradingCurrency")
+                        or pos.get("currency")
+                        or pos.get("currencyCode")
+                        or _currency_from_exchange_id(pos.get("exchangeId", ""))
+                        or _infer_currency_from_isin(prod.get("isin", ""))
+                        or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
+                        or "EUR"
+                    )
+
+                    # Tradegate US stocks trade in USD on NASDAQ — override currency to prevent
+                    # EUR-converted prices from being applied to USD-denominated yfinance data.
+                    pos_isin = prod.get("isin", "")
+                    if exchange_id == "196" and pos_isin.upper().startswith("US"):
+                        pos_currency = "USD"
+
+                    position = {
+                        "id": str(pos.get("id", pid)),
+                        "product_id": pid,
+                        "name": prod.get("name", f"Product {pid}"),
+                        "isin": prod.get("isin", ""),
+                        "symbol": prod.get("symbol", ""),
+                        "exchange_id": exchange_id,
+                        "currency": pos_currency,
+                        "asset_type": asset_type,
+                        "quantity": quantity,
+                        "avg_buy_price": round(avg_buy_price, 4),
+                        "current_price": round(current_price, 4),
+                        "current_value": round(current_value, 2),
+                        "unrealized_pl": round(unrealized_pl, 2),
+                        "unrealized_pl_pct": round(unrealized_pl_pct, 2),
+                        "sector": "",
+                        "country": "",
+                    }
+                    positions.append(position)
+
+                # Extract cash available
+                cash_available = 0.0
+                if isinstance(cash_funds_data, dict):
+                    cash_list = cash_funds_data.get("value", cash_funds_data.get("cashFunds", []))
+                    if isinstance(cash_list, list):
+                        for cash in cash_list:
+                            if isinstance(cash, dict):
+                                # Detect and convert DeGiro key-value list format if needed
+                                if cash.get("name") == "cashFund" and isinstance(cash.get("value"), list):
+                                    flat_cash = _kv_list_to_dict(cash.get("value"))
+                                else:
+                                    flat_cash = cash
+
+                                # Find EUR cash, or use the first available
+                                curr = flat_cash.get("currencyCode", flat_cash.get("currency", ""))
+                                val = float(flat_cash.get("value", 0))
+                                if curr == "EUR":
+                                    cash_available = val
+                                    break
+                                elif cash_available == 0:
+                                    cash_available = val
+
+                logger.info("Fetched %d positions from DeGiro", len(positions))
+
+                # Parse total_portfolio kv-list (same format as positions)
+                total_portfolio_flat = {}
+                if isinstance(total_portfolio_data, dict):
+                    tp_values = (total_portfolio_data.get("value")
+                                 or total_portfolio_data.get("values")
+                                 or [])
+                    if tp_values:
+                        total_portfolio_flat = _kv_list_to_dict(tp_values)
+                    else:
+                        # Already flat dict (newer degiro-connector versions)
+                        total_portfolio_flat = total_portfolio_data
+
+                # Extract key aggregates
+                def _safe_float(val, default=0.0):
+                    try:
+                        return float(val) if val is not None else default
+                    except (TypeError, ValueError):
+                        return default
+
+                total_deposit_withdrawal = _safe_float(
+                    total_portfolio_flat.get("totalDepositWithdrawal")
+                )
+                total_cash = _safe_float(total_portfolio_flat.get("totalCash", 0))
+                total_fees = _safe_float(total_portfolio_flat.get("totalNonProductFees", 0))
+                total_deposit_withdrawal_val = total_deposit_withdrawal
+
+                result = {
+                    "positions": positions,
+                    "cash_available": round(cash_available, 2),
+                    "currency": "EUR",
+                    "total_deposit_withdrawal": round(total_deposit_withdrawal_val, 2),
+                }
+
+                # Cache before releasing lock
+                _fetch_cache[cache_key] = (result, time.monotonic())
+                return result
+
+            except Exception as e:
+                logger.error("Failed to fetch portfolio: %s", str(e))
+                raise RuntimeError(f"Failed to fetch portfolio: {str(e)}") from e

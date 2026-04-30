@@ -876,6 +876,7 @@ async def get_benchmark():
     global _benchmark_cache, _benchmark_cache_time
 
     snapshots = load_snapshots()
+    snapshots = [_sanitize_floats(s) for s in snapshots]
     if not snapshots:
         return {"snapshots": [], "benchmark_series": [], "attribution": [], "message": "No snapshots yet"}
 
@@ -883,9 +884,9 @@ async def get_benchmark():
     if _benchmark_cache["series"] is not None and \
             _time.time() - _benchmark_cache_time < _BENCHMARK_TTL:
         return {
-            "snapshots": snapshots,   # always fresh from disk
-            "benchmark_series": _benchmark_cache["series"],
-            "attribution": _benchmark_cache["attribution"],
+            "snapshots": [_sanitize_floats(s) for s in snapshots],
+            "benchmark_series": _sanitize_floats({"data": _benchmark_cache["series"]})["data"],
+            "attribution": [_sanitize_floats(a) for a in _benchmark_cache["attribution"]],
         }
 
     # Get date range from snapshots
@@ -920,11 +921,11 @@ async def get_benchmark():
     _benchmark_cache["attribution"] = attribution
     _benchmark_cache_time = _time.time()
 
-    return {
-        "snapshots": snapshots,
-        "benchmark_series": benchmark_series,
-        "attribution": attribution,
-    }
+    return _sanitize_floats({
+        "snapshots": [_sanitize_floats(s) for s in snapshots],
+        "benchmark_series": _sanitize_floats({"data": benchmark_series})["data"],
+        "attribution": [_sanitize_floats(a) for a in attribution],
+    })
 
 
 # ─── Snapshots ───

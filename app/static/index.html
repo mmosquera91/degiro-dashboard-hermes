@@ -10,18 +10,15 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 </head>
 <body>
 
   <!-- HEADER -->
   <header class="header">
     <div class="header-left">
-      <svg class="logo" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="28" height="28" rx="6" fill="#01696f"/>
-        <path d="M7 19V9h3l3 6 3-6h3v10h-2.5v-6l-2.5 5h-2l-2.5-5v6H7z" fill="#fff"/>
-      </svg>
-      <span class="app-name">Brokr</span>
-    </div>
+        <img src="/static/logo.svg" alt="Brokr" class="header-logo">
+      </div>
     <div class="header-right">
       <span id="last-refresh" class="last-refresh"></span>
       <span id="stale-badge" class="stale-badge hidden">
@@ -75,13 +72,14 @@
           <span class="card-label">Portfolio</span>
           <span id="kpi-portfolio" class="card-value private-value">—</span>
           <span id="kpi-portfolio-sub" class="card-sub private-value">—</span>
+          <span id="kpi-portfolio-pl" class="card-sub private-value">—</span>
         </div>
         <div class="card kpi-card">
           <span class="card-label">Invested</span>
           <span id="kpi-invested" class="card-value private-value">—</span>
           <span id="kpi-invested-sub" class="card-sub private-value">—</span>
         </div>
-        <div class="card kpi-card">
+        <div id="kpi-cash-card" class="card kpi-card">
           <span class="card-label">Cash</span>
           <span id="kpi-cash" class="card-value private-value">—</span>
           <span id="kpi-cash-sub" class="card-sub private-value">—</span>
@@ -134,12 +132,12 @@
         <div id="card-top5-weight" class="card kpi-card">
           <span class="card-label">Top 5 Weight</span>
           <span class="card-value">—</span>
-          <span class="card-sub">—</span>
+          <span id="kpi-top5-sub" class="card-sub">—</span>
         </div>
         <div id="card-hhi" class="card kpi-card">
           <span class="card-label">HHI Concentration</span>
           <span class="card-value">—</span>
-          <span class="card-sub hhi-pill">—</span>
+          <span class="hhi-pill">—</span>
         </div>
       </section>
 
@@ -166,7 +164,9 @@
 
       <!-- BUY RADAR -->
       <section class="buy-radar-section">
-        <h3 class="section-title">Buy Radar</h3>
+        <div class="section-header">
+          <h3 class="section-title">Buy Radar</h3>
+        </div>
         <div class="radar-panels">
           <div class="card radar-panel">
             <h4 class="radar-title">Top ETF Candidates</h4>

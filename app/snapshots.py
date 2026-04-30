@@ -9,7 +9,7 @@ from typing import Optional
 
 import yfinance as yf
 
-from .market_data import _yf_throttle
+from .market_data import _yf_throttle, _sanitize_floats
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +63,13 @@ def save_snapshot(
     # Create directory if missing
     Path(SNAPSHOT_DIR).mkdir(parents=True, exist_ok=True)
 
-    snapshot = {
+    snapshot = _sanitize_floats({
         "date": date_str,
         "total_value_eur": round(total_value_eur, 2),
         "benchmark_value": round(benchmark_value, 4),
         "benchmark_return_pct": round(benchmark_return_pct, 4),
         "portfolio_data": portfolio_data,
-    }
+    })
 
     file_path = Path(SNAPSHOT_DIR) / f"{date_str}.json"
     tmp_path = file_path.with_suffix(".json.tmp")

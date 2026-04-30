@@ -103,3 +103,21 @@ Plans:
 *Roadmap created: 2026-04-23*
 *Last updated: 2026-04-30 — v1.1 complete*
 *Gaps remaining: none — all gaps closed*
+
+---
+
+## Future Enhancements (v1.2+)
+
+### Multi-day Snapshot History + Portfolio Performance Trends
+- Daily portfolio value indexed to 100 (first snapshot baseline)
+- Rolling 7/30-day vs S&P 500 performance
+- Drawdown heatmap + daily breakdown table
+- New `/api/portfolio-history` endpoint
+
+### Historical Per-Position Attribution Charts
+- Time-series attribution (position × day matrix)
+- Waterfall charts (daily contribution to total return)
+- Top/bottom movers heatmap
+- `/api/position-history` endpoint from snapshot positions
+
+*Estimated: 4 phases, 2 days effort*

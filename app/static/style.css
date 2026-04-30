@@ -9,6 +9,7 @@
   --color-border: #2a2a2a;
   --border: #2a2a2a;
   --text: #e8e8e8;
+  --text-primary: #e8e8e8;
   --text-dim: #888888;
   --text-muted: #555555;
   --color-text-muted: #555555;
@@ -65,6 +66,8 @@ body {
 }
 
 .logo { width: 28px; height: 28px; }
+.header-logo {   height: 60px; width: auto; margin-left: 0 !important; padding-left: 0 !important; display: block; }
+.navbar { display: flex; align-items: center; padding: 0.75rem 0; margin-left: 0; }
 
 .app-name {
   font-size: 1.2rem;
@@ -1285,3 +1288,6 @@ body.privacy-mode .private-value:active {
   background: rgba(239,68,68,0.12) !important;
   color: #ef4444 !important;
 }
+
+/* ─── HERO ─── */
+/* removed */
