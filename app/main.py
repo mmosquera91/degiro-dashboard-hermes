@@ -312,11 +312,6 @@ def _build_portfolio_summary(positions: list, cash_available: float, raw: dict |
     }
 
 
-def _sanitize_floats_deep(portfolio: dict) -> dict:
-    """Apply _sanitize_floats recursively to all positions in a portfolio dict."""
-    if "positions" in portfolio:
-        portfolio["positions"] = [_sanitize_floats(p) for p in portfolio["positions"]]
-    return portfolio
 
 
 def _save_snapshot_for_portfolio(portfolio: dict) -> None:
@@ -339,7 +334,7 @@ def _save_snapshot_for_portfolio(portfolio: dict) -> None:
             benchmark_value = 100.0
             benchmark_return_pct = 0.0
 
-        safe_portfolio = _sanitize_floats_deep(portfolio)
+        safe_portfolio = _sanitize_floats(portfolio)
         save_snapshot(
             date_str,
             safe_portfolio["total_value"],
@@ -378,19 +373,17 @@ def _restore_portfolio_from_snapshot():
         return
 
 # Sanitize any inf/nan floats baked into old snapshots before restoring
-    if "positions" in portfolio_data:
-        portfolio_data["positions"] = [_sanitize_floats(p) for p in portfolio_data["positions"]]
-        try:
-            portfolio_data["positions"] = compute_portfolio_weights(portfolio_data["positions"])
-            portfolio_data["positions"] = compute_scores(portfolio_data["positions"])
-            logger.info("Re-scored %d restored positions from snapshot", len(portfolio_data["positions"]))
-        except Exception as e:
-            logger.warning("Could not re-score restored positions: %s", e)
-        try:
-            portfolio_data["health_alerts"] = compute_health_alerts(portfolio_data)
-        except Exception as e:
-            logger.warning("Health alerts computation failed on restore: %s", e)
-            portfolio_data["health_alerts"] = []
+    try:
+        portfolio_data["positions"] = compute_portfolio_weights(portfolio_data["positions"])
+        portfolio_data["positions"] = compute_scores(portfolio_data["positions"])
+        logger.info("Re-scored %d restored positions from snapshot", len(portfolio_data["positions"]))
+    except Exception as e:
+        logger.warning("Could not re-score restored positions: %s", e)
+    try:
+        portfolio_data["health_alerts"] = compute_health_alerts(portfolio_data)
+    except Exception as e:
+        logger.warning("Health alerts computation failed on restore: %s", e)
+        portfolio_data["health_alerts"] = []
     portfolio_data = _sanitize_floats(portfolio_data)
     with _session_lock:
         _session["portfolio"] = portfolio_data
@@ -769,7 +762,7 @@ def _do_enrich_session():
         enriched = compute_portfolio_weights(enriched)
         enriched = compute_scores(enriched)
         summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
-        summary = _sanitize_floats_deep(summary)
+        summary = _sanitize_floats(summary)
         _record_daily_valuation(summary["total_value_eur"])
         logger.info(f"[DIAG] DEGIRO REPORTED TOTAL: {summary.get('total_value_eur', 0):.2f} EUR")
         try:

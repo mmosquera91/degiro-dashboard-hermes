@@ -1294,12 +1294,15 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
 
     return position
 
-def _sanitize_floats(obj: dict) -> dict:
-    """Replace float inf/nan with None so json.dumps() doesn't crash."""
-    return {
-        k: (None if isinstance(v, float) and not math.isfinite(v) else v)
-        for k, v in obj.items()
-    }
+def _sanitize_floats(obj):
+    """Recursively replace float inf/nan with None for JSON safety."""
+    if isinstance(obj, dict):
+        return {k: _sanitize_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_sanitize_floats(i) for i in obj]
+    elif isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
 
 
 def clear_symbol_cache() -> int:
@@ -1508,6 +1511,68 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         return all_enriched, any_rate_limited
 
     enriched, _session_rate_limited = asyncio.run(_run_all())
+
+    # Post-batch enrichment pass: positions that hit the cache-warm fast path get
+    # current_price from the batch fetch but skip the history fetch (line 952→1009),
+    # leaving rsi/perf_30d/perf_90d/perf_ytd/52w_low all None. Fill those in now.
+    # TODO: persist enriched metrics to cache in v2
+    _post_batch_start = time.time()
+    post_batch_enriched_count = 0
+    for pos in enriched:
+        yf_sym = pos.get("_resolved_yf_symbol", "")
+        if not yf_sym or pos.get("price_source") != "batch":
+            continue
+        if pos.get("rsi") is not None and pos.get("perf_30d") is not None:
+            continue  # already enriched through the regular history path
+
+        try:
+            ticker = yf.Ticker(yf_sym)
+            _yf_throttle()
+            hist = ticker.history(period="1y", auto_adjust=True)
+            if hist is None or hist.empty:
+                logger.warning("Post-batch enrichment: no 1y history for %s", yf_sym)
+                continue
+            if len(hist) < 14:
+                _yf_throttle()
+                hist = ticker.history(period="3mo", interval="1d", auto_adjust=True)
+
+            close = hist["Close"]
+            if len(hist) < 2:
+                continue
+
+            # RSI
+            pos["rsi"] = compute_rsi(close, period=14)
+
+            # Performance
+            perf = _compute_performance(close)
+            pos["perf_30d"] = perf["perf_30d"]
+            pos["perf_90d"] = perf["perf_90d"]
+            pos["perf_ytd"] = perf["perf_ytd"]
+
+            # 52w low / distance from 52w high from history
+            current_price = pos.get("current_price")
+            if current_price is not None and current_price > 0:
+                hist_52w_high = float(hist["High"].max()) if len(hist) > 0 else None
+                hist_52w_low = float(hist["Low"].min()) if len(hist) > 0 else None
+                pos["52w_low"] = round(hist_52w_low, 4) if hist_52w_low is not None else None
+                if hist_52w_high is not None and hist_52w_high > 0:
+                    pos["52w_high"] = round(hist_52w_high, 4)
+                    pos["distance_from_52w_high_pct"] = round(
+                        ((current_price - hist_52w_high) / hist_52w_high) * 100, 2
+                    )
+
+            post_batch_enriched_count += 1
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str:
+                logger.warning("Rate limited in post-batch enrichment for %s", yf_sym)
+                break
+            logger.warning("Post-batch enrichment failed for %s: %s", yf_sym, str(e))
+
+    _post_batch_elapsed = time.time() - _post_batch_start
+    if post_batch_enriched_count > 0:
+        logger.info("Post-batch enrichment: %d symbols enriched in %.1fs",
+                    post_batch_enriched_count, _post_batch_elapsed)
 
     elapsed = time.time() - _enrich_start
     logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)
