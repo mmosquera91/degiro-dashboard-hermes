@@ -6,6 +6,7 @@ sys.path.insert(0, 'app')
 import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
+import time
 
 from market_data import get_fx_rate, compute_rsi, enrich_position
 
@@ -135,3 +136,156 @@ class TestEnrichPosition:
         assert result["perf_30d"] is None
         assert result["perf_90d"] is None
         assert result["perf_ytd"] is None
+
+
+class TestGBpPenceConversion:
+    """BUG-04 and COVR-06: GBp pence conversion regression tests."""
+
+    def test_enrich_position_gbp_pence_conversion(self):
+        """COVR-06: GBp pence conversion — ticker returns GBp currency, price divided by 100."""
+        import market_data
+
+        # Pre-populate resolution cache so enrich_position doesn't fail symbol resolution
+        cache_key = "VUSA:IE00B4L5Y983"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache[cache_key] = {
+                "yf_symbol": "VUSA.DE",
+                "exchange": ".DE",
+                "currency": "",
+                "method": "test",
+                "cached_at": time.time(),
+            }
+
+        pos = {
+            "symbol": "VUSA",
+            "isin": "IE00B4L5Y983",
+            "name": "Vanguard S&P 500 UCITS ETF",
+            "asset_type": "ETF",
+            "quantity": 10.0,
+            "avg_buy_price": 6.0,
+            "currency": "EUR",
+        }
+
+        # Simulate LSE listing returning price in pence with GBp currency metadata
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.info = {"currency": "GBp", "shortName": "Vanguard S&P 500"}
+
+        # Price in pence (e.g., 620 GBp = £6.20)
+        mock_hist = MagicMock()
+        mock_hist.empty = False
+        mock_close = pd.Series([610, 612, 611, 613, 612, 614, 613, 615, 614, 616,
+                                615, 617, 616, 618, 617, 619, 618, 620, 619, 621])
+        mock_hist.__getitem__ = MagicMock(return_value=mock_close)
+        type(mock_hist).Close = property(lambda self: mock_close)
+        mock_ticker_instance.history.return_value = mock_hist
+
+        with patch("market_data.yf.Ticker", return_value=mock_ticker_instance):
+            with patch("market_data.compute_rsi", return_value=55.0):
+                result = enrich_position(pos)
+
+        # Verify pence conversion: price should be ~6.20 (pence/100), not ~620
+        assert result["current_price"] is not None
+        assert result["current_price"] < 10.0, f"Price {result['current_price']} should be < 10.0 (pounds, not pence)"
+        # Currency may be overwritten to EUR (from position) or stay as GBP/GBp
+        # — the critical assertion is that current_price is in pounds (<10), not pence (>=600)
+
+    def test_enrich_position_ie00b4l5y983_regression(self):
+        """BUG-04: IE00B4L5Y983 (Vanguard S&P 500 UCITS ETF) GBp pence regression test."""
+        import market_data
+
+        # Pre-populate resolution cache so enrich_position doesn't fail symbol resolution
+        cache_key = "IE00B4L5Y983:IE00B4L5Y983"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache[cache_key] = {
+                "yf_symbol": "IE00B4L5Y983.DE",
+                "exchange": ".DE",
+                "currency": "",
+                "method": "test",
+                "cached_at": time.time(),
+            }
+
+        pos = {
+            "symbol": "IE00B4L5Y983",
+            "isin": "IE00B4L5Y983",
+            "name": "Vanguard S&P 500 UCITS ETF",
+            "asset_type": "ETF",
+            "quantity": 10.0,
+            "avg_buy_price": 6.0,
+            "currency": "EUR",
+        }
+
+        # Mock ticker simulating IE00B4L5Y983 on LSE returning GBp prices
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.info = {
+            "currency": "GBp",
+            "shortName": "Vanguard S&P 500 UCITS ETF",
+            "sector": "ETF",
+        }
+
+        mock_hist = MagicMock()
+        mock_hist.empty = False
+        # Simulate price in pence range: 600-625 pence = £6.00-£6.25
+        mock_close = pd.Series([600, 602, 601, 603, 602, 604, 603, 605, 604, 606,
+                                605, 607, 606, 608, 607, 609, 608, 610, 609, 611])
+        mock_hist.__getitem__ = MagicMock(return_value=mock_close)
+        type(mock_hist).Close = property(lambda self: mock_close)
+        mock_ticker_instance.history.return_value = mock_hist
+
+        with patch("market_data.yf.Ticker", return_value=mock_ticker_instance):
+            with patch("market_data.compute_rsi", return_value=50.0):
+                result = enrich_position(pos)
+
+        # IE00B4L5Y983 in pence: ~610 pence = £6.10
+        # Without conversion: ~610 GBP would be 100x overvalued
+        assert result["current_price"] is not None
+        assert result["current_price"] < 10.0, (
+            f"IE00B4L5Y983 price {result['current_price']} suggests pence not converted to pounds"
+        )
+        assert result["current_price"] > 5.0, (
+            f"IE00B4L5Y983 price {result['current_price']} seems too low"
+        )
+
+    def test_enrich_position_non_gbp_currency_no_conversion(self):
+        """Non-GBp ticker (e.g., USD) should not have price divided by 100."""
+        import market_data
+
+        # Pre-populate resolution cache so enrich_position doesn't fail symbol resolution
+        cache_key = "AAPL:US0378331005"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache[cache_key] = {
+                "yf_symbol": "AAPL",
+                "exchange": "",
+                "currency": "USD",
+                "method": "test",
+                "cached_at": time.time(),
+            }
+
+        pos = {
+            "symbol": "AAPL",
+            "isin": "US0378331005",
+            "name": "Apple Inc",
+            "asset_type": "STOCK",
+            "quantity": 10.0,
+            "avg_buy_price": 150.0,
+            "currency": "USD",
+        }
+
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.info = {"currency": "USD", "shortName": "Apple"}
+
+        mock_hist = MagicMock()
+        mock_hist.empty = False
+        mock_close = pd.Series([150, 151, 150, 152, 151, 153, 152, 154, 153, 155,
+                                154, 156, 155, 157, 156, 158, 157, 159, 158, 160])
+        mock_hist.__getitem__ = MagicMock(return_value=mock_close)
+        type(mock_hist).Close = property(lambda self: mock_close)
+        mock_ticker_instance.history.return_value = mock_hist
+
+        with patch("market_data.yf.Ticker", return_value=mock_ticker_instance):
+            with patch("market_data.compute_rsi", return_value=55.0):
+                result = enrich_position(pos)
+
+        # USD price should NOT be divided by 100
+        assert result["current_price"] is not None
+        assert result["current_price"] > 100.0, "USD price should not be divided by 100"
+        assert result["currency"] == "USD"
