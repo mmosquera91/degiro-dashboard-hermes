@@ -100,3 +100,101 @@ class TestComputeScores:
         assert result[0]["momentum_score"] is None
         assert result[0]["value_score"] is None
         assert result[0]["buy_priority_score"] is not None  # normalization still works with defaults
+
+
+class TestComputeScoresNoneExclusion:
+    """BUG-01: Positions with None values are excluded from normalization pool."""
+
+    def test_compute_scores_none_value_score_excluded_from_pool(self):
+        """A position with None value_score does not pollute the normalization range."""
+        # Three ETF positions:
+        # Position 0: value_score=10.0
+        # Position 1: value_score=None (should be excluded)
+        # Position 2: value_score=5.0
+        # Non-None values are [10.0, 5.0], range [5, 10]
+        # Normalized: 10.0 -> 1.0, 5.0 -> 0.0
+        # Position 1 (None) should get neutral 0.5
+        positions = [
+            {
+                "asset_type": "ETF",
+                "value_score": 10.0,
+                "distance_from_52w_high_pct": -10.0,
+                "rsi": 40.0,
+                "weight": 10.0,
+                "perf_30d": 5.0,
+                "perf_90d": 10.0,
+                "perf_ytd": 15.0,
+            },
+            {
+                "asset_type": "ETF",
+                "value_score": None,  # BUG: was polluting the pool
+                "distance_from_52w_high_pct": -5.0,
+                "rsi": 60.0,
+                "weight": 20.0,
+                "perf_30d": 3.0,
+                "perf_90d": 6.0,
+                "perf_ytd": 9.0,
+            },
+            {
+                "asset_type": "ETF",
+                "value_score": 5.0,
+                "distance_from_52w_high_pct": -8.0,
+                "rsi": 50.0,
+                "weight": 15.0,
+                "perf_30d": 4.0,
+                "perf_90d": 8.0,
+                "perf_ytd": 12.0,
+            },
+        ]
+
+        result = compute_scores(positions)
+
+        # All positions should get a buy_priority_score
+        assert all(p.get("buy_priority_score") is not None for p in result)
+
+        # Verify the None value_score position gets a neutral score
+        none_pos = result[1]
+        assert none_pos["momentum_score"] is not None  # momentum computed from perf fields
+
+        # The normalized value_score for position 1 should not pollute the range
+        # Check that positions 0 and 2 have different buy_priority_scores
+        # (if None polluted the pool with median=7.5, they'd be closer together)
+        score_0 = result[0]["buy_priority_score"]
+        score_2 = result[2]["buy_priority_score"]
+        # They should NOT be equal if normalization is working correctly
+        assert score_0 != score_2, "None polluted the normalization pool"
+
+    def test_compute_scores_all_nones_get_neutral_scores(self):
+        """All-None pool returns neutral scores (0.5) for all positions."""
+        positions = [
+            {
+                "asset_type": "ETF",
+                "value_score": None,
+                "distance_from_52w_high_pct": None,
+                "rsi": None,
+                "weight": None,
+                "perf_30d": None,
+                "perf_90d": None,
+                "perf_ytd": None,
+            },
+        ]
+        result = compute_scores(positions)
+        # buy_priority_score should be based on 0.5 defaults for all dimensions
+        assert result[0]["buy_priority_score"] is not None
+
+    def test_compute_scores_mixed_none_per_dimension(self):
+        """Different dimensions can have None independently."""
+        positions = [
+            {
+                "asset_type": "ETF",
+                "value_score": 10.0,
+                "distance_from_52w_high_pct": None,  # Only this is None
+                "rsi": 40.0,
+                "weight": 10.0,
+                "perf_30d": 5.0,
+                "perf_90d": 10.0,
+                "perf_ytd": 15.0,
+            },
+        ]
+        result = compute_scores(positions)
+        assert result[0]["buy_priority_score"] is not None

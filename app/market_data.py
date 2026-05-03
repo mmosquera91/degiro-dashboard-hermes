@@ -1034,7 +1034,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
         )
         if not yf_symbol:
             logger.debug("No yfinance symbol resolved for %s (ISIN: %s) — skipping enrichment", symbol, isin)
-            position["enrichment_error"] = f"Symbol resolution failed: {symbol}"
+            position["_enrichment_error"] = f"Symbol resolution failed: {symbol}"
             return position
 
     # Step 3: Check price cache for current price
@@ -1268,30 +1268,28 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     ((position["current_price"] - float(wk52_high)) / float(wk52_high)) * 100, 2
                 )
 
+    except YFTickerMissingError as e:
+        with _resolution_cache_lock:
+            _resolution_cache.pop(cache_key, None)
+        _save_symbol_cache()
+        position["_enrichment_error"] = "yfinance_error"
+        logger.error("yfinance ticker not found for %s (%s)", symbol, yf_symbol)
+
+    except YFRateLimitError as e:
+        position["_enrichment_error"] = "rate_limited"
+        logger.warning("Rate limited enriching %s", symbol)
+
+    except (KeyError, ValueError, TypeError) as e:
+        position["_enrichment_error"] = "data_error"
+        logger.error("Data parsing error enriching %s: %s", symbol, str(e))
+
+    except ConnectionError as e:
+        position["_enrichment_error"] = "network_error"
+        logger.error("Network error enriching %s: %s", symbol, str(e))
+
     except Exception as e:
-        err_str = str(e)
-        if "429" in err_str or "Too Many Requests" in err_str or "Expecting value: line 1 column 1" in err_str:
-            position["_enrichment_error"] = "rate_limited"
-            logger.warning(
-                "Rate limited enriching %s — position marked as rate_limited",
-                symbol
-            )
-        else:
-            # Check for 404 — evict resolution cache entry
-            if "404" in err_str or "Not Found" in err_str or "not found" in err_str.lower():
-                with _resolution_cache_lock:
-                    _resolution_cache.pop(cache_key, None)
-                _save_symbol_cache()
-                logger.warning(
-                    "yfinance 404 for %s (%s) — evicted resolution cache",
-                    symbol, yf_symbol,
-                )
-            position["_enrichment_error"] = "yfinance_error"
-            logger.warning(
-                "yfinance enrichment failed for %s (%s): %s",
-                symbol, yf_symbol, str(e)
-            )
-        return position
+        position["_enrichment_error"] = "unknown_error"
+        logger.error("Unexpected error enriching %s: %s", symbol, str(e))
 
     return position
 

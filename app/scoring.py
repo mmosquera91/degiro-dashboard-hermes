@@ -85,28 +85,66 @@ def compute_scores(positions: list[dict]) -> list[dict]:
         if not pool:
             continue
 
-        # Extract raw values for normalization
-        value_scores = [p.get("value_score", 0) or 0 for p in pool]
-        distances = [p.get("distance_from_52w_high_pct", 0) or 0 for p in pool]
-        rsi_values = [p.get("rsi", 50) or 50 for p in pool]
-        weights = [p.get("weight", 1) or 1 for p in pool]
+        # Extract values and track which positions have None per dimension
+        # For each dimension: extract non-None values, normalize only the non-None pool,
+        # then assign 0.5 (neutral) to positions with None
+        n = len(pool)
 
-        # Normalize each component to [0, 1]
-        norm_value = _min_max_normalize(value_scores)
-        # Distance from 52w high is negative when below high — more negative = more opportunity
-        # We want higher score for more negative distance, so negate before normalizing
-        norm_distance = _min_max_normalize([-d for d in distances])
-        # RSI inverse: lower RSI = higher score (oversold = opportunity)
-        norm_rsi_inv = _min_max_normalize([100 - r for r in rsi_values])
-        # Portfolio weight inverse: lower weight = higher score (diversification)
-        norm_weight_inv = _min_max_normalize([-w for w in weights])
+        # value_score
+        value_scores = [p.get("value_score") for p in pool]
+        value_none_mask = [v is None for v in value_scores]
+        value_clean = [v for v in value_scores if v is not None]
+        norm_value = _min_max_normalize(value_clean) if value_clean else [0.5]
+        # Reconstruct full-length with 0.5 for None positions
+        norm_value_full = []
+        ni = 0
+        for has_none in value_none_mask:
+            norm_value_full.append(0.5 if has_none else norm_value[ni])
+            if not has_none:
+                ni += 1
+
+        # distance_from_52w_high_pct
+        distances = [p.get("distance_from_52w_high_pct") for p in pool]
+        dist_none_mask = [d is None for d in distances]
+        dist_clean = [d for d in distances if d is not None]
+        norm_distance = _min_max_normalize([-d for d in dist_clean]) if dist_clean else [0.5]
+        norm_distance_full = []
+        ni = 0
+        for has_none in dist_none_mask:
+            norm_distance_full.append(0.5 if has_none else norm_distance[ni])
+            if not has_none:
+                ni += 1
+
+        # rsi
+        rsi_values = [p.get("rsi") for p in pool]
+        rsi_none_mask = [r is None for r in rsi_values]
+        rsi_clean = [r for r in rsi_values if r is not None]
+        norm_rsi_inv = _min_max_normalize([100 - r for r in rsi_clean]) if rsi_clean else [0.5]
+        norm_rsi_full = []
+        ni = 0
+        for has_none in rsi_none_mask:
+            norm_rsi_full.append(0.5 if has_none else norm_rsi_inv[ni])
+            if not has_none:
+                ni += 1
+
+        # weight
+        weights = [p.get("weight") for p in pool]
+        weight_none_mask = [w is None for w in weights]
+        weight_clean = [w for w in weights if w is not None]
+        norm_weight_inv = _min_max_normalize([-w for w in weight_clean]) if weight_clean else [0.5]
+        norm_weight_full = []
+        ni = 0
+        for has_none in weight_none_mask:
+            norm_weight_full.append(0.5 if has_none else norm_weight_inv[ni])
+            if not has_none:
+                ni += 1
 
         for i, pos in enumerate(pool):
             buy_score = (
-                0.35 * norm_value[i]
-                + 0.35 * norm_distance[i]
-                + 0.20 * norm_rsi_inv[i]
-                + 0.10 * norm_weight_inv[i]
+                0.35 * norm_value_full[i]
+                + 0.35 * norm_distance_full[i]
+                + 0.20 * norm_rsi_full[i]
+                + 0.10 * norm_weight_full[i]
             )
             pos["buy_priority_score"] = round(buy_score, 2)
 
