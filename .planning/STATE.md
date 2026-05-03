@@ -83,6 +83,7 @@ progress:
 | 260429-oyv | daily_change_pct from snapshot delta + benchmark chart restyle | 2026-04-29 | 0aefb4f | [260429-oyv](./quick/260429-oyv-260429-daily-change-and-benchmark-style/) |
 | 260430-benchmark-nan-fix | Fix NaN/inf in /api/benchmark route and snapshot writes | 2026-04-30 | — | |
 | 260430-toast-dismiss-fix | Fix progress toast leaking on 409/catch/timeout paths in handleUpdatePrices | 2026-04-30 | — | |
+| 260503-fix-test-mocks | Fix 2 pre-existing mock chain failures in test_market_data.py | 2026-05-03 | f096a7c | [260503-fix-test-mocks](./quick/260503-fix-test-mocks/) |
 
 - **fix symbol vwdId fallback to yfinance (2026-04-26):** Removed `vwdId` and `vwd_id` from symbol fallback chain in `fetch_portfolio()`. vwdId is a Van der Moolen internal numeric ID (e.g. "72095021"), not a market ticker — using it as a yfinance symbol fallback caused symbol_cache.json poisoning and wasted 10 yfinance HTTP calls per leveraged product/turbo/warrant per enrichment run. `enrich_position()` already handles empty symbol with early return + warning log. `app/degiro_client.py` line 697.
 - **fix _yf_rate_limited race condition (2026-04-24):** Added `_yf_rate_limited_until` with 60s cooldown. `enrich_positions()` now conditionally resets flag only after cooldown expires. `_resolve_yf_symbol()` sets 60s cooldown on 429 detection and checks expiry before skipping. Prevents premature retry after rate limit hit. Commit: 68279c0
