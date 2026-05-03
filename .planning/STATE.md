@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Dashboard & Persistence Fix
+milestone: v1.2
+milestone_name: Hardening Sprint
 status: complete
 last_updated: "2026-05-02T23:23:16.837Z"
 progress:
@@ -22,7 +22,7 @@ progress:
 
 **Current Focus:** Phase --phase — 08
 
-## Milestone v1.1 Goals
+## Milestone v1.2 Goals
 
 - Persist portfolio snapshots to disk for container restart survival
 - Fix blank per-stock metrics in dashboard (RSI, Weight, Momentum, Buy Priority show "-")
@@ -108,4 +108,4 @@ progress:
 
 ---
 
-*Last updated: 2026-04-30 — v1.1 complete*
+*Last updated: 2026-05-03 — v1.2*
