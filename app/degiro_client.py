@@ -793,7 +793,7 @@ class DeGiroClient:
                     # plBase comes as {"EUR": -29.98} in newer DeGiro format
                     pl_base = pos.get("plBase", pos.get("pl", pos.get("unrealizedPl", 0)))
                     if isinstance(pl_base, dict):
-                        unrealized_pl = float(pl_base.get("EUR", list(pl_base.values())[0] if pl_base else 0))
+                        unrealized_pl = float(pl_base.get("EUR") or (list(pl_base.values())[0] if pl_base else 0))
                     else:
                         unrealized_pl = float(pl_base or 0)
 
