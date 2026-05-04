@@ -178,3 +178,30 @@ class TestSessionTokenRoute:
         response = client.get("/api/session-token", follow_redirects=False)
         assert response.status_code == 303
         assert "/login" in response.headers["location"]
+
+
+class TestApiLogoutRoute:
+    """ROUTES-08: POST /api/logout."""
+
+    def test_logout_clears_session_and_returns_logged_out(self, client, with_auth_env):
+        """ROUTES-08: Valid Bearer token clears session and returns {"status": "logged_out"}."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        response = client.post(
+            "/api/logout",
+            headers={"Authorization": "Bearer test-bearer-token-12345"},
+            cookies={"brokr_session": token},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "logged_out"}
+
+
+class TestApiPortfolioRoute:
+    """ROUTES-12: GET /api/portfolio auth behavior."""
+
+    def test_without_bearer_token_returns_401(self, client, with_auth_env):
+        """ROUTES-12: No Authorization header returns 401 (verify_brok_token rejects)."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        response = client.get("/api/portfolio", cookies={"brokr_session": token})
+        assert response.status_code == 401
