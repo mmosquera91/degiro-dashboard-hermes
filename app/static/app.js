@@ -26,14 +26,28 @@
   }
 
   // ─── Auth ───
-  const AUTH_TOKEN = "dev-secret-change-in-production";
-  const authHeaders = { "Authorization": `Bearer ${AUTH_TOKEN}` };
+  let _authToken = null;
 
-  // ─── API Helper ───
+  async function _ensureAuthToken() {
+    if (_authToken !== null) return;
+    try {
+      const res = await fetch("/api/session-token", {
+        headers: { "Authorization": `Bearer ${_authToken || ""}` },
+        credentials: "same-origin",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        _authToken = data.token;
+      }
+    } catch (_) {}
+  }
+
   async function apiFetch(url, options = {}) {
+    await _ensureAuthToken();
     return fetch(url, {
       ...options,
-      headers: { ...authHeaders, ...(options.headers || {}) },
+      headers: { "Authorization": `Bearer ${_authToken}`, ...(options.headers || {}) },
+      credentials: "same-origin",
     });
   }
 
@@ -72,20 +86,27 @@
   });
 
   function bindEvents() {
-    elBtnRefresh.addEventListener("click", () => { _lastTableHash = null; openModal(); });
-    elBtnUpdatePrices.addEventListener("click", handleUpdatePrices);
-    elBtnEmptyConnect.addEventListener("click", openModal);
-    elBtnExport.addEventListener("click", exportHermesContext);
-    elBtnPrivacy.addEventListener("click", togglePrivacyMode);
-    $("#modal-close").addEventListener("click", closeModal);
-    elEnrichmentClose.addEventListener("click", closeEnrichmentModal);
-    elCredModal.addEventListener("click", (e) => {
-      if (e.target === elCredModal) closeModal();
-    });
+    if (!elBtnRefresh && !elBtnUpdatePrices && !elBtnEmptyConnect && !elBtnExport && !elBtnPrivacy) {
+      return; // No elements found, skip binding
+    }
+    if (elBtnRefresh) elBtnRefresh.addEventListener("click", () => { _lastTableHash = null; openModal(); });
+    if (elBtnUpdatePrices) elBtnUpdatePrices.addEventListener("click", handleUpdatePrices);
+    if (elBtnEmptyConnect) elBtnEmptyConnect.addEventListener("click", openModal);
+    if (elBtnExport) elBtnExport.addEventListener("click", exportHermesContext);
+    if (elBtnPrivacy) elBtnPrivacy.addEventListener("click", togglePrivacyMode);
+    const modalClose = $("#modal-close");
+    if (modalClose) modalClose.addEventListener("click", closeModal);
+    if (elEnrichmentClose) elEnrichmentClose.addEventListener("click", closeEnrichmentModal);
+    if (elCredModal) {
+      elCredModal.addEventListener("click", (e) => {
+        if (e.target === elCredModal) closeModal();
+      });
+    }
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeModal();
     });
-    $("#session-form").addEventListener("submit", handleSession);
+    const sessionForm = $("#session-form");
+    if (sessionForm) sessionForm.addEventListener("submit", handleSession);
 
     // Filter tabs
     $$(".filter-tab").forEach((btn) => {
@@ -112,14 +133,17 @@
     });
 
     // Snapshot manager lazy-load
-    document.getElementById("snapshot-manager")
-      .addEventListener("toggle", e => {
+    const snapshotMgr = document.getElementById("snapshot-manager");
+    if (snapshotMgr) {
+      snapshotMgr.addEventListener("toggle", e => {
         if (e.target.open) renderSnapshotManager();
       });
+    }
 
     // Manual snapshot save button
-    document.getElementById("btn-save-snapshot")
-      .addEventListener("click", async () => {
+    const btnSaveSnapshot = document.getElementById("btn-save-snapshot");
+    if (btnSaveSnapshot) {
+      btnSaveSnapshot.addEventListener("click", async () => {
         const btn = document.getElementById("btn-save-snapshot");
         btn.disabled = true;
         btn.querySelector(".btn-label").textContent = "Saving...";
@@ -136,30 +160,36 @@
           btn.querySelector(".btn-label").textContent = "Save Snapshot Now";
         }
       });
+    }
   }
 
   // ─── Modal ───
   function openModal() {
-    elCredModal.classList.remove("hidden");
-    elCredError.classList.add("hidden");
-    $("#session-error").classList.add("hidden");
-    $("#session-form").reset();
-    $("#session-id").focus();
+    if (elCredModal) elCredModal.classList.remove("hidden");
+    if (elCredError) elCredError.classList.add("hidden");
+    const sessionError = $("#session-error");
+    if (sessionError) sessionError.classList.add("hidden");
+    const sessionForm = $("#session-form");
+    if (sessionForm) sessionForm.reset();
+    const sessionIdInput = $("#session-id");
+    if (sessionIdInput) sessionIdInput.focus();
   }
 
   function closeModal() {
-    elCredModal.classList.add("hidden");
+    if (elCredModal) elCredModal.classList.add("hidden");
   }
 
   // ─── Privacy Mode ───
   function togglePrivacyMode() {
     privacyMode = !privacyMode;
     document.body.classList.toggle("privacy-mode", privacyMode);
-    elBtnPrivacy.classList.toggle("active", privacyMode);
-    const icon = elBtnPrivacy.querySelector("i");
-    if (icon) {
-      icon.setAttribute("data-lucide", privacyMode ? "eye-off" : "eye");
-      lucide.createIcons({ nodes: [elBtnPrivacy] });
+    if (elBtnPrivacy) {
+      elBtnPrivacy.classList.toggle("active", privacyMode);
+      const icon = elBtnPrivacy.querySelector("i");
+      if (icon) {
+        icon.setAttribute("data-lucide", privacyMode ? "eye-off" : "eye");
+        lucide.createIcons({ nodes: [elBtnPrivacy] });
+      }
     }
   }
 
@@ -176,10 +206,10 @@
     const spin = $("#session-connect-spinner");
     const err = $("#session-error");
 
-    btn.disabled = true;
-    txt.classList.add("hidden");
-    spin.classList.remove("hidden");
-    err.classList.add("hidden");
+    if (btn) btn.disabled = true;
+    if (txt) txt.classList.add("hidden");
+    if (spin) spin.classList.remove("hidden");
+    if (err) err.classList.add("hidden");
 
     try {
       const res = await apiFetch("/api/session", {
@@ -196,12 +226,13 @@
       closeModal();
       await loadPortfolioRaw();
     } catch (err) {
-      $("#session-error").textContent = err.message;
-      $("#session-error").classList.remove("hidden");
+      const errEl = $("#session-error");
+      if (errEl) errEl.textContent = err.message;
+      if (errEl) errEl.classList.remove("hidden");
     } finally {
-      btn.disabled = false;
-      txt.classList.remove("hidden");
-      spin.classList.add("hidden");
+      if (btn) btn.disabled = false;
+      if (txt) txt.classList.remove("hidden");
+      if (spin) spin.classList.add("hidden");
     }
   }
 
@@ -403,6 +434,7 @@
   }
 
   function showLoading(on) {
+    if (!elLoadingOverlay) return;
     if (on) {
       elLoadingOverlay.classList.remove("hidden");
     } else {
@@ -411,16 +443,18 @@
   }
 
   function showEnrichmentModal(msg) {
-    elEnrichmentStatus.textContent = msg;
-    elEnrichmentModalContent.classList.remove("hidden");
-    elEnrichmentError.classList.add("hidden");
+    if (!elEnrichmentModal) return;
+    if (elEnrichmentStatus) elEnrichmentStatus.textContent = msg;
+    if (elEnrichmentModalContent) elEnrichmentModalContent.classList.remove("hidden");
+    if (elEnrichmentError) elEnrichmentError.classList.add("hidden");
     elEnrichmentModal.classList.remove("hidden");
   }
 
   function closeEnrichmentModal() {
+    if (!elEnrichmentModal) return;
     elEnrichmentModal.classList.add("hidden");
-    elEnrichmentModalContent.classList.remove("hidden");
-    elEnrichmentError.classList.add("hidden");
+    if (elEnrichmentModalContent) elEnrichmentModalContent.classList.remove("hidden");
+    if (elEnrichmentError) elEnrichmentError.classList.add("hidden");
   }
 
   function showEnriching(on) {
@@ -685,7 +719,7 @@
 
     elEmptyState.classList.add("hidden");
     elDashboard.classList.remove("hidden");
-    elBtnExport.style.display = "";
+    if (elBtnExport) elBtnExport.style.display = "";
 
     // Last refresh
     const dt = new Date(portfolioData.date);

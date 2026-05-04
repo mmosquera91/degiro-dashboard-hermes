@@ -4,6 +4,13 @@
 
 | Date | Task | Status |
 |------|------|--------|
+| 2026-05-04 | 260504-cookie-secure-flags | complete |
+| 2026-05-04 | 260504-add-sri-hashes-cdn | complete |
+| 2026-05-04 | 260504-fix-xss-login | complete |
+| 2026-05-04 | 260504-remove-hardcoded-auth-token | complete |
+| 2026-05-04 | 260504-fix-null-classlist-error | complete |
+| 2026-05-04 | 260504-timing-leak-fix | complete |
+| 2026-05-04 | 260504-rate-limit-auth | complete |
 | 2026-04-29 | 260429-cleanup-dead-delta-only | complete |
 | 2026-04-29 | 260429-rollback-alloc-bar | complete |
 | 2026-04-29 | 260429-allocation-bar-css-fix | complete |
