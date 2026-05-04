@@ -9,6 +9,36 @@ from unittest.mock import patch, MagicMock
 from degiro_client import _kv_list_to_dict, DeGiroClient
 
 
+class TestDeGiroClientFromSessionId:
+    """DEGIRO-02, DEGIRO-03: from_session_id behavior."""
+
+    def test_from_session_id_returns_trading_api(self):
+        """DEGIRO-02: Valid session_id returns TradingAPI instance."""
+        with patch("app.degiro_client.DeGiroClient._fetch_int_account"):
+            result = DeGiroClient.from_session_id("valid-session-123")
+        assert result is not None
+        assert hasattr(result, "connection_storage")
+        assert hasattr(result, "credentials")
+        # Verify session_id was set
+        assert result.connection_storage.session_id == "valid-session-123"
+
+    def test_from_session_id_with_int_account(self):
+        """DEGIRO-02: Valid session_id + int_account sets int_account on credentials."""
+        with patch("app.degiro_client.DeGiroClient._fetch_int_account"):
+            result = DeGiroClient.from_session_id("valid-session-456", int_account=789)
+        assert result.credentials.int_account == 789
+
+    def test_from_session_id_empty_string_raises(self):
+        """DEGIRO-03: Empty session_id raises ConnectionError."""
+        with pytest.raises(ConnectionError, match="Session ID is required"):
+            DeGiroClient.from_session_id("")
+
+    def test_from_session_id_none_raises(self):
+        """DEGIRO-03: None session_id raises ConnectionError."""
+        with pytest.raises(ConnectionError, match="Session ID is required"):
+            DeGiroClient.from_session_id(None)
+
+
 class TestKvListToDict:
     def test_kv_list_to_dict(self):
         """Converts DeGiro key-value list to flat dict."""
