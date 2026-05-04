@@ -7,8 +7,8 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
 ## Phases
 
 - [x] **Phase 11: Auth Infrastructure Tests** - conftest.py, auth.py unit tests, rate_limiter.py unit tests, middleware tests (completed 2026-05-04)
-- [ ] **Phase 12: API Route Tests** - login/logout, session-token bootstrap, error responses, auth endpoints
-- [ ] **Phase 13: DeGiro Client Tests** - mocked client tests, portfolio parsing edge cases
+- [x] **Phase 12: API Route Tests** - login/logout, session-token bootstrap, error responses, auth endpoints (completed 2026-05-04)
+- [x] **Phase 13: DeGiro Client Tests** - mocked client tests, portfolio parsing edge cases (completed 2026-05-04)
 - [ ] **Phase 14: Integration Tests** - end-to-end flows, cookie validation chain, unauthorized redirect chain
 
 ## Phase Details
@@ -79,8 +79,8 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 11. Auth Infrastructure Tests | 3/3 | Complete    | 2026-05-04 |
-| 12. API Route Tests | 0/? | Not started | - |
-| 13. DeGiro Client Tests | 0/? | Not started | - |
+| 12. API Route Tests | 5/5 | Complete    | 2026-05-04 |
+| 13. DeGiro Client Tests | 2/2 | Complete   | 2026-05-04 |
 | 14. Integration Tests | 0/? | Not started | - |
 
 ---
