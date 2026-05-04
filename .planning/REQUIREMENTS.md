@@ -1,103 +1,126 @@
-# Requirements: Brokr
+# Requirements: Brokr v1.3 Test Coverage Sprint
 
-**Defined:** 2026-04-24
-**Core Value:** Reliable portfolio health visibility — seeing risk and performance signals at a glance.
+**Defined:** 2026-05-04
+**Core Value:** Reliable portfolio health visibility — seeing risk and performance signals at a glance so you can make informed decisions without manually crunching numbers.
 
-## v1.1 Requirements
+## v1 Requirements
 
-Requirements for v1.1 milestone — Dashboard Fix & Persistence.
+### Auth & Middleware
 
-### Data Enrichment & Scoring
+- [ ] **AUTH-01**: auth.py `_make_token` creates HMAC-SHA256 signed token with expiry
+- [ ] **AUTH-02**: auth.py `_verify_token` validates expiry and signature with timing-safe comparison
+- [ ] **AUTH-03**: auth.py `make_session_cookie` returns token + cookie kwargs (Secure, HttpOnly, SameSite=Lax)
+- [ ] **AUTH-04**: auth.py `verify_session_cookie` returns True for valid token, False for invalid/expired
+- [ ] **AUTH-05**: auth.py `clear_session_cookie` returns correct delete_cookie kwargs
+- [ ] **AUTH-06**: rate_limiter.py `check_rate_limit` allows up to MAX_ATTEMPTS (5) in WINDOW_SECONDS (60s)
+- [ ] **AUTH-07**: rate_limiter.py `check_rate_limit` raises HTTPException 429 after limit exceeded
+- [ ] **AUTH-08**: rate_limiter.py `_clean_old_timestamps` removes timestamps outside the window
+- [ ] **AUTH-09**: main.py middleware `check_session_cookie` redirects unauthenticated requests to /login
+- [ ] **AUTH-10**: main.py middleware `check_session_cookie` passes valid session cookie through
+- [ ] **AUTH-11**: main.py `verify_brok_token` validates Bearer token, returns 401 on mismatch
 
-- [ ] **ENR-01**: yfinance enrichment failures are logged with `_enrichment_error` field per position (not silent WARNING only)
-- [ ] **ENR-02**: Positions with enrichment failures display "No data" instead of "-" in dashboard
-- [ ] **ENR-03**: Scoring normalization excludes positions with None values (not converted to 0 before normalization)
+### API Routes
 
-### Snapshot Persistence
+- [ ] **ROUTES-01**: POST /login with correct password sets brokr_session cookie and redirects to /
+- [ ] **ROUTES-02**: POST /login with wrong password redirects to /login?failedattempt=yes
+- [ ] **ROUTES-03**: POST /api/auth with valid credentials returns {"status": "authenticated"}
+- [ ] **ROUTES-04**: POST /api/auth with ConnectionError returns 401
+- [ ] **ROUTES-05**: POST /api/auth with generic error returns 500
+- [ ] **ROUTES-06**: POST /api/session with valid session_id returns {"status": "authenticated"}
+- [ ] **ROUTES-07**: POST /api/session with ConnectionError returns 401
+- [ ] **ROUTES-08**: POST /api/logout clears session and returns {"status": "logged_out"}
+- [ ] **ROUTES-09**: GET /api/session-token returns BROKR_AUTH_TOKEN (bootstrap endpoint)
+- [ ] **ROUTES-10**: GET /api/session-token without session cookie returns redirect to /login (middleware)
+- [ ] **ROUTES-11**: GET /health returns {"status": "ok"} without auth
+- [ ] **ROUTES-12**: GET /api/portfolio without auth token returns 401
 
-- [x] **SNAP-01**: `save_snapshot()` accepts full `portfolio_data` dict (positions, sector_breakdown, allocation)
-- [x] **SNAP-02**: `load_latest_snapshot()` reads and returns the most recent snapshot with portfolio data
-- [x] **SNAP-03**: Snapshot writes use atomic rename (write to temp, then rename) to prevent corruption on crash
-- [x] **SNAP-04**: `docker-compose.yml` has `./snapshots:/data/snapshots` volume mount so snapshots survive container restarts (implemented: named volume `brokr_snapshots` in docker-compose.yml — satisfies DOCK-02 preference for named over bind mount)
+### DeGiro Client (Mocked)
 
-### Startup Restoration
+- [ ] **DEGIRO-01**: DeGiroClient `_kv_list_to_dict` converts list of {"key","value"} dicts to flat dict
+- [ ] **DEGIRO-02**: DeGiroClient `from_session_id` accepts session_id + optional int_account, returns TradingAPI
+- [ ] **DEGIRO-03**: DeGiroClient `from_session_id` raises ConnectionError on invalid session
+- [ ] **DEGIRO-04**: DeGiroClient `fetch_portfolio` returns dict with positions and cash_available
+- [ ] **DEGIRO-05**: DeGiroClient `fetch_portfolio` raises ConnectionError on session expired (2FA required, anti-bot)
+- [ ] **DEGIRO-06**: Portfolio parsing handles empty positions list
+- [ ] **DEGIRO-07**: Portfolio parsing handles missing optional fields gracefully
 
-- [x] **REST-01**: `@app.on_event("startup")` calls `load_latest_snapshot()` and restores portfolio into `_session["portfolio"]`
-- [x] **REST-02**: Dashboard serves last-known portfolio immediately after restart (no DeGiro session required)
-- [x] **REST-03**: Session TTL check does not block serving fresh cached portfolio (401 only when both session expired AND no cached portfolio)
+### Integration
 
-### Dashboard Visualization
-
-- [ ] **DASH-01**: Sector breakdown doughnut chart renders correctly from `portfolio["sector_breakdown"]`
-- [ ] **DASH-02**: Benchmark comparison line chart renders from `/api/benchmark` data (needs 2+ snapshots)
-- [ ] **DASH-03**: Per-stock RSI displays correctly (not "-") when yfinance enrichment succeeds
-- [ ] **DASH-04**: Per-stock Weight, Momentum Score, Buy Priority Score display correctly (not "-") when scoring completes
-- [ ] **DASH-05**: Charts show "No data available" message when data is unavailable (not blank/empty)
-
-### Docker Configuration
-
-- [x] **DOCK-01**: `docker-compose.yml` includes named volume or bind mount for `/data/snapshots`
-- [x] **DOCK-02**: Snapshot directory survives `docker-compose down -v` (named volume preferred over anonymous)
+- [ ] **INTEG-01**: login flow → session-token → protected endpoint works end-to-end with cookie
+- [ ] **INTEG-02**: Cookie validation chain: middleware checks cookie → verify_brok_token checks Bearer
+- [ ] **INTEG-03**: Unauthorized request to /api/* redirects to /login then returns 303
+- [ ] **INTEG-04**: Expired cookie is cleared and redirect to /login occurs
 
 ## v2 Requirements
 
-Deferred to future release.
+Deferred. Tracked but not in current roadmap.
 
-### Session Management
+### API Routes (Extended)
 
-- **AUTH-01**: DeGiro session auto-reauth when expiry detected (no manual re-auth required)
-- **AUTH-02**: Dynamic FX rate refresh on-demand (not cached stale)
+- **ROUTES-13**: GET /api/portfolio serves cached portfolio when session expired but cache exists
+- **ROUTES-14**: POST /api/refresh-prices runs enrichment in background thread, returns immediately
+- **ROUTES-15**: GET /api/benchmark returns cached series within TTL, fresh fetch outside TTL
 
-### Historical Analysis
+### Error Handling
 
-- **HIST-01**: Historical portfolio snapshots viewer (trend analysis)
-- **HIST-02**: Export performance history to CSV/JSON
-
-### Benchmark & Attribution
-
-- **BENC-01**: Store benchmark series to disk to survive restarts
-- **BENC-02**: Attribution dashboard with per-position contribution
+- **ERROR-01**: Rate limiter blocks IP after MAX_ATTEMPTS, unblocks after WINDOW_SECONDS
+- **ERROR-02**: Operation lock returns 409 when enrichment already running
+- **ERROR-03**: Benchmark cache invalidation on snapshot deletion
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Multi-user / multi-account support | Single user for now |
-| Real-time price streaming | yfinance polling sufficient |
-| Database / persistent storage | JSON snapshots sufficient for single-user |
-| Mobile app | Web-only, responsive sufficient |
-| Hermes-side AI logic | Brokr only provides portfolio data |
-| Brokerage trading | Read-only analytics |
-| Additional broker integrations | DeGiro only |
-| SQLite/Redis for session storage | Over-engineering for single-user |
+| Tests against real DeGiro API | Flaky, rate-limited, requires live credentials |
+| Frontend JS tests | Backend coverage sprint only |
+| TestClient lifespan startup (full) | Startup side effects (asyncio loops, file writes) make tests hang; override lifespan in tests |
+| Performance/load testing | Out of scope for unit test sprint |
+| Database integration tests | No database — in-memory only |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENR-01 | Phase 9 | Pending |
-| ENR-02 | Phase 9 | Pending |
-| ENR-03 | Phase 9 | Pending |
-| SNAP-01 | Phase 7 | Complete |
-| SNAP-02 | Phase 7 | Complete |
-| SNAP-03 | Phase 7 | Complete |
-| SNAP-04 | Phase 7 | Complete |
-| REST-01 | Phase 8 | Complete |
-| REST-02 | Phase 8 | Complete |
-| REST-03 | Phase 8 | Complete |
-| DASH-01 | Phase 10 | Pending |
-| DASH-02 | Phase 10 | Pending |
-| DASH-03 | Phase 10 | Pending |
-| DASH-04 | Phase 10 | Pending |
-| DASH-05 | Phase 10 | Pending |
-| DOCK-01 | Phase 7 | Complete |
-| DOCK-02 | Phase 7 | Complete |
+| AUTH-01 | Phase 1 | Pending |
+| AUTH-02 | Phase 1 | Pending |
+| AUTH-03 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Pending |
+| AUTH-05 | Phase 1 | Pending |
+| AUTH-06 | Phase 1 | Pending |
+| AUTH-07 | Phase 1 | Pending |
+| AUTH-08 | Phase 1 | Pending |
+| AUTH-09 | Phase 1 | Pending |
+| AUTH-10 | Phase 1 | Pending |
+| AUTH-11 | Phase 1 | Pending |
+| ROUTES-01 | Phase 2 | Pending |
+| ROUTES-02 | Phase 2 | Pending |
+| ROUTES-03 | Phase 2 | Pending |
+| ROUTES-04 | Phase 2 | Pending |
+| ROUTES-05 | Phase 2 | Pending |
+| ROUTES-06 | Phase 2 | Pending |
+| ROUTES-07 | Phase 2 | Pending |
+| ROUTES-08 | Phase 2 | Pending |
+| ROUTES-09 | Phase 2 | Pending |
+| ROUTES-10 | Phase 2 | Pending |
+| ROUTES-11 | Phase 2 | Pending |
+| ROUTES-12 | Phase 2 | Pending |
+| DEGIRO-01 | Phase 3 | Pending |
+| DEGIRO-02 | Phase 3 | Pending |
+| DEGIRO-03 | Phase 3 | Pending |
+| DEGIRO-04 | Phase 3 | Pending |
+| DEGIRO-05 | Phase 3 | Pending |
+| DEGIRO-06 | Phase 3 | Pending |
+| DEGIRO-07 | Phase 3 | Pending |
+| INTEG-01 | Phase 4 | Pending |
+| INTEG-02 | Phase 4 | Pending |
+| INTEG-03 | Phase 4 | Pending |
+| INTEG-04 | Phase 4 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 17 total
-- Mapped to phases: 17
+- v1 requirements: 33 total
+- Mapped to phases: 33
 - Unmapped: 0 ✓
 
 ---
-*Requirements defined: 2026-04-24*
-*Last updated: 2026-04-24 after research synthesis*
+*Requirements defined: 2026-05-04*
+*Last updated: 2026-05-04 after initial definition*
