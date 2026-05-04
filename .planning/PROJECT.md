@@ -81,19 +81,19 @@ Reliable portfolio health visibility — seeing risk and performance signals at 
 | Fix security before features | Credential exposure and no auth unsafe to share | ✓ Good |
 | Async yfinance via thread pool | Event loop was blocking on network I/O | ✓ Good |
 
-## Current Milestone: v1.1 Dashboard & Persistence Fix
+## Current Milestone: v1.3 Test Coverage Sprint
 
-**Goal:** Fix dashboard data visibility and persistent portfolio caching — make per-stock metrics visible, sector/benchmark charts render, and portfolio data survives container restarts.
+**Goal:** Bump backend test coverage from ~30% to ~75-80%, targeting main.py routes, auth middleware, degiro_client, and integration flows.
 
 **Target features:**
-- Persist portfolio snapshots to disk so data survives container restarts
-- Fix blank per-stock metrics in dashboard (RSI, Weight, Momentum, Buy Priority show "-")
-- Fix missing sector breakdown chart
-- Fix missing benchmark comparison chart
+- Auth & Middleware: auth.py cookie signing/comparison, rate_limiter.py logic, main.py middleware
+- API Routes: login/logout, session-token, error responses (401/429/500), edge cases via TestClient
+- DeGiro Client: mocked tests for _kv_list_to_dict, portfolio parsing, error handling (no real API calls)
+- Integration: end-to-end flows with mocked DeGiro
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-24 — v1.1 milestone started*
+*Last updated: 2026-05-04 — v1.3 milestone started*
