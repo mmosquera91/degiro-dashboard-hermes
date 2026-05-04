@@ -21,18 +21,18 @@
 
 ### API Routes
 
-- [ ] **ROUTES-01**: POST /login with correct password sets brokr_session cookie and redirects to /
-- [ ] **ROUTES-02**: POST /login with wrong password redirects to /login?failedattempt=yes
-- [ ] **ROUTES-03**: POST /api/auth with valid credentials returns {"status": "authenticated"}
-- [ ] **ROUTES-04**: POST /api/auth with ConnectionError returns 401
-- [ ] **ROUTES-05**: POST /api/auth with generic error returns 500
-- [ ] **ROUTES-06**: POST /api/session with valid session_id returns {"status": "authenticated"}
-- [ ] **ROUTES-07**: POST /api/session with ConnectionError returns 401
-- [ ] **ROUTES-08**: POST /api/logout clears session and returns {"status": "logged_out"}
-- [ ] **ROUTES-09**: GET /api/session-token returns BROKR_AUTH_TOKEN (bootstrap endpoint)
-- [ ] **ROUTES-10**: GET /api/session-token without session cookie returns redirect to /login (middleware)
-- [ ] **ROUTES-11**: GET /health returns {"status": "ok"} without auth
-- [ ] **ROUTES-12**: GET /api/portfolio without auth token returns 401
+- [x] **ROUTES-01**: POST /login with correct password sets brokr_session cookie and redirects to /
+- [x] **ROUTES-02**: POST /login with wrong password redirects to /login?failedattempt=yes
+- [x] **ROUTES-03**: POST /api/auth with valid credentials returns {"status": "authenticated"}
+- [x] **ROUTES-04**: POST /api/auth with ConnectionError returns 401
+- [x] **ROUTES-05**: POST /api/auth with generic error returns 500
+- [x] **ROUTES-06**: POST /api/session with valid session_id returns {"status": "authenticated"}
+- [x] **ROUTES-07**: POST /api/session with ConnectionError returns 401
+- [x] **ROUTES-08**: POST /api/logout clears session and returns {"status": "logged_out"}
+- [x] **ROUTES-09**: GET /api/session-token returns BROKR_AUTH_TOKEN (bootstrap endpoint)
+- [x] **ROUTES-10**: GET /api/session-token without session cookie returns redirect to /login (middleware)
+- [x] **ROUTES-11**: GET /health returns {"status": "ok"} without auth
+- [x] **ROUTES-12**: GET /api/portfolio without auth token returns 401
 
 ### DeGiro Client (Mocked)
 
@@ -92,18 +92,18 @@ Deferred. Tracked but not in current roadmap.
 | AUTH-09 | Phase 11 | Complete |
 | AUTH-10 | Phase 11 | Complete |
 | AUTH-11 | Phase 11 | Complete |
-| ROUTES-01 | Phase 12 | Pending |
-| ROUTES-02 | Phase 12 | Pending |
-| ROUTES-03 | Phase 12 | Pending |
-| ROUTES-04 | Phase 12 | Pending |
-| ROUTES-05 | Phase 12 | Pending |
-| ROUTES-06 | Phase 12 | Pending |
-| ROUTES-07 | Phase 12 | Pending |
-| ROUTES-08 | Phase 12 | Pending |
-| ROUTES-09 | Phase 12 | Pending |
-| ROUTES-10 | Phase 12 | Pending |
-| ROUTES-11 | Phase 12 | Pending |
-| ROUTES-12 | Phase 12 | Pending |
+| ROUTES-01 | Phase 12 | Complete |
+| ROUTES-02 | Phase 12 | Complete |
+| ROUTES-03 | Phase 12 | Complete |
+| ROUTES-04 | Phase 12 | Complete |
+| ROUTES-05 | Phase 12 | Complete |
+| ROUTES-06 | Phase 12 | Complete |
+| ROUTES-07 | Phase 12 | Complete |
+| ROUTES-08 | Phase 12 | Complete |
+| ROUTES-09 | Phase 12 | Complete |
+| ROUTES-10 | Phase 12 | Complete |
+| ROUTES-11 | Phase 12 | Complete |
+| ROUTES-12 | Phase 12 | Complete |
 | DEGIRO-01 | Phase 13 | Pending |
 | DEGIRO-02 | Phase 13 | Pending |
 | DEGIRO-03 | Phase 13 | Pending |
