@@ -28,7 +28,10 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
   8. check_session_cookie middleware redirects unauthenticated requests to /login
   9. check_session_cookie middleware passes valid session cookies through
   10. verify_brok_token validates Bearer tokens and returns 401 on mismatch
-**Plans**: TBD
+**Plans**: 3 plans
+  - [x] 11-01-PLAN.md - conftest.py and auth.py tests
+  - [x] 11-02-PLAN.md - rate_limiter.py and middleware tests
+  - [x] 11-03-PLAN.md - full middleware chain tests
 
 ### Phase 12: API Route Tests
 **Goal**: All API endpoints respond correctly to valid/invalid requests and error conditions
@@ -47,7 +50,12 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
   10. GET /api/session-token redirects to /login when no session cookie
   11. GET /health returns {"status": "ok"} without requiring auth
   12. GET /api/portfolio returns 401 when no auth token provided
-**Plans**: TBD
+**Plans**: 5 plans
+  - [x] 12-01-PLAN.md - login/logout routes
+  - [x] 12-02-PLAN.md - session-token bootstrap endpoint
+  - [x] 12-03-PLAN.md - auth endpoints (/api/auth, /api/session)
+  - [x] 12-04-PLAN.md - portfolio and health routes
+  - [x] 12-05-PLAN.md - logout and error responses
 
 ### Phase 13: DeGiro Client Tests
 **Goal**: DeGiroClient methods handle edge cases and errors correctly with mocked HTTP
@@ -61,7 +69,9 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
   5. fetch_portfolio raises ConnectionError when session expired (2FA/anti-bot)
   6. Portfolio parsing handles empty positions list without crashing
   7. Portfolio parsing handles missing optional fields gracefully
-**Plans**: TBD
+**Plans**: 2 plans
+  - [x] 13-01-PLAN.md - DeGiroClient core methods
+  - [x] 13-02-PLAN.md - portfolio parsing edge cases
 
 ### Phase 14: Integration Tests
 **Goal**: End-to-end auth flows and cookie validation chain work correctly
@@ -72,7 +82,8 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
   2. Cookie validation chain: middleware checks cookie -> verify_brok_token checks Bearer token
   3. Unauthorized request to /api/* redirects to /login returning 303
   4. Expired cookie is cleared and redirect to /login occurs
-**Plans**: TBD
+**Plans**: 1 plan
+  - [ ] 14-01-PLAN.md - End-to-end integration tests
 
 ## Progress
 
@@ -80,8 +91,8 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
 |-------|----------------|--------|-----------|
 | 11. Auth Infrastructure Tests | 3/3 | Complete    | 2026-05-04 |
 | 12. API Route Tests | 5/5 | Complete    | 2026-05-04 |
-| 13. DeGiro Client Tests | 2/2 | Complete   | 2026-05-04 |
-| 14. Integration Tests | 0/? | Not started | - |
+| 13. DeGiro Client Tests | 2/2 | Complete    | 2026-05-04 |
+| 14. Integration Tests | 0/1 | Not started | - |
 
 ---
 
