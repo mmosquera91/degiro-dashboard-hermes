@@ -1,123 +1,89 @@
-# Roadmap: Brokr
+# Roadmap: Brokr v1.3 Test Coverage Sprint
 
-**Created:** 2026-04-23
-**Project:** Portfolio analytics dashboard for DeGiro
-**Granularity:** Coarse
+## Overview
 
-## Milestones
-
-- ✅ **v1.0 MVP** — Phases 1-6 (shipped 2026-04-24)
-- ⏳ **v1.1 Dashboard & Persistence Fix** — Phases 7-10
+Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API routes, DeGiro client mocking, and integration flows. Start at Phase 11 (continuing from v1.1's last phase 10).
 
 ## Phases
 
-<details>
-<summary>✅ v1.0 MVP (Phases 1-6) — SHIPPED 2026-04-24</summary>
-
-- [x] Phase 1: Security Hardening (2/2 plans) — completed 2026-04-23
-- [x] Phase 2: Performance (2/2 plans) — completed 2026-04-23
-- [x] Phase 3: Health Indicators (2/2 plans) — completed 2026-04-23
-- [x] Phase 4: Benchmark Tracking (5/5 plans) — completed 2026-04-23
-- [x] Phase 5: Dashboard Polish (2/2 plans) — completed 2026-04-24
-- [x] Phase 6: Testing (4/4 plans) — completed 2026-04-24
-
-</details>
-
-### v1.1 Dashboard & Persistence Fix (Phases 7-10)
-
-- [x] **Phase 7: Snapshot Format Extension** — Persist full portfolio data in snapshots with atomic writes (completed 2026-04-24)
-- [x] **Phase 8: Startup Portfolio Restoration** — Restore portfolio on app startup from latest snapshot (completed 2026-04-24; gap closure in progress)
-- [x] **Phase 9: Data Enrichment & Scoring Fixes** — Fix silent yfinance failures and scoring None pollution (completed 2026-04-30)
-- [x] **Phase 10: Frontend Dashboard Verification** — Verify charts render with real data and handle missing data gracefully (completed 2026-04-30)
+- [ ] **Phase 11: Auth Infrastructure Tests** - conftest.py, auth.py unit tests, rate_limiter.py unit tests, middleware tests
+- [ ] **Phase 12: API Route Tests** - login/logout, session-token bootstrap, error responses, auth endpoints
+- [ ] **Phase 13: DeGiro Client Tests** - mocked client tests, portfolio parsing edge cases
+- [ ] **Phase 14: Integration Tests** - end-to-end flows, cookie validation chain, unauthorized redirect chain
 
 ## Phase Details
 
-### Phase 7: Snapshot Format Extension
-**Goal**: Extended snapshot format stores full enriched portfolio data and uses atomic writes for crash safety
-**Depends on**: Nothing (first v1.1 phase)
-**Requirements**: SNAP-01, SNAP-02, SNAP-03, DOCK-01, DOCK-02
+### Phase 11: Auth Infrastructure Tests
+**Goal**: auth.py HMAC signing, rate limiting logic, and session middleware work correctly
+**Depends on**: Nothing (first phase of this milestone)
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05, AUTH-06, AUTH-07, AUTH-08, AUTH-09, AUTH-10, AUTH-11
 **Success Criteria** (what must be TRUE):
-  1. `save_snapshot()` accepts and writes full `portfolio_data` dict including positions, sector_breakdown, and allocation
-  2. `load_latest_snapshot()` reads most recent snapshot and returns portfolio data
-  3. Snapshot writes use atomic rename (temp file + rename) to prevent corruption on crash
-  4. `docker-compose.yml` has named volume or bind mount for `/data/snapshots`
-  5. Snapshot directory survives `docker-compose down -v`
-**Plans**: 3 plans
-Plans:
-- [x] 07-01-PLAN.md — Docker named volume configuration
-- [x] 07-02-PLAN.md — Snapshot module extension (save_snapshot + load_latest_snapshot + atomic writes)
-- [x] 07-03-PLAN.md — Integration into get_portfolio() and test scaffold
-**UI hint**: no
-
-### Phase 8: Startup Portfolio Restoration
-**Goal**: Dashboard serves last-known portfolio immediately after container restart without requiring DeGiro session
-**Depends on**: Phase 7
-**Requirements**: REST-01, REST-02, REST-03
-**Success Criteria** (what must be TRUE):
-  1. `@app.on_event("startup")` loads latest snapshot and restores portfolio into `_session["portfolio"]`
-  2. Dashboard renders with last-known portfolio immediately after restart (no 401 error)
-  3. When session is expired but cached portfolio exists, dashboard serves cached portfolio (no 401)
-  4. Session TTL check does not block serving fresh cached portfolio
-**Plans**: 3 plans
-Plans:
-- [x] 08-01-PLAN.md — Startup portfolio restoration via on_startup event
-- [x] 08-02-PLAN.md — Workspace-relative snapshot dir + WARNING log
-- [x] 08-03-PLAN.md — Directory auto-creation + ERROR log + file existence check
-**UI hint**: no
-
-### Phase 9: Data Enrichment & Scoring Fixes
-**Goal**: Per-stock metrics display actual values when data is available and explicit "No data" when enrichment fails
-**Depends on**: Phase 7 (snapshot must include position data for Phase 10 verification)
-**Requirements**: ENR-01, ENR-02, ENR-03
-**Success Criteria** (what must be TRUE):
-  1. yfinance enrichment failures populate `_enrichment_error` field on position (not silent WARNING)
-  2. Dashboard displays "No data" for positions with enrichment failures (not "-")
-  3. Scoring normalization excludes positions with None values (None positions do not pollute normalization pool)
+  1. auth.py creates HMAC-SHA256 signed tokens with expiry that verify correctly
+  2. auth.py rejects expired tokens and invalid signatures using timing-safe comparison
+  3. auth.py sets Secure, HttpOnly, SameSite=Lax cookie attributes correctly
+  4. auth.py clears session cookies with correct delete_cookie kwargs
+  5. rate_limiter.py allows up to 5 requests per 60 seconds per IP
+  6. rate_limiter.py returns 429 after limit exceeded with correct headers
+  7. rate_limiter.py cleans timestamps outside the sliding window
+  8. check_session_cookie middleware redirects unauthenticated requests to /login
+  9. check_session_cookie middleware passes valid session cookies through
+  10. verify_brok_token validates Bearer tokens and returns 401 on mismatch
 **Plans**: TBD
-**UI hint**: no
 
-### Phase 10: Frontend Dashboard Verification
-**Goal**: Sector and benchmark charts render correctly; per-stock metrics visible when data available
-**Depends on**: Phase 8 (requires portfolio restored in session)
-**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05
+### Phase 12: API Route Tests
+**Goal**: All API endpoints respond correctly to valid/invalid requests and error conditions
+**Depends on**: Phase 11
+**Requirements**: ROUTES-01, ROUTES-02, ROUTES-03, ROUTES-04, ROUTES-05, ROUTES-06, ROUTES-07, ROUTES-08, ROUTES-09, ROUTES-10, ROUTES-11, ROUTES-12
 **Success Criteria** (what must be TRUE):
-  1. Sector breakdown doughnut chart renders from `portfolio["sector_breakdown"]`
-  2. Benchmark comparison line chart renders from `/api/benchmark` data (requires 2+ snapshots)
-  3. Per-stock RSI displays actual value when yfinance enrichment succeeds
-  4. Per-stock Weight, Momentum Score, Buy Priority Score display correctly when scoring completes
-  5. Charts show "No data available" message when data is unavailable (not blank/empty)
+  1. POST /login with correct password sets brokr_session cookie and redirects to /
+  2. POST /login with wrong password redirects to /login?failedattempt=yes
+  3. POST /api/auth returns authenticated status with valid credentials
+  4. POST /api/auth returns 401 on ConnectionError from DeGiro
+  5. POST /api/auth returns 500 on generic errors
+  6. POST /api/session validates session_id and returns authenticated status
+  7. POST /api/session returns 401 on ConnectionError
+  8. POST /api/logout clears session and returns logged_out status
+  9. GET /api/session-token returns BROKR_AUTH_TOKEN when session cookie present
+  10. GET /api/session-token redirects to /login when no session cookie
+  11. GET /health returns {"status": "ok"} without requiring auth
+  12. GET /api/portfolio returns 401 when no auth token provided
 **Plans**: TBD
-**UI hint**: yes
+
+### Phase 13: DeGiro Client Tests
+**Goal**: DeGiroClient methods handle edge cases and errors correctly with mocked HTTP
+**Depends on**: Phase 12
+**Requirements**: DEGIRO-01, DEGIRO-02, DEGIRO-03, DEGIRO-04, DEGIRO-05, DEGIRO-06, DEGIRO-07
+**Success Criteria** (what must be TRUE):
+  1. _kv_list_to_dict converts {"key", "value"} list format to flat dict correctly
+  2. from_session_id accepts session_id + optional int_account and returns TradingAPI
+  3. from_session_id raises ConnectionError on invalid session
+  4. fetch_portfolio returns dict with positions and cash_available
+  5. fetch_portfolio raises ConnectionError when session expired (2FA/anti-bot)
+  6. Portfolio parsing handles empty positions list without crashing
+  7. Portfolio parsing handles missing optional fields gracefully
+**Plans**: TBD
+
+### Phase 14: Integration Tests
+**Goal**: End-to-end auth flows and cookie validation chain work correctly
+**Depends on**: Phase 13
+**Requirements**: INTEG-01, INTEG-02, INTEG-03, INTEG-04
+**Success Criteria** (what must be TRUE):
+  1. login flow -> session-token -> protected endpoint works end-to-end with cookie
+  2. Cookie validation chain: middleware checks cookie -> verify_brok_token checks Bearer token
+  3. Unauthorized request to /api/* redirects to /login returning 303
+  4. Expired cookie is cleared and redirect to /login occurs
+**Plans**: TBD
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 7. Snapshot Format Extension | 3/3 | Complete    | 2026-04-24 |
-| 8. Startup Portfolio Restoration | 2/3 | Gap closure | 2026-04-24 |
-| 9. Data Enrichment & Scoring Fixes | ~80% | Complete — enrichment_error field added; "No data" UI added via quick task | 2026-04-30 |
-| 10. Frontend Dashboard Verification | ~80% | Complete — chart-empty state added for empty benchmark/sector charts | 2026-04-30 |
+| 11. Auth Infrastructure Tests | 0/? | Not started | - |
+| 12. API Route Tests | 0/? | Not started | - |
+| 13. DeGiro Client Tests | 0/? | Not started | - |
+| 14. Integration Tests | 0/? | Not started | - |
 
 ---
 
-*Roadmap created: 2026-04-23*
-*Last updated: 2026-04-30 — v1.1 complete*
-*Gaps remaining: none — all gaps closed*
-
----
-
-## Future Enhancements (v1.2+)
-
-### Multi-day Snapshot History + Portfolio Performance Trends
-- Daily portfolio value indexed to 100 (first snapshot baseline)
-- Rolling 7/30-day vs S&P 500 performance
-- Drawdown heatmap + daily breakdown table
-- New `/api/portfolio-history` endpoint
-
-### Historical Per-Position Attribution Charts
-- Time-series attribution (position × day matrix)
-- Waterfall charts (daily contribution to total return)
-- Top/bottom movers heatmap
-- `/api/position-history` endpoint from snapshot positions
-
-*Estimated: 4 phases, 2 days effort*
+*Roadmap created: 2026-05-04*
+*Granularity: coarse*

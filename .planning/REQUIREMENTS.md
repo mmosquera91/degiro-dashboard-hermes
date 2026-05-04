@@ -81,40 +81,40 @@ Deferred. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| AUTH-04 | Phase 1 | Pending |
-| AUTH-05 | Phase 1 | Pending |
-| AUTH-06 | Phase 1 | Pending |
-| AUTH-07 | Phase 1 | Pending |
-| AUTH-08 | Phase 1 | Pending |
-| AUTH-09 | Phase 1 | Pending |
-| AUTH-10 | Phase 1 | Pending |
-| AUTH-11 | Phase 1 | Pending |
-| ROUTES-01 | Phase 2 | Pending |
-| ROUTES-02 | Phase 2 | Pending |
-| ROUTES-03 | Phase 2 | Pending |
-| ROUTES-04 | Phase 2 | Pending |
-| ROUTES-05 | Phase 2 | Pending |
-| ROUTES-06 | Phase 2 | Pending |
-| ROUTES-07 | Phase 2 | Pending |
-| ROUTES-08 | Phase 2 | Pending |
-| ROUTES-09 | Phase 2 | Pending |
-| ROUTES-10 | Phase 2 | Pending |
-| ROUTES-11 | Phase 2 | Pending |
-| ROUTES-12 | Phase 2 | Pending |
-| DEGIRO-01 | Phase 3 | Pending |
-| DEGIRO-02 | Phase 3 | Pending |
-| DEGIRO-03 | Phase 3 | Pending |
-| DEGIRO-04 | Phase 3 | Pending |
-| DEGIRO-05 | Phase 3 | Pending |
-| DEGIRO-06 | Phase 3 | Pending |
-| DEGIRO-07 | Phase 3 | Pending |
-| INTEG-01 | Phase 4 | Pending |
-| INTEG-02 | Phase 4 | Pending |
-| INTEG-03 | Phase 4 | Pending |
-| INTEG-04 | Phase 4 | Pending |
+| AUTH-01 | Phase 11 | Pending |
+| AUTH-02 | Phase 11 | Pending |
+| AUTH-03 | Phase 11 | Pending |
+| AUTH-04 | Phase 11 | Pending |
+| AUTH-05 | Phase 11 | Pending |
+| AUTH-06 | Phase 11 | Pending |
+| AUTH-07 | Phase 11 | Pending |
+| AUTH-08 | Phase 11 | Pending |
+| AUTH-09 | Phase 11 | Pending |
+| AUTH-10 | Phase 11 | Pending |
+| AUTH-11 | Phase 11 | Pending |
+| ROUTES-01 | Phase 12 | Pending |
+| ROUTES-02 | Phase 12 | Pending |
+| ROUTES-03 | Phase 12 | Pending |
+| ROUTES-04 | Phase 12 | Pending |
+| ROUTES-05 | Phase 12 | Pending |
+| ROUTES-06 | Phase 12 | Pending |
+| ROUTES-07 | Phase 12 | Pending |
+| ROUTES-08 | Phase 12 | Pending |
+| ROUTES-09 | Phase 12 | Pending |
+| ROUTES-10 | Phase 12 | Pending |
+| ROUTES-11 | Phase 12 | Pending |
+| ROUTES-12 | Phase 12 | Pending |
+| DEGIRO-01 | Phase 13 | Pending |
+| DEGIRO-02 | Phase 13 | Pending |
+| DEGIRO-03 | Phase 13 | Pending |
+| DEGIRO-04 | Phase 13 | Pending |
+| DEGIRO-05 | Phase 13 | Pending |
+| DEGIRO-06 | Phase 13 | Pending |
+| DEGIRO-07 | Phase 13 | Pending |
+| INTEG-01 | Phase 14 | Pending |
+| INTEG-02 | Phase 14 | Pending |
+| INTEG-03 | Phase 14 | Pending |
+| INTEG-04 | Phase 14 | Pending |
 
 **Coverage:**
 - v1 requirements: 33 total
@@ -123,4 +123,4 @@ Deferred. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-05-04*
-*Last updated: 2026-05-04 after initial definition*
+*Last updated: 2026-05-04 after roadmap creation (phase numbers 11-14)*
