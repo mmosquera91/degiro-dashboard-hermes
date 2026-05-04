@@ -53,3 +53,21 @@ class TestHealthRoute:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
+
+
+class TestSessionTokenRoute:
+    """ROUTES-09, ROUTES-10: GET /api/session-token behavior."""
+
+    def test_with_valid_session_cookie_returns_token(self, client, with_auth_env):
+        """ROUTES-09: Valid session cookie returns BROKR_AUTH_TOKEN."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        response = client.get("/api/session-token", cookies={"brokr_session": token})
+        assert response.status_code == 200
+        assert response.json() == {"token": "test-bearer-token-12345"}
+
+    def test_without_session_cookie_redirects_to_login(self, client):
+        """ROUTES-10: No session cookie returns 303 redirect to /login."""
+        response = client.get("/api/session-token", follow_redirects=False)
+        assert response.status_code == 303
+        assert "/login" in response.headers["location"]
