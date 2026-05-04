@@ -55,6 +55,32 @@ class TestHealthRoute:
         assert response.json() == {"status": "ok"}
 
 
+class TestApiAuthRoute:
+    """ROUTES-03, ROUTES-04, ROUTES-05: POST /api/auth."""
+
+    def test_valid_credentials_returns_authenticated(self, client, with_auth_env):
+        """ROUTES-03: Valid credentials return {"status": "authenticated"}."""
+        with patch("app.main.DeGiroClient.authenticate") as mock_auth:
+            mock_auth.return_value = MagicMock()
+            response = client.post("/api/auth", json={"username": "user", "password": "pass"})
+            assert response.status_code == 200
+            assert response.json() == {"status": "authenticated"}
+
+    def test_connection_error_returns_401(self, client, with_auth_env):
+        """ROUTES-04: ConnectionError from DeGiroClient returns 401."""
+        with patch("app.main.DeGiroClient.authenticate") as mock_auth:
+            mock_auth.side_effect = ConnectionError("DeGiro connection failed")
+            response = client.post("/api/auth", json={"username": "user", "password": "pass"})
+            assert response.status_code == 401
+
+    def test_generic_error_returns_500(self, client, with_auth_env):
+        """ROUTES-05: Generic exception returns 500."""
+        with patch("app.main.DeGiroClient.authenticate") as mock_auth:
+            mock_auth.side_effect = RuntimeError("Unexpected error")
+            response = client.post("/api/auth", json={"username": "user", "password": "pass"})
+            assert response.status_code == 500
+
+
 class TestSessionTokenRoute:
     """ROUTES-09, ROUTES-10: GET /api/session-token behavior."""
 
