@@ -23,6 +23,7 @@ from .scoring import compute_scores, compute_portfolio_weights, get_top_candidat
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
 from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, SNAPSHOT_DIR
+from .rate_limiter import check_rate_limit
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ _session = {
     "last_enriched_at": None,
     "enriching": False,
 }
-_session_lock = asyncio.Lock()
+_session_lock = asyncio.Lock()  # async contexts: async with _session_lock
+_sync_lock = threading.Lock()   # sync contexts: with _sync_lock
 
 # Global operation lock — prevents concurrent enrichment, Update Prices, and DeGiro sync
 _operation_lock = asyncio.Lock()
@@ -396,7 +398,7 @@ def _restore_portfolio_from_snapshot():
         logger.warning("Health alerts computation failed on restore: %s", e)
         portfolio_data["health_alerts"] = []
     portfolio_data = _sanitize_floats(portfolio_data)
-    with _session_lock:
+    with _sync_lock:
         _session["portfolio"] = portfolio_data
         _session["portfolio_time"] = datetime.now()
         snap_date = snapshot.get("date")  # "YYYY-MM-DD"
@@ -564,7 +566,7 @@ async def health():
 
 # ─── Auth ───
 
-@app.post("/api/auth", dependencies=[Depends(verify_brok_token)])
+@app.post("/api/auth", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)])
 async def auth(request: AuthRequest):
     """Authenticate with DeGiro. Credentials are discarded immediately after session establishment."""
     try:
@@ -573,7 +575,7 @@ async def auth(request: AuthRequest):
             password=request.password,
             otp=request.otp,
         )
-        async with _session_lock:
+        with _sync_lock:
             _session["trading_api"] = trading_api
             _session["session_time"] = datetime.now()
             _session["portfolio"] = None
@@ -588,7 +590,7 @@ async def auth(request: AuthRequest):
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 
-@app.post("/api/session", dependencies=[Depends(verify_brok_token)])
+@app.post("/api/session", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)])
 async def session_auth(request: SessionRequest):
     """Authenticate using an existing DeGiro session ID from browser cookies.
 
@@ -600,7 +602,7 @@ async def session_auth(request: SessionRequest):
             request.session_id,
             int_account=request.int_account,
         )
-        async with _session_lock:
+        with _sync_lock:
             _session["trading_api"] = trading_api
             _session["session_time"] = datetime.now()
             _session["portfolio"] = None
@@ -629,7 +631,7 @@ async def get_portfolio():
         raise HTTPException(status_code=409, detail="Another operation is already running")
 
     try:
-        async with _session_lock:
+        with _sync_lock:
             portfolio = _session["portfolio"]
             if portfolio is not None:
                 pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
@@ -688,7 +690,7 @@ async def get_portfolio():
             except Exception as e:
                 logger.warning("Snapshot save failed (non-blocking): %s", str(e))
 
-            async with _session_lock:
+            with _sync_lock:
                 _session["portfolio"] = portfolio
                 _session["portfolio_time"] = datetime.now(timezone.utc)
                 _session["last_enriched_at"] = datetime.now(timezone.utc)
@@ -717,7 +719,7 @@ async def get_portfolio_raw():
         raise HTTPException(status_code=409, detail="Another operation is already running")
 
     try:
-        async with _session_lock:
+        with _sync_lock:
             # If we already have enriched data, return that
             raw_session = _session["portfolio"]
             if raw_session:
@@ -769,10 +771,10 @@ def _do_enrich_session():
     calling this function.
     """
     try:
-        with _session_lock:
+        with _sync_lock:
             _session["enriching"] = True
 
-        with _session_lock:
+        with _sync_lock:
             positions = [p.copy() for p in _session["portfolio"]["positions"]]
             cash = _session["portfolio"].get("cash_available", 0)
             raw_portfolio = _session["portfolio"]
@@ -791,7 +793,7 @@ def _do_enrich_session():
             summary["health_alerts"] = []
 
         now = datetime.now(timezone.utc)
-        with _session_lock:
+        with _sync_lock:
             summary["last_enriched_at"] = now.isoformat()
             _session["portfolio"] = summary
             _session["portfolio_time"] = now
@@ -799,7 +801,7 @@ def _do_enrich_session():
 
         _save_snapshot_for_portfolio(summary)
     finally:
-        with _session_lock:
+        with _sync_lock:
             _session["enriching"] = False
 
 
@@ -823,7 +825,7 @@ async def refresh_prices():
     Does not require a DeGiro session — works from snapshot-restored portfolio.
     Runs enrichment in a background thread and returns immediately.
     """
-    async with _session_lock:
+    with _sync_lock:
         portfolio = _session.get("portfolio")
     if not portfolio or not portfolio.get("positions"):
         raise HTTPException(status_code=400, detail="No portfolio loaded")
@@ -836,7 +838,7 @@ async def refresh_prices():
 @app.get("/api/enrichment-status")
 async def enrichment_status():
     """Return current enrichment state — no auth required, no financial data."""
-    async with _session_lock:
+    with _sync_lock:
         enriching = _session.get("enriching", False)
         last_enriched_at = _session.get("last_enriched_at")
     return {
@@ -854,10 +856,26 @@ async def hermes_context():
     Works with cached portfolio even if the DeGiro session has expired.
     Benchmark and attribution data can be served from snapshots alone.
     """
-    async with _session_lock:
+    with _sync_lock:
         portfolio = _session["portfolio"]
 
     return build_hermes_context(portfolio if portfolio is not None else {})
+
+
+# ─── Session Token ───
+
+@app.get("/api/session-token", dependencies=[Depends(verify_brok_token)])
+async def get_session_token():
+    """Return the BROKR_AUTH_TOKEN for the current authenticated session.
+
+    The frontend uses this token for subsequent API calls instead of
+    hardcoding it in JavaScript. Called on page load after session cookie
+    is validated by the middleware.
+    """
+    token = os.getenv("BROKR_AUTH_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=500, detail="BROKR_AUTH_TOKEN not configured")
+    return {"token": token}
 
 
 # ─── Logout ───
@@ -865,7 +883,7 @@ async def hermes_context():
 @app.post("/api/logout", dependencies=[Depends(verify_brok_token)])
 async def logout():
     """Clear in-memory session and portfolio data."""
-    async with _session_lock:
+    with _sync_lock:
         _clear_session()
     return {"status": "logged_out"}
 
@@ -929,7 +947,7 @@ async def get_benchmark():
         benchmark_series = _benchmark_cache["series"]
 
     # Get current portfolio for attribution
-    async with _session_lock:
+    with _sync_lock:
         portfolio = _session["portfolio"]
 
     if portfolio is None:
@@ -1001,7 +1019,7 @@ async def delete_snapshot(date_str: str):
 @app.post("/api/snapshots/save", dependencies=[Depends(verify_brok_token)])
 async def save_snapshot_now():
     """Manually trigger a snapshot save for the current portfolio."""
-    async with _session_lock:
+    with _sync_lock:
         portfolio = _session.get("portfolio")
     if not portfolio:
         raise HTTPException(status_code=400, detail="No portfolio loaded")
@@ -1021,7 +1039,7 @@ async def login_get(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 
-@app.post("/login")
+@app.post("/login", dependencies=[Depends(check_rate_limit)])
 async def login_post(request: Request):
     """Authenticate: check password, set signed session cookie on success."""
     form = await request.form()
@@ -1036,7 +1054,7 @@ async def login_post(request: Request):
             {"request": request, "error": "Server misconfigured — APP_PASSWORD not set"},
         )
 
-    if password == app_password:
+    if hmac.compare_digest(password, app_password):
         from .auth import make_session_cookie
         token, cookie_kwargs = make_session_cookie()
         response = RedirectResponse(url="/", status_code=303)
@@ -1049,13 +1067,9 @@ async def login_post(request: Request):
 @app.get("/logout")
 async def logout():
     """Clear session cookie and redirect to /login."""
+    from .auth import clear_session_cookie
     response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie(
-        "brokr_session",
-        path="/",
-        httponly=True,
-        samesite="lax",
-    )
+    response.delete_cookie("brokr_session", **clear_session_cookie())
     return response
 
 
