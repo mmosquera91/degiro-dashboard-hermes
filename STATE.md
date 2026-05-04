@@ -10,9 +10,12 @@
 | 2026-05-04 | 260504-remove-hardcoded-auth-token | complete |
 | 2026-05-04 | 260504-fix-null-classlist-error | complete |
 | 2026-05-04 | 260504-timing-leak-fix | complete |
-| 2026-05-04 | 260504-rate-limit-auth | complete |
-| 2026-04-29 | 260429-cleanup-dead-delta-only | complete |
-| 2026-04-29 | 260429-rollback-alloc-bar | complete |
+|| 2026-05-04 | 260504-rate-limit-auth | complete |
+|| 2026-05-04 | 260504-fix-session-token-bootstrap | complete |
+|| 2026-05-04 | 260504-fix-sri-hash-chartjs-typo | complete |
+|| 2026-05-04 | 260504-fix-delete-cookie-kwargs | complete |
+|| 2026-04-29 | 260429-cleanup-dead-delta-only | complete |
+|| 2026-04-29 | 260429-rollback-alloc-bar | complete |
 | 2026-04-29 | 260429-allocation-bar-css-fix | complete |
 | 2026-04-29 | 260429-dashboard-polish | complete |
 | 2026-04-29 | 260429-dashboard-rows-redesign | complete |
