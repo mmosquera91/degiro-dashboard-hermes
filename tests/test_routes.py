@@ -111,6 +111,48 @@ class TestApiAuthRoute:
             assert response.status_code == 500
 
 
+class TestApiSessionRoute:
+    """ROUTES-06, ROUTES-07: POST /api/session."""
+
+    def _session_headers(self, client):
+        """Return headers with valid session cookie and bearer token."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        return {
+            "cookies": {"brokr_session": token},
+            "headers": {"Authorization": "Bearer test-bearer-token-12345"},
+        }
+
+    def test_valid_session_id_returns_authenticated(self, client, with_auth_env):
+        """ROUTES-06: Valid session_id returns {"status": "authenticated"}."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        with patch("app.main.DeGiroClient.from_session_id") as mock_session:
+            mock_session.return_value = MagicMock()
+            response = client.post(
+                "/api/session",
+                json={"session_id": "valid-session-123"},
+                cookies={"brokr_session": token},
+                headers={"Authorization": "Bearer test-bearer-token-12345"},
+            )
+            assert response.status_code == 200
+            assert response.json() == {"status": "authenticated"}
+
+    def test_connection_error_returns_401(self, client, with_auth_env):
+        """ROUTES-07: ConnectionError from DeGiroClient.from_session_id returns 401."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        with patch("app.main.DeGiroClient.from_session_id") as mock_session:
+            mock_session.side_effect = ConnectionError("Session expired")
+            response = client.post(
+                "/api/session",
+                json={"session_id": "invalid-session"},
+                cookies={"brokr_session": token},
+                headers={"Authorization": "Bearer test-bearer-token-12345"},
+            )
+            assert response.status_code == 401
+
+
 class TestSessionTokenRoute:
     """ROUTES-09, ROUTES-10: GET /api/session-token behavior."""
 
