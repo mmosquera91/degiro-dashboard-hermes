@@ -98,13 +98,14 @@ def verify_session_cookie(cookie_value: Optional[str]) -> bool:
 
 
 def clear_session_cookie() -> dict:
-    """Return cookie kwargs to clear the session cookie."""
+    """Return cookie kwargs to clear the session cookie.
+
+    Only includes kwargs that Response.delete_cookie() accepts.
+    """
     kwargs = {
         "path": "/",
         "httponly": True,
         "samesite": "Lax",
-        "max_age": 0,
-        "expires": "Thu, 01 Jan 1970 00:00:00 GMT",
     }
     if _is_cookie_secure():
         kwargs["secure"] = True
