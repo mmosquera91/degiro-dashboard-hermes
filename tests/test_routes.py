@@ -4,6 +4,15 @@ from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Clear rate limiter state before each test to prevent cross-test pollution."""
+    import app.rate_limiter as rl
+    with rl._store_lock:
+        rl._rate_limit_store.clear()
+    yield
+
+
 @pytest.fixture
 def with_auth_env(monkeypatch):
     """Set required env vars for route tests."""
