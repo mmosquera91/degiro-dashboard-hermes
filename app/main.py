@@ -36,20 +36,31 @@ _session = {
     "last_enriched_at": None,
     "enriching": False,
 }
-_session_lock = threading.Lock()
+_session_lock = asyncio.Lock()
 
 # Global operation lock — prevents concurrent enrichment, Update Prices, and DeGiro sync
-_operation_lock = threading.Event()
+_operation_lock = asyncio.Lock()
 
-def _is_operation_locked():
-    return _operation_lock.is_set()
+_operation_lock_held = False
 
-def _acquire_operation_lock():
+async def _is_operation_locked():
+    global _operation_lock_held
+    return _operation_lock_held
+
+async def _acquire_operation_lock():
     """Attempt to acquire the operation lock. Returns True if acquired, False if already held."""
-    return not _operation_lock.is_set()
+    global _operation_lock_held
+    if _operation_lock_held:
+        return False
+    await _operation_lock.acquire()
+    _operation_lock_held = True
+    return True
 
 def _release_operation_lock():
-    _operation_lock.clear()
+    global _operation_lock_held
+    if _operation_lock_held:
+        _operation_lock.release()
+        _operation_lock_held = False
 
 # Benchmark cache (1-hour TTL)
 _benchmark_cache: dict = {"series": None, "attribution": None}
@@ -562,7 +573,7 @@ async def auth(request: AuthRequest):
             password=request.password,
             otp=request.otp,
         )
-        with _session_lock:
+        async with _session_lock:
             _session["trading_api"] = trading_api
             _session["session_time"] = datetime.now()
             _session["portfolio"] = None
@@ -589,7 +600,7 @@ async def session_auth(request: SessionRequest):
             request.session_id,
             int_account=request.int_account,
         )
-        with _session_lock:
+        async with _session_lock:
             _session["trading_api"] = trading_api
             _session["session_time"] = datetime.now()
             _session["portfolio"] = None
@@ -613,82 +624,86 @@ async def get_portfolio():
     Serves cached portfolio even if the DeGiro session has expired.
     Only requires a live session for the initial fetch.
     """
-    if _is_operation_locked():
+    # Acquire operation lock FIRST — before check, not after
+    if not await _acquire_operation_lock():
         raise HTTPException(status_code=409, detail="Another operation is already running")
 
-    with _session_lock:
-        portfolio = _session["portfolio"]
-        if portfolio is not None:
+    try:
+        async with _session_lock:
+            portfolio = _session["portfolio"]
+            if portfolio is not None:
+                pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
+                portfolio["daily_change_pct"] = pct
+                portfolio["daily_change_eur"] = eur
+                return portfolio
+
+            # No cached portfolio — need active session to fetch
+            if _session["trading_api"] is None:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Session expired or not authenticated. Please reconnect via the UI.",
+                )
+            if not _is_session_valid():
+                raise HTTPException(
+                    status_code=401,
+                    detail="Session expired. Please refresh your connection via the UI.",
+                )
+            trading_api = _session["trading_api"]
+
+        try:
+            # Fetch raw portfolio from DeGiro
+            raw = DeGiroClient.fetch_portfolio(trading_api)
+
+            # Enrich with yfinance data
+            positions = await asyncio.to_thread(enrich_positions, raw)
+
+            # Compute portfolio weights
+            positions = compute_portfolio_weights(positions)
+
+            # Compute scores (defensive — scoring can fail on edge cases)
+            try:
+                positions = compute_scores(positions)
+            except Exception as e:
+                logger.warning("Score computation failed: %s", str(e))
+
+            # Build summary
+            portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0), raw)
+
+            # Compute health alerts from the portfolio summary data (defensive)
+            try:
+                health_alerts = compute_health_alerts({
+                    "positions": portfolio["positions"],
+                    "sector_breakdown": portfolio.get("sector_breakdown", {}),
+                    "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
+                    "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
+                })
+                portfolio["health_alerts"] = health_alerts
+            except Exception as e:
+                logger.warning("Health alerts computation failed: %s", str(e))
+                portfolio["health_alerts"] = []
+
+            # Save snapshot as side effect — benchmark indexed to 100 at portfolio start (D-04)
+            try:
+                _save_snapshot_for_portfolio(portfolio)
+            except Exception as e:
+                logger.warning("Snapshot save failed (non-blocking): %s", str(e))
+
+            async with _session_lock:
+                _session["portfolio"] = portfolio
+                _session["portfolio_time"] = datetime.now(timezone.utc)
+                _session["last_enriched_at"] = datetime.now(timezone.utc)
+                portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
+
             pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
             portfolio["daily_change_pct"] = pct
             portfolio["daily_change_eur"] = eur
             return portfolio
 
-        # No cached portfolio — need active session to fetch
-        if _session["trading_api"] is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Session expired or not authenticated. Please reconnect via the UI.",
-            )
-        if not _is_session_valid():
-            raise HTTPException(
-                status_code=401,
-                detail="Session expired. Please refresh your connection via the UI.",
-            )
-        trading_api = _session["trading_api"]
-
-    try:
-        # Fetch raw portfolio from DeGiro
-        raw = DeGiroClient.fetch_portfolio(trading_api)
-
-        # Enrich with yfinance data
-        positions = await asyncio.to_thread(enrich_positions, raw)
-
-        # Compute portfolio weights
-        positions = compute_portfolio_weights(positions)
-
-        # Compute scores (defensive — scoring can fail on edge cases)
-        try:
-            positions = compute_scores(positions)
         except Exception as e:
-            logger.warning("Score computation failed: %s", str(e))
-
-        # Build summary
-        portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0), raw)
-
-        # Compute health alerts from the portfolio summary data (defensive)
-        try:
-            health_alerts = compute_health_alerts({
-                "positions": portfolio["positions"],
-                "sector_breakdown": portfolio.get("sector_breakdown", {}),
-                "etf_allocation_pct": portfolio.get("etf_allocation_pct", 0),
-                "stock_allocation_pct": portfolio.get("stock_allocation_pct", 0),
-            })
-            portfolio["health_alerts"] = health_alerts
-        except Exception as e:
-            logger.warning("Health alerts computation failed: %s", str(e))
-            portfolio["health_alerts"] = []
-
-        # Save snapshot as side effect — benchmark indexed to 100 at portfolio start (D-04)
-        try:
-            _save_snapshot_for_portfolio(portfolio)
-        except Exception as e:
-            logger.warning("Snapshot save failed (non-blocking): %s", str(e))
-
-        with _session_lock:
-            _session["portfolio"] = portfolio
-            _session["portfolio_time"] = datetime.now(timezone.utc)
-            _session["last_enriched_at"] = datetime.now(timezone.utc)
-            portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
-
-        pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
-        portfolio["daily_change_pct"] = pct
-        portfolio["daily_change_eur"] = eur
-        return portfolio
-
-    except Exception as e:
-        logger.error("Portfolio fetch error: %s", str(e))
-        raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+            logger.error("Portfolio fetch error: %s", str(e))
+            raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+    finally:
+        _release_operation_lock()
 
 
 @app.get("/api/portfolio-raw", dependencies=[Depends(verify_brok_token)])
@@ -698,48 +713,51 @@ async def get_portfolio_raw():
     Fast (~2-3s) — useful for showing basic data immediately while
     the full enrichment happens in the background.
     """
-    if _is_operation_locked():
+    if not await _acquire_operation_lock():
         raise HTTPException(status_code=409, detail="Another operation is already running")
 
-    with _session_lock:
-        # If we already have enriched data, return that
-        raw_session = _session["portfolio"]
-        if raw_session:
-            portfolio = raw_session.copy()
-            pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
-            portfolio["daily_change_pct"] = pct
-            portfolio["daily_change_eur"] = eur
-            portfolio = _sanitize_floats(portfolio)
-            return portfolio
-
-        if not _is_session_valid():
-            raise HTTPException(
-                status_code=401,
-                detail="Session expired or not authenticated. Please reconnect via the UI.",
-            )
-        trading_api = _session["trading_api"]
-
     try:
-        raw = DeGiroClient.fetch_portfolio(trading_api)
-        portfolio = _build_raw_portfolio_summary(
-            raw.get("positions", []),
-            raw.get("cash_available", 0),
-        )
-        portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
+        async with _session_lock:
+            # If we already have enriched data, return that
+            raw_session = _session["portfolio"]
+            if raw_session:
+                portfolio = raw_session.copy()
+                pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
+                portfolio["daily_change_pct"] = pct
+                portfolio["daily_change_eur"] = eur
+                portfolio = _sanitize_floats(portfolio)
+                return portfolio
 
-        pct, eur = _get_daily_change(portfolio["total_value_eur"])
-        portfolio["daily_change_pct"] = pct
-        portfolio["daily_change_eur"] = eur
+            if not _is_session_valid():
+                raise HTTPException(
+                    status_code=401,
+                    detail="Session expired or not authenticated. Please reconnect via the UI.",
+                )
+            trading_api = _session["trading_api"]
 
         try:
-            return portfolio
-        except ValueError as e:
-            logger.error("JSON serialization error in portfolio-raw: %s", e)
-            return _sanitize_floats(portfolio)
+            raw = DeGiroClient.fetch_portfolio(trading_api)
+            portfolio = _build_raw_portfolio_summary(
+                raw.get("positions", []),
+                raw.get("cash_available", 0),
+            )
+            portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
 
-    except Exception as e:
-        logger.error("Raw portfolio fetch error: %s", str(e))
-        raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+            pct, eur = _get_daily_change(portfolio["total_value_eur"])
+            portfolio["daily_change_pct"] = pct
+            portfolio["daily_change_eur"] = eur
+
+            try:
+                return portfolio
+            except ValueError as e:
+                logger.error("JSON serialization error in portfolio-raw: %s", e)
+                return _sanitize_floats(portfolio)
+
+        except Exception as e:
+            logger.error("Raw portfolio fetch error: %s", str(e))
+            raise HTTPException(status_code=500, detail="Failed to fetch portfolio")
+    finally:
+        _release_operation_lock()
 
 
 def _do_enrich_session():
@@ -747,9 +765,10 @@ def _do_enrich_session():
 
     Called by both the /api/refresh-prices endpoint (via thread) and the
     daily enrichment loop (via asyncio.to_thread). Does NOT call DeGiro.
+    Does NOT acquire locks — callers must acquire _operation_lock before
+    calling this function.
     """
     try:
-        _operation_lock.set()
         with _session_lock:
             _session["enriching"] = True
 
@@ -780,9 +799,21 @@ def _do_enrich_session():
 
         _save_snapshot_for_portfolio(summary)
     finally:
-        _operation_lock.clear()
         with _session_lock:
             _session["enriching"] = False
+
+
+async def _do_enrich_session_async():
+    """Async wrapper that acquires the operation lock before running enrichment.
+
+    Used by /api/refresh-prices and daily loops.
+    """
+    if not await _acquire_operation_lock():
+        raise HTTPException(status_code=409, detail="Another operation is already running")
+    try:
+        await asyncio.to_thread(_do_enrich_session)
+    finally:
+        _release_operation_lock()
 
 
 @app.post("/api/refresh-prices", dependencies=[Depends(verify_brok_token)])
@@ -792,10 +823,7 @@ async def refresh_prices():
     Does not require a DeGiro session — works from snapshot-restored portfolio.
     Runs enrichment in a background thread and returns immediately.
     """
-    if _is_operation_locked():
-        raise HTTPException(status_code=409, detail="Another operation is already running")
-
-    with _session_lock:
+    async with _session_lock:
         portfolio = _session.get("portfolio")
     if not portfolio or not portfolio.get("positions"):
         raise HTTPException(status_code=400, detail="No portfolio loaded")
@@ -808,7 +836,7 @@ async def refresh_prices():
 @app.get("/api/enrichment-status")
 async def enrichment_status():
     """Return current enrichment state — no auth required, no financial data."""
-    with _session_lock:
+    async with _session_lock:
         enriching = _session.get("enriching", False)
         last_enriched_at = _session.get("last_enriched_at")
     return {
@@ -826,7 +854,7 @@ async def hermes_context():
     Works with cached portfolio even if the DeGiro session has expired.
     Benchmark and attribution data can be served from snapshots alone.
     """
-    with _session_lock:
+    async with _session_lock:
         portfolio = _session["portfolio"]
 
     return build_hermes_context(portfolio if portfolio is not None else {})
@@ -837,7 +865,7 @@ async def hermes_context():
 @app.post("/api/logout", dependencies=[Depends(verify_brok_token)])
 async def logout():
     """Clear in-memory session and portfolio data."""
-    with _session_lock:
+    async with _session_lock:
         _clear_session()
     return {"status": "logged_out"}
 
@@ -901,7 +929,7 @@ async def get_benchmark():
         benchmark_series = _benchmark_cache["series"]
 
     # Get current portfolio for attribution
-    with _session_lock:
+    async with _session_lock:
         portfolio = _session["portfolio"]
 
     if portfolio is None:
@@ -973,7 +1001,7 @@ async def delete_snapshot(date_str: str):
 @app.post("/api/snapshots/save", dependencies=[Depends(verify_brok_token)])
 async def save_snapshot_now():
     """Manually trigger a snapshot save for the current portfolio."""
-    with _session_lock:
+    async with _session_lock:
         portfolio = _session.get("portfolio")
     if not portfolio:
         raise HTTPException(status_code=400, detail="No portfolio loaded")
