@@ -58,26 +58,56 @@ class TestHealthRoute:
 class TestApiAuthRoute:
     """ROUTES-03, ROUTES-04, ROUTES-05: POST /api/auth."""
 
+    def _auth_headers(self, client):
+        """Return headers with valid session cookie and bearer token."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
+        return {
+            "cookies": {"brokr_session": token},
+            "headers": {"Authorization": "Bearer test-bearer-token-12345"},
+        }
+
     def test_valid_credentials_returns_authenticated(self, client, with_auth_env):
         """ROUTES-03: Valid credentials return {"status": "authenticated"}."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
         with patch("app.main.DeGiroClient.authenticate") as mock_auth:
             mock_auth.return_value = MagicMock()
-            response = client.post("/api/auth", json={"username": "user", "password": "pass"})
+            response = client.post(
+                "/api/auth",
+                json={"username": "user", "password": "pass"},
+                cookies={"brokr_session": token},
+                headers={"Authorization": "Bearer test-bearer-token-12345"},
+            )
             assert response.status_code == 200
             assert response.json() == {"status": "authenticated"}
 
     def test_connection_error_returns_401(self, client, with_auth_env):
         """ROUTES-04: ConnectionError from DeGiroClient returns 401."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
         with patch("app.main.DeGiroClient.authenticate") as mock_auth:
             mock_auth.side_effect = ConnectionError("DeGiro connection failed")
-            response = client.post("/api/auth", json={"username": "user", "password": "pass"})
+            response = client.post(
+                "/api/auth",
+                json={"username": "user", "password": "pass"},
+                cookies={"brokr_session": token},
+                headers={"Authorization": "Bearer test-bearer-token-12345"},
+            )
             assert response.status_code == 401
 
     def test_generic_error_returns_500(self, client, with_auth_env):
         """ROUTES-05: Generic exception returns 500."""
+        from app.auth import make_session_cookie
+        token, _ = make_session_cookie()
         with patch("app.main.DeGiroClient.authenticate") as mock_auth:
             mock_auth.side_effect = RuntimeError("Unexpected error")
-            response = client.post("/api/auth", json={"username": "user", "password": "pass"})
+            response = client.post(
+                "/api/auth",
+                json={"username": "user", "password": "pass"},
+                cookies={"brokr_session": token},
+                headers={"Authorization": "Bearer test-bearer-token-12345"},
+            )
             assert response.status_code == 500
 
 
