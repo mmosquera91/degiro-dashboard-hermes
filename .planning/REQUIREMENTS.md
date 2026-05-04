@@ -7,17 +7,17 @@
 
 ### Auth & Middleware
 
-- [ ] **AUTH-01**: auth.py `_make_token` creates HMAC-SHA256 signed token with expiry
-- [ ] **AUTH-02**: auth.py `_verify_token` validates expiry and signature with timing-safe comparison
-- [ ] **AUTH-03**: auth.py `make_session_cookie` returns token + cookie kwargs (Secure, HttpOnly, SameSite=Lax)
-- [ ] **AUTH-04**: auth.py `verify_session_cookie` returns True for valid token, False for invalid/expired
-- [ ] **AUTH-05**: auth.py `clear_session_cookie` returns correct delete_cookie kwargs
-- [ ] **AUTH-06**: rate_limiter.py `check_rate_limit` allows up to MAX_ATTEMPTS (5) in WINDOW_SECONDS (60s)
-- [ ] **AUTH-07**: rate_limiter.py `check_rate_limit` raises HTTPException 429 after limit exceeded
-- [ ] **AUTH-08**: rate_limiter.py `_clean_old_timestamps` removes timestamps outside the window
-- [ ] **AUTH-09**: main.py middleware `check_session_cookie` redirects unauthenticated requests to /login
-- [ ] **AUTH-10**: main.py middleware `check_session_cookie` passes valid session cookie through
-- [ ] **AUTH-11**: main.py `verify_brok_token` validates Bearer token, returns 401 on mismatch
+- [x] **AUTH-01**: auth.py `_make_token` creates HMAC-SHA256 signed token with expiry
+- [x] **AUTH-02**: auth.py `_verify_token` validates expiry and signature with timing-safe comparison
+- [x] **AUTH-03**: auth.py `make_session_cookie` returns token + cookie kwargs (Secure, HttpOnly, SameSite=Lax)
+- [x] **AUTH-04**: auth.py `verify_session_cookie` returns True for valid token, False for invalid/expired
+- [x] **AUTH-05**: auth.py `clear_session_cookie` returns correct delete_cookie kwargs
+- [x] **AUTH-06**: rate_limiter.py `check_rate_limit` allows up to MAX_ATTEMPTS (5) in WINDOW_SECONDS (60s)
+- [x] **AUTH-07**: rate_limiter.py `check_rate_limit` raises HTTPException 429 after limit exceeded
+- [x] **AUTH-08**: rate_limiter.py `_clean_old_timestamps` removes timestamps outside the window
+- [x] **AUTH-09**: main.py middleware `check_session_cookie` redirects unauthenticated requests to /login
+- [x] **AUTH-10**: main.py middleware `check_session_cookie` passes valid session cookie through
+- [x] **AUTH-11**: main.py `verify_brok_token` validates Bearer token, returns 401 on mismatch
 
 ### API Routes
 
@@ -81,17 +81,17 @@ Deferred. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 11 | Pending |
-| AUTH-02 | Phase 11 | Pending |
-| AUTH-03 | Phase 11 | Pending |
-| AUTH-04 | Phase 11 | Pending |
-| AUTH-05 | Phase 11 | Pending |
-| AUTH-06 | Phase 11 | Pending |
-| AUTH-07 | Phase 11 | Pending |
-| AUTH-08 | Phase 11 | Pending |
-| AUTH-09 | Phase 11 | Pending |
-| AUTH-10 | Phase 11 | Pending |
-| AUTH-11 | Phase 11 | Pending |
+| AUTH-01 | Phase 11 | Complete |
+| AUTH-02 | Phase 11 | Complete |
+| AUTH-03 | Phase 11 | Complete |
+| AUTH-04 | Phase 11 | Complete |
+| AUTH-05 | Phase 11 | Complete |
+| AUTH-06 | Phase 11 | Complete |
+| AUTH-07 | Phase 11 | Complete |
+| AUTH-08 | Phase 11 | Complete |
+| AUTH-09 | Phase 11 | Complete |
+| AUTH-10 | Phase 11 | Complete |
+| AUTH-11 | Phase 11 | Complete |
 | ROUTES-01 | Phase 12 | Pending |
 | ROUTES-02 | Phase 12 | Pending |
 | ROUTES-03 | Phase 12 | Pending |

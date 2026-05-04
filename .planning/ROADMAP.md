@@ -78,7 +78,7 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 11. Auth Infrastructure Tests | 3/3 | Complete   | 2026-05-04 |
+| 11. Auth Infrastructure Tests | 3/3 | Complete    | 2026-05-04 |
 | 12. API Route Tests | 0/? | Not started | - |
 | 13. DeGiro Client Tests | 0/? | Not started | - |
 | 14. Integration Tests | 0/? | Not started | - |
