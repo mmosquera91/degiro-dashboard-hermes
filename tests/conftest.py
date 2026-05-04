@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, 'app')
+
 import pytest
 from unittest.mock import patch, MagicMock
 import market_data
@@ -66,3 +69,30 @@ def sample_etf_position():
         "unrealized_pl": 25.0,
         "unrealized_pl_pct": 6.25,
     }
+
+
+@pytest.fixture
+def mock_auth_env(monkeypatch):
+    """Set required env vars for auth tests."""
+    monkeypatch.setenv("APP_PASSWORD", "testpassword123")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-hmac")
+    yield
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+
+
+@pytest.fixture
+def auth_module(mock_auth_env):
+    """Return auth module with test env vars set."""
+    import importlib
+    import app.auth as auth
+    importlib.reload(auth)
+    return auth
+
+
+@pytest.fixture
+def sample_token(auth_module):
+    """Return a valid HMAC-signed token for testing."""
+    import time
+    token, _ = auth_module.make_session_cookie()
+    return token
