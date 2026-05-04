@@ -539,26 +539,23 @@ def _currency_from_exchange_id(exchange_id: str) -> str:
     return _EXCHANGE_ID_CURRENCY.get(str(exchange_id), "")
 
 
-# Well-known US tickers that commonly appear in European DeGiro portfolios.
-    # This list is a catch-all for when product info is unavailable.
-    # Pattern: bare uppercase alpha symbols that trade on US exchanges only.
-    _KNOWN_USD_SYMBOLS = {
-        "UNH", "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META",
-        "TSLA", "BRK-B", "JPM", "V", "MA", "JNJ", "WMT", "PG", "HD",
-        "CVX", "XOM", "LLY", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR",
-        "COST", "AVGO", "ORCL", "ACN", "TXN", "NEE", "RTX", "HON", "UPS",
-        "CAT", "GS", "MS", "BAC", "WFC", "C", "BLK", "SCHW", "AXP",
-        "QUBT", "RGTI", "LWLG", "ONDS", "POET", "CRGO",
-    }
+_KNOWN_USD_SYMBOLS = {
+    "UNH", "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META",
+    "TSLA", "BRK-B", "JPM", "V", "MA", "JNJ", "WMT", "PG", "HD",
+    "CVX", "XOM", "LLY", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR",
+    "COST", "AVGO", "ORCL", "ACN", "TXN", "NEE", "RTX", "HON", "UPS",
+    "CAT", "GS", "MS", "BAC", "WFC", "C", "BLK", "SCHW", "AXP",
+    "QUBT", "RGTI", "LWLG", "ONDS", "POET", "CRGO",
+}
 
-    @staticmethod
-    def _infer_currency_from_symbol(symbol: str) -> str:
-        """Infer trading currency from well-known US stock symbols.
-        Returns 'USD' if recognised, '' otherwise.
-        """
-        if not symbol:
-            return ""
-        return "USD" if symbol.upper() in DeGiroClient._KNOWN_USD_SYMBOLS else ""
+
+def _infer_currency_from_symbol(symbol: str) -> str:
+    """Infer trading currency from well-known US stock symbols.
+    Returns 'USD' if recognised, '' otherwise.
+    """
+    if not symbol:
+        return ""
+    return "USD" if symbol.upper() in _KNOWN_USD_SYMBOLS else ""
 
 
 class DeGiroClient:
@@ -834,7 +831,7 @@ class DeGiroClient:
                         or pos.get("currencyCode")
                         or _currency_from_exchange_id(pos.get("exchangeId", ""))
                         or _infer_currency_from_isin(prod.get("isin", ""))
-                        or DeGiroClient._infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
+                        or _infer_currency_from_symbol(prod.get("symbol", pos.get("symbol", "")))
                         or "EUR"
                     )
 

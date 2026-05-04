@@ -284,3 +284,49 @@ class TestFetchPortfolio:
         result = DeGiroClient.fetch_portfolio(mock_api)
         assert result["positions"] == []
         assert result["cash_available"] == 0.0
+
+    def test_fetch_portfolio_raises_on_connection_error(self):
+        """DEGIRO-05: DeGiroConnectionError during get_update raises RuntimeError."""
+        mock_api = MagicMock()
+        from degiro_connector.core.exceptions import DeGiroConnectionError
+        mock_api.get_update.call.side_effect = DeGiroConnectionError("Session expired", "Session expired or 2FA required")
+
+        with pytest.raises(RuntimeError, match="Failed to fetch portfolio"):
+            DeGiroClient.fetch_portfolio(mock_api)
+
+    def test_fetch_portfolio_missing_optional_fields(self):
+        """DEGIRO-07: Position missing optional fields uses defaults."""
+        mock_api = MagicMock()
+        mock_api.get_update.call.return_value = {
+            "portfolio": {
+                "value": [
+                    {
+                        "name": "positionrow",
+                        "value": [
+                            # Only id, size, price present — no name, isin, symbol, etc.
+                            {"name": "id", "value": 999},
+                            {"name": "size", "value": 3.0},
+                            {"name": "price", "value": 200.0},
+                            {"name": "value", "value": 600.0},
+                            {"name": "breakEvenPrice", "value": 190.0},
+                            {"name": "positionType", "value": "STOCK"},
+                        ],
+                    }
+                ]
+            },
+            "cashFunds": {"value": []},
+            "totalPortfolio": {},
+        }
+        mock_api.get_products_info.call.return_value = {"data": {}}  # no product info
+
+        result = DeGiroClient.fetch_portfolio(mock_api)
+        assert len(result["positions"]) == 1
+        pos = result["positions"][0]
+        # Defaults per DEGIRO-07: name → "Product {pid}", isin → "", symbol → ""
+        assert pos["name"] == "Product 999"
+        assert pos["isin"] == ""
+        assert pos["symbol"] == ""
+        assert pos["sector"] == ""
+        assert pos["country"] == ""
+        assert pos["quantity"] == 3.0
+        assert pos["current_price"] == 200.0
