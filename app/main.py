@@ -864,13 +864,13 @@ async def hermes_context():
 
 # ─── Session Token ───
 
-@app.get("/api/session-token", dependencies=[Depends(verify_brok_token)])
+@app.get("/api/session-token")
 async def get_session_token():
     """Return the BROKR_AUTH_TOKEN for the current authenticated session.
 
     The frontend uses this token for subsequent API calls instead of
-    hardcoding it in JavaScript. Called on page load after session cookie
-    is validated by the middleware.
+    hardcoding it in JavaScript. Authenticated via session cookie (middleware).
+    No bearer token needed — this is the bootstrap endpoint.
     """
     token = os.getenv("BROKR_AUTH_TOKEN", "")
     if not token:
