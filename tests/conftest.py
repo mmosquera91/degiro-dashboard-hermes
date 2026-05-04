@@ -3,7 +3,46 @@ sys.path.insert(0, 'app')
 
 import pytest
 from unittest.mock import patch, MagicMock
+from contextlib import asynccontextmanager
+from fastapi.testclient import TestClient
 import market_data
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Clear rate limiter state before each test to prevent cross-test pollution."""
+    import app.rate_limiter as rl
+    with rl._store_lock:
+        rl._rate_limit_store.clear()
+    yield
+
+
+@pytest.fixture
+def with_auth_env(monkeypatch):
+    """Set required env vars for integration tests."""
+    monkeypatch.setenv("APP_PASSWORD", "testpassword123")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-hmac")
+    monkeypatch.setenv("BROKR_AUTH_TOKEN", "test-bearer-token-12345")
+    monkeypatch.setenv("DEBUG", "false")
+    yield
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.delenv("BROKR_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("DEBUG", raising=False)
+
+
+@pytest.fixture
+def client(with_auth_env):
+    """Return TestClient with env vars set and lifespan overridden."""
+    from app.main import app
+
+    @asynccontextmanager
+    async def noop_lifespan(app):
+        yield
+
+    app.router.lifespan_context = noop_lifespan
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
 
 
 @pytest.fixture(autouse=True)
