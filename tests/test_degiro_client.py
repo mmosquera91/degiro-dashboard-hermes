@@ -45,6 +45,48 @@ class TestKvListToDict:
         assert _kv_list_to_dict(None) == {}
 
 
+class TestDeGiroClientKvListToDict:
+    """DEGIRO-01: _kv_list_to_dict converts DeGiro key-value list format to flat dict."""
+
+    def test_normal_kv_list(self):
+        """DEGIRO-01: Normal [{"name": "key", "value": x}] converts to {"key": x}."""
+        from app.degiro_client import _kv_list_to_dict
+        result = _kv_list_to_dict([
+            {"name": "size", "value": 64},
+            {"name": "price", "value": 150.5},
+        ])
+        assert result == {"size": 64, "price": 150.5}
+
+    def test_empty_list(self):
+        """DEGIRO-01: Empty list [] returns {}."""
+        from app.degiro_client import _kv_list_to_dict
+        assert _kv_list_to_dict([]) == {}
+
+    def test_dict_passthrough(self):
+        """DEGIRO-01: If already a dict, returns as-is."""
+        from app.degiro_client import _kv_list_to_dict
+        existing = {"foo": "bar", "baz": 123}
+        assert _kv_list_to_dict(existing) is existing
+
+    def test_non_list_input(self):
+        """DEGIRO-01: Non-list input (string) returns {}."""
+        from app.degiro_client import _kv_list_to_dict
+        assert _kv_list_to_dict("not a list") == {}
+        assert _kv_list_to_dict(None) == {}
+        assert _kv_list_to_dict(42) == {}
+
+    def test_item_missing_keys(self):
+        """DEGIRO-01: Item missing "name" or "value" key is skipped."""
+        from app.degiro_client import _kv_list_to_dict
+        result = _kv_list_to_dict([
+            {"name": "valid", "value": 1},
+            {"value": 2},          # missing "name" — skipped
+            {"name": "also_valid"},  # missing "value" — skipped
+            {"name": "third", "value": 3},
+        ])
+        assert result == {"valid": 1, "third": 3}
+
+
 class TestFetchPortfolio:
     def test_fetch_portfolio_happy_path(self):
         """Parses positions from raw API response."""

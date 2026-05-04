@@ -466,7 +466,7 @@ def _kv_list_to_dict(kv_list):
     return {
         item.get("name"): item.get("value")
         for item in kv_list
-        if isinstance(item, dict) and "name" in item
+        if isinstance(item, dict) and "name" in item and "value" in item
     }
 
 
