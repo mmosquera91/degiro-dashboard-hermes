@@ -422,6 +422,28 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_daily_enrichment_loop())
         # End-of-day valuation at ~23:00 local time
         asyncio.create_task(_daily_eod_loop())
+        # Startup health checks
+        try:
+            import socket
+            await asyncio.to_thread(socket.gethostbyname, "google.com")
+            logger.info("DNS resolution: OK")
+        except Exception as e:
+            logger.error("DNS resolution failed: %s", e)
+        try:
+            import app.snapshots
+            logger.info("snapshots module: OK")
+        except Exception as e:
+            logger.error("snapshots import failed: %s", e)
+        try:
+            import app.market_data
+            logger.info("market_data module: OK")
+        except Exception as e:
+            logger.error("market_data import failed: %s", e)
+        try:
+            import app.degiro_client
+            logger.info("degiro_client module: OK")
+        except Exception as e:
+            logger.error("degiro_client import failed: %s", e)
         yield
     except Exception as e:
         logger.error("Unhandled exception during request: %s", str(e))
@@ -492,33 +514,6 @@ async def check_session_cookie(request: Request, call_next):
         return response
 
     return await call_next(request)
-
-
-@app.on_event("startup")
-async def on_startup():
-    logger.info("Startup event fired")
-    try:
-        import socket
-        await asyncio.to_thread(socket.gethostbyname, "google.com")
-        logger.info("DNS resolution: OK")
-    except Exception as e:
-        logger.error("DNS resolution failed: %s", e)
-    try:
-        import app.snapshots
-        logger.info("snapshots module: OK")
-    except Exception as e:
-        logger.error("snapshots import failed: %s", e)
-    try:
-        import app.market_data
-        logger.info("market_data module: OK")
-    except Exception as e:
-        logger.error("market_data import failed: %s", e)
-    try:
-        import app.degiro_client
-        logger.info("degiro_client module: OK")
-    except Exception as e:
-        logger.error("degiro_client import failed: %s", e)
-    # Snapshot restore moved to lifespan.__aenter__() for FastAPI 0.100+ compatibility
 
 
 # ─── Security Headers Middleware (SEC-06, D-08) ───
