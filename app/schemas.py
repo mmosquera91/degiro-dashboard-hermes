@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel, ConfigDict
 
 
 # ─── Request Models ────────────────────────────────────────────────────────────
@@ -109,13 +109,12 @@ class SnapshotListItem(BaseModel):
     has_portfolio_data: bool
 
 
-class SnapshotListResponse(BaseModel):
-    __root__: list[SnapshotListItem]
-
-    class Config:
-        arbitrary_types_allowed = True
+class SnapshotListResponse(RootModel[list[SnapshotListItem]]):
+    pass
 
 
 class HermesContextResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     json: dict[str, Any]
     plaintext: str
