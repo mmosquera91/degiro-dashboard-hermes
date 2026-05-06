@@ -36,20 +36,20 @@
 
 ### DeGiro Client (Mocked)
 
-- [ ] **DEGIRO-01**: DeGiroClient `_kv_list_to_dict` converts list of {"key","value"} dicts to flat dict
-- [ ] **DEGIRO-02**: DeGiroClient `from_session_id` accepts session_id + optional int_account, returns TradingAPI
-- [ ] **DEGIRO-03**: DeGiroClient `from_session_id` raises ConnectionError on invalid session
-- [ ] **DEGIRO-04**: DeGiroClient `fetch_portfolio` returns dict with positions and cash_available
-- [ ] **DEGIRO-05**: DeGiroClient `fetch_portfolio` raises ConnectionError on session expired (2FA required, anti-bot)
-- [ ] **DEGIRO-06**: Portfolio parsing handles empty positions list
-- [ ] **DEGIRO-07**: Portfolio parsing handles missing optional fields gracefully
+- [x] **DEGIRO-01**: DeGiroClient `_kv_list_to_dict` converts list of {"key","value"} dicts to flat dict
+- [x] **DEGIRO-02**: DeGiroClient `from_session_id` accepts session_id + optional int_account, returns TradingAPI
+- [x] **DEGIRO-03**: DeGiroClient `from_session_id` raises ConnectionError on invalid session
+- [x] **DEGIRO-04**: DeGiroClient `fetch_portfolio` returns dict with positions and cash_available
+- [x] **DEGIRO-05**: DeGiroClient `fetch_portfolio` raises ConnectionError on session expired (2FA required, anti-bot)
+- [x] **DEGIRO-06**: Portfolio parsing handles empty positions list
+- [x] **DEGIRO-07**: Portfolio parsing handles missing optional fields gracefully
 
 ### Integration
 
-- [ ] **INTEG-01**: login flow → session-token → protected endpoint works end-to-end with cookie
-- [ ] **INTEG-02**: Cookie validation chain: middleware checks cookie → verify_brok_token checks Bearer
-- [ ] **INTEG-03**: Unauthorized request to /api/* redirects to /login then returns 303
-- [ ] **INTEG-04**: Expired cookie is cleared and redirect to /login occurs
+- [x] **INTEG-01**: login flow → session-token → protected endpoint works end-to-end with cookie
+- [x] **INTEG-02**: Cookie validation chain: middleware checks cookie → verify_brok_token checks Bearer
+- [x] **INTEG-03**: Unauthorized request to /api/* redirects to /login then returns 303
+- [x] **INTEG-04**: Expired cookie is cleared and redirect to /login occurs
 
 ## v2 Requirements
 
@@ -104,17 +104,17 @@ Deferred. Tracked but not in current roadmap.
 | ROUTES-10 | Phase 12 | Complete |
 | ROUTES-11 | Phase 12 | Complete |
 | ROUTES-12 | Phase 12 | Complete |
-| DEGIRO-01 | Phase 13 | Pending |
-| DEGIRO-02 | Phase 13 | Pending |
-| DEGIRO-03 | Phase 13 | Pending |
-| DEGIRO-04 | Phase 13 | Pending |
-| DEGIRO-05 | Phase 13 | Pending |
-| DEGIRO-06 | Phase 13 | Pending |
-| DEGIRO-07 | Phase 13 | Pending |
-| INTEG-01 | Phase 14 | Pending |
-| INTEG-02 | Phase 14 | Pending |
-| INTEG-03 | Phase 14 | Pending |
-| INTEG-04 | Phase 14 | Pending |
+| DEGIRO-01 | Phase 13 | Complete |
+| DEGIRO-02 | Phase 13 | Complete |
+| DEGIRO-03 | Phase 13 | Complete |
+| DEGIRO-04 | Phase 13 | Complete |
+| DEGIRO-05 | Phase 13 | Complete |
+| DEGIRO-06 | Phase 13 | Complete |
+| DEGIRO-07 | Phase 13 | Complete |
+| INTEG-01 | Phase 14 | Complete |
+| INTEG-02 | Phase 14 | Complete |
+| INTEG-03 | Phase 14 | Complete |
+| INTEG-04 | Phase 14 | Complete |
 
 **Coverage:**
 - v1 requirements: 33 total

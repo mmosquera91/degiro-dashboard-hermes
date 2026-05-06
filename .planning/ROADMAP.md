@@ -9,7 +9,7 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
 - [x] **Phase 11: Auth Infrastructure Tests** - conftest.py, auth.py unit tests, rate_limiter.py unit tests, middleware tests (completed 2026-05-04)
 - [x] **Phase 12: API Route Tests** - login/logout, session-token bootstrap, error responses, auth endpoints (completed 2026-05-04)
 - [x] **Phase 13: DeGiro Client Tests** - mocked client tests, portfolio parsing edge cases (completed 2026-05-04)
-- [ ] **Phase 14: Integration Tests** - end-to-end flows, cookie validation chain, unauthorized redirect chain
+- [x] **Phase 14: Integration Tests** - end-to-end flows, cookie validation chain, unauthorized redirect chain (completed 2026-05-04)
 
 ## Phase Details
 
@@ -83,7 +83,7 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
   3. Unauthorized request to /api/* redirects to /login returning 303
   4. Expired cookie is cleared and redirect to /login occurs
 **Plans**: 1 plan
-  - [ ] 14-01-PLAN.md - End-to-end integration tests
+  - [x] 14-01-PLAN.md - End-to-end integration tests
 
 ## Progress
 
@@ -92,7 +92,7 @@ Bump backend test coverage from ~30% to ~75-80%, targeting auth middleware, API 
 | 11. Auth Infrastructure Tests | 3/3 | Complete    | 2026-05-04 |
 | 12. API Route Tests | 5/5 | Complete    | 2026-05-04 |
 | 13. DeGiro Client Tests | 2/2 | Complete    | 2026-05-04 |
-| 14. Integration Tests | 0/1 | Not started | - |
+| 14. Integration Tests | 1/1 | Complete    | 2026-05-04 |
 
 ---
 
