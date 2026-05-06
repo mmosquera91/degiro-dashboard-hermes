@@ -42,6 +42,7 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 .hidden { display: none !important; }
@@ -57,9 +58,6 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  margin-left: -20px;
-  margin-right: -20px;
-  padding-left: 20px;
 }
 
 .header-left {
@@ -889,7 +887,9 @@ body {
 /* ─── RESPONSIVE — 768px tablet ─── */
 @media (max-width: 768px) {
   html { font-size: 13px; }
-  .header { margin-left: 0; margin-right: 0; padding: 10px 14px; }
+  .header { padding: 10px 14px; }
+  .header-logo { height: 40px; }
+  .header-right { gap: 6px; }
   .main { padding: 14px; }
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .allocation-bar-row { flex-wrap: wrap; gap: 12px; grid-template-columns: 1fr; }
