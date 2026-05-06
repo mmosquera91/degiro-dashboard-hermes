@@ -905,7 +905,7 @@ body {
   .last-refresh { display: none; }
   .stale-badge { font-size: 0.65rem; padding: 3px 6px; }
   #alloc-stocks-label, #alloc-etfs-label { font-size: 0.85rem; }
-  .allocation-bar-header { flex-direction: column; align-items: center; }
+  .allocation-bar-header { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .alloc-pct { display: none; }
 }
 
