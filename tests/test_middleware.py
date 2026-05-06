@@ -41,7 +41,8 @@ class TestCheckSessionCookie:
 
     def test_invalid_cookie_redirects_to_login(self, client):
         """Request with invalid cookie redirects to /login and deletes cookie."""
-        response = client.get("/any-path", cookies={"brokr_session": "invalid-token"}, follow_redirects=False)
+        client.cookies.set("brokr_session", "invalid-token")
+        response = client.get("/any-path", follow_redirects=False)
         assert response.status_code == 303
         assert "/login" in response.headers["location"]
 
@@ -54,13 +55,15 @@ class TestCheckSessionCookie:
         """Request with valid session cookie is passed through."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/health", cookies={"brokr_session": token})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/health")
         # /health is exempt so it returns 200
         assert response.status_code == 200
 
     def test_invalid_cookie_deleted(self, client):
         """Invalid cookie triggers delete_cookie on the response."""
-        response = client.get("/any-page", cookies={"brokr_session": "bad-token"}, follow_redirects=False)
+        client.cookies.set("brokr_session", "bad-token")
+        response = client.get("/any-page", follow_redirects=False)
         assert response.status_code == 303
 
 
@@ -71,28 +74,32 @@ class TestVerifyBrokToken:
         """Request without Authorization header returns 401."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/api/portfolio", cookies={"brokr_session": token})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/api/portfolio")
         assert response.status_code == 401
 
     def test_invalid_auth_format_returns_401(self, client, with_auth_env):
         """Authorization header without Bearer prefix returns 401."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/api/portfolio", cookies={"brokr_session": token}, headers={"Authorization": "NotBearer token"})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/api/portfolio", headers={"Authorization": "NotBearer token"})
         assert response.status_code == 401
 
     def test_wrong_token_returns_401(self, client, with_auth_env):
         """Wrong bearer token returns 401 with 'Invalid token'."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/api/portfolio", cookies={"brokr_session": token}, headers={"Authorization": "Bearer wrong-token"})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/api/portfolio", headers={"Authorization": "Bearer wrong-token"})
         assert response.status_code == 401
 
     def test_correct_token_allows_request(self, client, with_auth_env):
         """Correct bearer token allows request to proceed."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/api/portfolio", cookies={"brokr_session": token}, headers={"Authorization": "Bearer test-bearer-token-12345"})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/api/portfolio", headers={"Authorization": "Bearer test-bearer-token-12345"})
         # Should not be 401 due to token mismatch - session is not authenticated so 401 with "Session expired"
         if response.status_code == 401:
             assert "Invalid token" not in response.text

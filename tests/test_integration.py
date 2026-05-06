@@ -40,7 +40,8 @@ class TestCookieValidationChain:
         cookie = response.cookies["brokr_session"]
 
         # Use the cookie to fetch the bearer token
-        response = client.get("/api/session-token", cookies={"brokr_session": cookie})
+        client.cookies.set("brokr_session", cookie)
+        response = client.get("/api/session-token")
         assert response.status_code == 200
         assert response.json() == {"token": "test-bearer-token-12345"}
 
@@ -51,13 +52,14 @@ class TestCookieValidationChain:
         cookie = response.cookies["brokr_session"]
 
         # Request with only session cookie (no Bearer) — middleware passes, verify_brok_token rejects
-        response = client.get("/api/portfolio", cookies={"brokr_session": cookie}, follow_redirects=False)
+        client.cookies.set("brokr_session", cookie)
+        response = client.get("/api/portfolio", follow_redirects=False)
         assert response.status_code == 401, "Bearer token missing — verify_brok_token should reject"
 
         # Request with session cookie AND valid Bearer — should pass both checks
+        client.cookies.set("brokr_session", cookie)
         response = client.get(
             "/api/portfolio",
-            cookies={"brokr_session": cookie},
             headers={"Authorization": "Bearer test-bearer-token-12345"},
             follow_redirects=False,
         )
@@ -73,7 +75,8 @@ class TestCookieValidationChain:
         cookie_value, _ = make_session_cookie()
 
         # /api/session-token does NOT require Bearer — only valid cookie (middleware check)
-        response = client.get("/api/session-token", cookies={"brokr_session": cookie_value})
+        client.cookies.set("brokr_session", cookie_value)
+        response = client.get("/api/session-token")
         assert response.status_code == 200, "Valid cookie passed middleware — route handler executed"
 
 
@@ -93,7 +96,8 @@ class TestUnauthorizedRedirect:
         cookie = response.cookies["brokr_session"]
 
         # Request with cookie but no Bearer — verify_brok_token rejects
-        response = client.get("/api/portfolio", cookies={"brokr_session": cookie}, follow_redirects=False)
+        client.cookies.set("brokr_session", cookie)
+        response = client.get("/api/portfolio", follow_redirects=False)
         assert response.status_code == 401
 
     def test_wrong_bearer_returns_401(self, client, with_auth_env):
@@ -103,9 +107,9 @@ class TestUnauthorizedRedirect:
         cookie = response.cookies["brokr_session"]
 
         # Request with cookie AND wrong Bearer token
+        client.cookies.set("brokr_session", cookie)
         response = client.get(
             "/api/portfolio",
-            cookies={"brokr_session": cookie},
             headers={"Authorization": "Bearer wrong-token"},
             follow_redirects=False,
         )
@@ -126,7 +130,8 @@ class TestExpiredCookie:
         )
 
         # Attempt to use expired cookie
-        response = client.get("/api/session-token", cookies={"brokr_session": expired_token}, follow_redirects=False)
+        client.cookies.set("brokr_session", expired_token)
+        response = client.get("/api/session-token", follow_redirects=False)
 
         assert response.status_code == 303, "Expired cookie should redirect to /login"
         assert "/login" in response.headers["location"]
@@ -141,6 +146,7 @@ class TestExpiredCookie:
         )
 
         # Attempt to access protected endpoint with expired cookie
-        response = client.get("/api/session-token", cookies={"brokr_session": expired_token}, follow_redirects=False)
+        client.cookies.set("brokr_session", expired_token)
+        response = client.get("/api/session-token", follow_redirects=False)
         assert response.status_code == 303, "Expired cookie should redirect, not grant access"
         assert "/login" in response.headers["location"]

@@ -80,12 +80,12 @@ class TestApiAuthRoute:
         """ROUTES-03: Valid credentials return {"status": "authenticated"}."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
+        client.cookies.set("brokr_session", token)
         with patch("app.main.DeGiroClient.authenticate") as mock_auth:
             mock_auth.return_value = MagicMock()
             response = client.post(
                 "/api/auth",
                 json={"username": "user", "password": "pass"},
-                cookies={"brokr_session": token},
                 headers={"Authorization": "Bearer test-bearer-token-12345"},
             )
             assert response.status_code == 200
@@ -95,12 +95,12 @@ class TestApiAuthRoute:
         """ROUTES-04: ConnectionError from DeGiroClient returns 401."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
+        client.cookies.set("brokr_session", token)
         with patch("app.main.DeGiroClient.authenticate") as mock_auth:
             mock_auth.side_effect = ConnectionError("DeGiro connection failed")
             response = client.post(
                 "/api/auth",
                 json={"username": "user", "password": "pass"},
-                cookies={"brokr_session": token},
                 headers={"Authorization": "Bearer test-bearer-token-12345"},
             )
             assert response.status_code == 401
@@ -109,12 +109,12 @@ class TestApiAuthRoute:
         """ROUTES-05: Generic exception returns 500."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
+        client.cookies.set("brokr_session", token)
         with patch("app.main.DeGiroClient.authenticate") as mock_auth:
             mock_auth.side_effect = RuntimeError("Unexpected error")
             response = client.post(
                 "/api/auth",
                 json={"username": "user", "password": "pass"},
-                cookies={"brokr_session": token},
                 headers={"Authorization": "Bearer test-bearer-token-12345"},
             )
             assert response.status_code == 500
@@ -136,12 +136,12 @@ class TestApiSessionRoute:
         """ROUTES-06: Valid session_id returns {"status": "authenticated"}."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
+        client.cookies.set("brokr_session", token)
         with patch("app.main.DeGiroClient.from_session_id") as mock_session:
             mock_session.return_value = MagicMock()
             response = client.post(
                 "/api/session",
                 json={"session_id": "valid-session-123"},
-                cookies={"brokr_session": token},
                 headers={"Authorization": "Bearer test-bearer-token-12345"},
             )
             assert response.status_code == 200
@@ -151,12 +151,12 @@ class TestApiSessionRoute:
         """ROUTES-07: ConnectionError from DeGiroClient.from_session_id returns 401."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
+        client.cookies.set("brokr_session", token)
         with patch("app.main.DeGiroClient.from_session_id") as mock_session:
             mock_session.side_effect = ConnectionError("Session expired")
             response = client.post(
                 "/api/session",
                 json={"session_id": "invalid-session"},
-                cookies={"brokr_session": token},
                 headers={"Authorization": "Bearer test-bearer-token-12345"},
             )
             assert response.status_code == 401
@@ -169,7 +169,8 @@ class TestSessionTokenRoute:
         """ROUTES-09: Valid session cookie returns BROKR_AUTH_TOKEN."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/api/session-token", cookies={"brokr_session": token})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/api/session-token")
         assert response.status_code == 200
         assert response.json() == {"token": "test-bearer-token-12345"}
 
@@ -187,10 +188,10 @@ class TestApiLogoutRoute:
         """ROUTES-08: Valid Bearer token clears session and returns {"status": "logged_out"}."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
+        client.cookies.set("brokr_session", token)
         response = client.post(
             "/api/logout",
             headers={"Authorization": "Bearer test-bearer-token-12345"},
-            cookies={"brokr_session": token},
         )
         assert response.status_code == 200
         assert response.json() == {"status": "logged_out"}
@@ -203,5 +204,6 @@ class TestApiPortfolioRoute:
         """ROUTES-12: No Authorization header returns 401 (verify_brok_token rejects)."""
         from app.auth import make_session_cookie
         token, _ = make_session_cookie()
-        response = client.get("/api/portfolio", cookies={"brokr_session": token})
+        client.cookies.set("brokr_session", token)
+        response = client.get("/api/portfolio")
         assert response.status_code == 401
