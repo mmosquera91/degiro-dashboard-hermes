@@ -606,7 +606,7 @@
             grid: { color: "#2a2a2a" },
           },
           y: {
-            ticks: { color: "#888", font: { family: "Inter", size: 10 }, callback: (v) => "€" + Math.round(v / 1000) + "k" },
+            ticks: { color: "#888", font: { family: "Inter", size: 10 }, callback: (v) => Math.round(v) },
             grid: { color: "#2a2a2a" },
           },
         },
@@ -775,9 +775,18 @@
     const dailyBadge = $("#kpi-portfolio-sub");
     if (d.daily_change_pct != null) {
       const sign = d.daily_change_pct >= 0 ? "▲" : "▼";
-      dailyBadge.innerHTML = `<span class="badge ${d.daily_change_pct >= 0 ? "badge-positive" : "badge-negative"}">${sign} ${fmtPct(d.daily_change_pct)} today</span>`;
+      dailyBadge.innerHTML = `<span class="badge ${d.daily_change_pct >= 0 ? "badge-positive" : "badge-negative"}">${sign} ${fmtEur(d.daily_change_eur)} (${fmtPct(d.daily_change_pct)}) today</span>`;
     } else {
       dailyBadge.textContent = "—";
+    }
+
+    // Card 1 — Portfolio P&L line (true_total_pl)
+    const plEl = $("#kpi-portfolio-pl");
+    if (d.true_total_pl != null) {
+      plEl.textContent = `Total P&L: ${fmtEur(d.true_total_pl)} (${fmtPct(d.true_total_pl_pct)})`;
+      setSignClass(plEl, d.true_total_pl);
+    } else {
+      plEl.textContent = "—";
     }
 
     // Card 2 — Invested (excl. cash)
@@ -1220,6 +1229,11 @@
       const val = top5El.querySelector('.card-value');
       val.textContent = top5.toFixed(1) + '%';
       val.style.color = ''; // neutral — no colour
+      const top5Sub = top5El.querySelector('#kpi-top5-sub');
+      if (top5Sub) {
+        const sorted = [...positions].sort((a,b) => (b.weight||0)-(a.weight||0)).slice(0,5);
+        top5Sub.textContent = sorted.map(p => p.symbol || p.name || '').join(' · ');
+      }
     }
 
     // HHI
