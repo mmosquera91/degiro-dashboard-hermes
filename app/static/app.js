@@ -847,8 +847,8 @@
     const etfValue = totalValue * (etfPct / 100);
     const stockValue = totalValue * (stockPct / 100);
 
-    $("#alloc-stocks-label").innerHTML = `<strong>${fmtEur(stockValue)}</strong> · ${stockPct.toFixed(1)}%`;
-    $("#alloc-etfs-label").innerHTML = `<strong>${fmtEur(etfValue)}</strong> · ${etfPct.toFixed(1)}%`;
+    $("#alloc-stocks-label").innerHTML = `<strong>${fmtEur(stockValue)}</strong> · <span class="alloc-pct">${stockPct.toFixed(1)}%</span>`;
+    $("#alloc-etfs-label").innerHTML = `<strong>${fmtEur(etfValue)}</strong> · <span class="alloc-pct">${etfPct.toFixed(1)}%</span>`;
 
     // Bar: stocks on left (orange), etfs on right (teal)
     $("#alloc-stocks-bar").style.width = stockPct + "%";
@@ -1050,13 +1050,13 @@
 
       tr.innerHTML = `
         <td class="col-name">${esc(p.name)}</td>
-        <td>${p.asset_type || "—"}</td>
         <td class="private-value">${fmtEur(p.current_value_eur)}</td>
-        <td><span class="private-value">${p.quantity ?? "—"}</span></td>
-        <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
-        <td>${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
         <td class="${plClass}">${p.unrealized_pl_pct != null ? p.unrealized_pl_pct.toFixed(2) + "%" : "—"}</td>
+        <td>${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
+        <td><span class="private-value">${p.quantity ?? "—"}</span></td>
         <td>${p.weight != null ? p.weight.toFixed(1) + "%" : "—"}</td>
+        <td>${p.asset_type || "—"}</td>
+        <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
         <td>${p.rsi != null ? p.rsi.toFixed(0) : "—"}</td>
         <td>${p.momentum_score != null ? p.momentum_score.toFixed(2) : "—"}</td>
         <td>${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
