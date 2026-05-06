@@ -15,9 +15,29 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 
 from .degiro_client import DeGiroClient
+from . import schemas
+from .schemas import (
+    AuthRequest,
+    SessionRequest,
+    HealthResponse,
+    AuthResponse,
+    PortfolioResponse,
+    BenchmarkResponse,
+    SnapshotSaveResponse,
+    SnapshotDeleteResponse,
+    EnrichmentStatusResponse,
+    HermesContextResponse,
+    ErrorResponse,
+    SessionTokenResponse,
+    RefreshPricesResponse,
+    SnapshotListResponse,
+    SnapshotListItem,
+    SymbolCacheClearResponse,
+    ReloadOverridesResponse,
+    LogoutResponse,
+)
 from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
@@ -539,29 +559,16 @@ app.add_middleware(
 )
 
 
-# ─── API Models ───
-
-class AuthRequest(BaseModel):
-    username: str
-    password: str
-    otp: str | None = None
-
-
-class SessionRequest(BaseModel):
-    session_id: str
-    int_account: int | None = None
-
-
 # ─── Health ───
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health():
     return {"status": "ok"}
 
 
 # ─── Auth ───
 
-@app.post("/api/auth", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)])
+@app.post("/api/auth", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)], response_model=AuthResponse)
 async def auth(request: AuthRequest):
     """Authenticate with DeGiro. Credentials are discarded immediately after session establishment."""
     try:
@@ -585,7 +592,7 @@ async def auth(request: AuthRequest):
         raise HTTPException(status_code=500, detail="Authentication failed")
 
 
-@app.post("/api/session", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)])
+@app.post("/api/session", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)], response_model=AuthResponse)
 async def session_auth(request: SessionRequest):
     """Authenticate using an existing DeGiro session ID from browser cookies.
 
@@ -614,7 +621,7 @@ async def session_auth(request: SessionRequest):
 
 # ─── Portfolio ───
 
-@app.get("/api/portfolio", dependencies=[Depends(verify_brok_token)])
+@app.get("/api/portfolio", dependencies=[Depends(verify_brok_token)], response_model=PortfolioResponse)
 async def get_portfolio():
     """Return full portfolio with all computed metrics.
 
@@ -813,7 +820,7 @@ async def _do_enrich_session_async():
         _release_operation_lock()
 
 
-@app.post("/api/refresh-prices", dependencies=[Depends(verify_brok_token)])
+@app.post("/api/refresh-prices", dependencies=[Depends(verify_brok_token)], response_model=dict)
 async def refresh_prices():
     """Re-enrich current portfolio positions with fresh yfinance data.
 
@@ -830,7 +837,7 @@ async def refresh_prices():
     return {"status": "enrichment_started"}
 
 
-@app.get("/api/enrichment-status")
+@app.get("/api/enrichment-status", response_model=EnrichmentStatusResponse)
 async def enrichment_status():
     """Return current enrichment state — no auth required, no financial data."""
     with _sync_lock:
@@ -844,7 +851,7 @@ async def enrichment_status():
 
 # ─── Hermes Context ───
 
-@app.get("/api/hermes-context", dependencies=[Depends(verify_brok_token)])
+@app.get("/api/hermes-context", dependencies=[Depends(verify_brok_token)], response_model=HermesContextResponse)
 async def hermes_context():
     """Return structured context for Hermes AI agent.
 
@@ -859,7 +866,7 @@ async def hermes_context():
 
 # ─── Session Token ───
 
-@app.get("/api/session-token")
+@app.get("/api/session-token", response_model=SessionTokenResponse)
 async def get_session_token():
     """Return the BROKR_AUTH_TOKEN for the current authenticated session.
 
@@ -875,7 +882,7 @@ async def get_session_token():
 
 # ─── Logout ───
 
-@app.post("/api/logout", dependencies=[Depends(verify_brok_token)])
+@app.post("/api/logout", dependencies=[Depends(verify_brok_token)], response_model=LogoutResponse)
 async def logout():
     """Clear in-memory session and portfolio data."""
     with _sync_lock:
@@ -885,7 +892,7 @@ async def logout():
 
 # ─── Admin ───
 
-@app.delete("/api/admin/symbol-cache", dependencies=[Depends(verify_brok_token)])
+@app.delete("/api/admin/symbol-cache", dependencies=[Depends(verify_brok_token)], response_model=SymbolCacheClearResponse)
 async def delete_symbol_cache():
     """Clear the symbol resolution cache.
 
@@ -897,7 +904,7 @@ async def delete_symbol_cache():
     return {"cleared": cleared}
 
 
-@app.post("/api/admin/reload-overrides", dependencies=[Depends(verify_brok_token)])
+@app.post("/api/admin/reload-overrides", dependencies=[Depends(verify_brok_token)], response_model=ReloadOverridesResponse)
 async def reload_symbol_overrides():
     """Reload symbol_overrides.json from disk without restarting."""
     from app.market_data import _load_symbol_overrides
@@ -907,7 +914,7 @@ async def reload_symbol_overrides():
 
 # ─── Benchmark ───
 
-@app.get("/api/benchmark", dependencies=[Depends(verify_brok_token)])
+@app.get("/api/benchmark", dependencies=[Depends(verify_brok_token)], response_model=BenchmarkResponse)
 async def get_benchmark():
     """Return benchmark comparison data: snapshots, indexed series, and attribution.
 
@@ -971,7 +978,7 @@ async def get_benchmark():
 
 # ─── Snapshots ───
 
-@app.get("/api/snapshots", dependencies=[Depends(verify_brok_token)])
+@app.get("/api/snapshots", dependencies=[Depends(verify_brok_token)], response_model=SnapshotListResponse)
 async def list_snapshots():
     """List all snapshots (lightweight — no portfolio_data payload)."""
     snapshots = load_snapshots()
@@ -987,7 +994,7 @@ async def list_snapshots():
     ]
 
 
-@app.delete("/api/snapshots/{date_str}", dependencies=[Depends(verify_brok_token)])
+@app.delete("/api/snapshots/{date_str}", dependencies=[Depends(verify_brok_token)], response_model=SnapshotDeleteResponse)
 async def delete_snapshot(date_str: str):
     """Delete a snapshot file by date string (YYYY-MM-DD)."""
     try:
@@ -1011,7 +1018,7 @@ async def delete_snapshot(date_str: str):
     return {"deleted": date_str}
 
 
-@app.post("/api/snapshots/save", dependencies=[Depends(verify_brok_token)])
+@app.post("/api/snapshots/save", dependencies=[Depends(verify_brok_token)], response_model=SnapshotSaveResponse)
 async def save_snapshot_now():
     """Manually trigger a snapshot save for the current portfolio."""
     with _sync_lock:
