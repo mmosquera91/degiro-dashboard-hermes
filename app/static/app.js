@@ -563,6 +563,7 @@
     const mergedBenchmark = allDates.map(d => benchmarkByDate.get(d) || null);
 
     // Build chart data — X-axis from merged daily dates, Y-axis indexed to 100
+    if (charts.benchmark) { charts.benchmark.destroy(); charts.benchmark = null; }
     charts.benchmark = new Chart($("#chart-benchmark"), {
       type: "line",
       data: {
