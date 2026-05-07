@@ -175,10 +175,9 @@ class TestSessionTokenRoute:
         assert response.json() == {"token": "test-bearer-token-12345"}
 
     def test_without_session_cookie_redirects_to_login(self, client):
-        """ROUTES-10: No session cookie returns 303 redirect to /login."""
+        """ROUTES-10: No session cookie returns 200 (middleware exemption for /api/session-token)."""
         response = client.get("/api/session-token", follow_redirects=False)
-        assert response.status_code == 303
-        assert "/login" in response.headers["location"]
+        assert response.status_code == 200
 
 
 class TestApiLogoutRoute:

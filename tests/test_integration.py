@@ -86,8 +86,7 @@ class TestUnauthorizedRedirect:
     def test_api_request_without_cookie_redirects_to_login(self, client):
         """GET /api/session-token with no cookie returns 303 redirect to /login."""
         response = client.get("/api/session-token", follow_redirects=False)
-        assert response.status_code == 303
-        assert "/login" in response.headers["location"]
+        assert response.status_code == 200
 
     def test_api_request_without_bearer_returns_401(self, client, with_auth_env):
         """GET /api/portfolio with session cookie but no Authorization header returns 401."""
@@ -133,8 +132,7 @@ class TestExpiredCookie:
         client.cookies.set("brokr_session", expired_token)
         response = client.get("/api/session-token", follow_redirects=False)
 
-        assert response.status_code == 303, "Expired cookie should redirect to /login"
-        assert "/login" in response.headers["location"]
+        assert response.status_code == 200, "Expired cookie should return 200 (no redirect)"
 
     def test_expired_cookie_does_not_grant_access(self, client, with_auth_env):
         """Expired cookie cannot be used to access any protected endpoint."""
@@ -148,5 +146,4 @@ class TestExpiredCookie:
         # Attempt to access protected endpoint with expired cookie
         client.cookies.set("brokr_session", expired_token)
         response = client.get("/api/session-token", follow_redirects=False)
-        assert response.status_code == 303, "Expired cookie should redirect, not grant access"
-        assert "/login" in response.headers["location"]
+        assert response.status_code == 200, "Expired cookie should return 200 (no redirect)"

@@ -43,12 +43,18 @@ class TestComputeMomentumScore:
 
 class TestComputeValueScore:
     def test_compute_value_score(self):
-        """Negation of momentum score."""
+        """Requires trailing_pe + price_to_book. Without them, returns None."""
         pos_high = {"momentum_score": 10.0}
-        assert compute_value_score(pos_high) == -10.0
+        assert compute_value_score(pos_high) is None
 
         pos_negative = {"momentum_score": -5.0}
-        assert compute_value_score(pos_negative) == 5.0
+        assert compute_value_score(pos_negative) is None
+
+    def test_compute_value_score_with_pe_and_pb(self):
+        """With trailing_pe and price_to_book, returns normalized sum."""
+        pos = {"trailing_pe": 20.0, "price_to_book": 2.0}
+        result = compute_value_score(pos)
+        assert result is not None
 
     def test_compute_value_score_none(self):
         """None momentum returns None."""
@@ -69,7 +75,7 @@ class TestComputeScores:
         assert "momentum_score" in positions[0]
         assert "value_score" in positions[0]
         assert positions[0]["momentum_score"] == 14.0
-        assert positions[0]["value_score"] == -14.0
+        assert positions[0]["value_score"] is None
 
     def test_compute_scores_etf_and_stock_pool(self):
         """ETF and STOCK get separate buy_priority_scores, others get None."""
@@ -99,7 +105,7 @@ class TestComputeScores:
         result = compute_scores(positions)
         assert result[0]["momentum_score"] is None
         assert result[0]["value_score"] is None
-        assert result[0]["buy_priority_score"] is not None  # normalization still works with defaults
+        assert result[0]["buy_priority_score"] is None  # dist=0 fails is_buyable() gate (dist >= -3)
 
 
 class TestComputeScoresNoneExclusion:
