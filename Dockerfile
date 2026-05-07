@@ -12,13 +12,11 @@ COPY start.py ./start.py
 
 RUN chown -R appuser:appgroup /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends gosu \
-    && rm -rf /var/lib/apt/lists/*
-
-# Entrypoint runs as root to fix volume permissions, then drops to appuser
-COPY entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+# Create snapshot directory — will be overlaid by bind mount at runtime
+RUN mkdir -p /data/snapshots && touch /data/symbol_overrides.json && chown -R appuser:appgroup /data
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+USER appuser
+
+CMD ["python", "/app/start.py"]
