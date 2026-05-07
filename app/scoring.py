@@ -8,13 +8,13 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def _min_max_normalize(values: list[float]) -> list[float]:
-    """Min-max normalize a list of values to [0, 1].
+def _zscore_normalize(values: list[float]) -> list[float]:
+    """Z-score normalize a list of values to [0, 1] via standard scoring.
 
-    If all values are the same, returns 0.5 for all.
+    Maps to [0, 1] using max(0, min(1, 0.5 + (v - mean) / (3 * std))).
+    If N < 3, returns [0.5] * N (insufficient data for z-score).
     None values are treated as the median of non-None values.
     """
-    # Replace None with median
     clean = [v for v in values if v is not None]
     if not clean:
         return [0.5] * len(values)
@@ -22,13 +22,17 @@ def _min_max_normalize(values: list[float]) -> list[float]:
     median_val = float(np.median(clean))
     filled = [v if v is not None else median_val for v in values]
 
-    min_val = min(filled)
-    max_val = max(filled)
+    n = len(filled)
+    if n < 3:
+        return [0.5] * n
 
-    if min_val == max_val:
-        return [0.5] * len(values)
+    mean_val = float(np.mean(filled))
+    std_val = float(np.std(filled, ddof=1))
 
-    return [(v - min_val) / (max_val - min_val) for v in filled]
+    if std_val == 0:
+        return [0.5] * n
+
+    return [max(0.0, min(1.0, 0.5 + (v - mean_val) / (3 * std_val))) for v in filled]
 
 
 def compute_momentum_score(position: dict) -> Optional[float]:
@@ -53,21 +57,53 @@ def compute_momentum_score(position: dict) -> Optional[float]:
 
 
 def compute_value_score(position: dict) -> Optional[float]:
-    """Compute value score — higher for positions that are more 'on sale'.
+    """Compute value score — lower P/E and P/B are better.
 
-    Based on inverse of recent gains: positions with lower momentum score higher.
-    We negate the momentum score so that weak momentum = high value score.
+    Averages trailing_pe and price_to_book (both from yfinance).
+    If neither is available → None (gets 0.5 in normalize).
     """
-    momentum = position.get("momentum_score")
-    if momentum is None:
+    pe = position.get("trailing_pe")
+    pb = position.get("price_to_book")
+
+    has_pe = pe is not None and pe > 0
+    has_pb = pb is not None and pb > 0
+
+    if not has_pe and not has_pb:
         return None
-    return round(-momentum, 2)
+
+    if has_pe and has_pb:
+        return round((pe + pb) / 2, 2)
+    if has_pe:
+        return round(pe, 2)
+    return round(pb, 2)
+
+
+def is_buyable(position: dict) -> bool:
+    """Absolute quality gates before buy eligibility.
+
+    Gates: RSI < 70 (if exists), distance_from_52w_high_pct < -3%, momentum_score > -25.
+    """
+    rsi = position.get("rsi")
+    if rsi is not None and rsi >= 70:
+        return False
+
+    dist = position.get("distance_from_52w_high_pct")
+    if dist is not None and dist >= -3:
+        # Not far enough below 52w high — requires strictly < -3
+        return False
+
+    momentum = position.get("momentum_score")
+    if momentum is not None and momentum <= -25:
+        return False
+
+    return True
 
 
 def compute_scores(positions: list[dict]) -> list[dict]:
     """Compute momentum, value, and buy priority scores for all positions.
 
     Buy priority is computed within separate ETF and STOCK pools.
+    Only positions passing is_buyable() are scored; others get buy_priority_score = None.
     """
     # Step 1: Compute momentum score for each position
     for pos in positions:
@@ -85,17 +121,28 @@ def compute_scores(positions: list[dict]) -> list[dict]:
         if not pool:
             continue
 
-        # Extract values and track which positions have None per dimension
-        # For each dimension: extract non-None values, normalize only the non-None pool,
-        # then assign 0.5 (neutral) to positions with None
         n = len(pool)
+
+        # Pre-compute mask: which positions pass is_buyable
+        buyable_mask = [is_buyable(p) for p in pool]
+
+        # Momentum scores (used as independent signal, not inverted)
+        momentum_scores = [p.get("momentum_score") for p in pool]
+        mom_none_mask = [v is None for v in momentum_scores]
+        mom_clean = [v for v in momentum_scores if v is not None]
+        norm_momentum = _zscore_normalize(mom_clean) if mom_clean else [0.5]
+        norm_momentum_full = []
+        ni = 0
+        for has_none in mom_none_mask:
+            norm_momentum_full.append(0.5 if has_none else norm_momentum[ni])
+            if not has_none:
+                ni += 1
 
         # value_score
         value_scores = [p.get("value_score") for p in pool]
         value_none_mask = [v is None for v in value_scores]
         value_clean = [v for v in value_scores if v is not None]
-        norm_value = _min_max_normalize(value_clean) if value_clean else [0.5]
-        # Reconstruct full-length with 0.5 for None positions
+        norm_value = _zscore_normalize(value_clean) if value_clean else [0.5]
         norm_value_full = []
         ni = 0
         for has_none in value_none_mask:
@@ -107,7 +154,7 @@ def compute_scores(positions: list[dict]) -> list[dict]:
         distances = [p.get("distance_from_52w_high_pct") for p in pool]
         dist_none_mask = [d is None for d in distances]
         dist_clean = [d for d in distances if d is not None]
-        norm_distance = _min_max_normalize([-d for d in dist_clean]) if dist_clean else [0.5]
+        norm_distance = _zscore_normalize([-d for d in dist_clean]) if dist_clean else [0.5]
         norm_distance_full = []
         ni = 0
         for has_none in dist_none_mask:
@@ -116,10 +163,10 @@ def compute_scores(positions: list[dict]) -> list[dict]:
                 ni += 1
 
         # rsi
-        rsi_values = [p.get("rsi", 0) or 0 for p in pool]
+        rsi_values = [p.get("rsi") for p in pool]
         rsi_none_mask = [r is None for r in rsi_values]
         rsi_clean = [r for r in rsi_values if r is not None]
-        norm_rsi_inv = _min_max_normalize([100 - r for r in rsi_clean]) if rsi_clean else [0.5]
+        norm_rsi_inv = _zscore_normalize([100 - r for r in rsi_clean]) if rsi_clean else [0.5]
         norm_rsi_full = []
         ni = 0
         for has_none in rsi_none_mask:
@@ -131,7 +178,7 @@ def compute_scores(positions: list[dict]) -> list[dict]:
         weights = [p.get("weight", 0) or 0 for p in pool]
         weight_none_mask = [w is None for w in weights]
         weight_clean = [w for w in weights if w is not None]
-        norm_weight_inv = _min_max_normalize([-w for w in weight_clean]) if weight_clean else [0.5]
+        norm_weight_inv = _zscore_normalize([-w for w in weight_clean]) if weight_clean else [0.5]
         norm_weight_full = []
         ni = 0
         for has_none in weight_none_mask:
@@ -140,10 +187,15 @@ def compute_scores(positions: list[dict]) -> list[dict]:
                 ni += 1
 
         for i, pos in enumerate(pool):
+            if not buyable_mask[i]:
+                pos["buy_priority_score"] = None
+                continue
+
             buy_score = (
-                0.35 * norm_value_full[i]
-                + 0.35 * norm_distance_full[i]
-                + 0.20 * norm_rsi_full[i]
+                0.25 * norm_value_full[i]
+                + 0.20 * norm_momentum_full[i]
+                + 0.30 * norm_distance_full[i]
+                + 0.15 * norm_rsi_full[i]
                 + 0.10 * norm_weight_full[i]
             )
             pos["buy_priority_score"] = round(buy_score, 2)
