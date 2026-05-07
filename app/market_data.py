@@ -28,7 +28,7 @@ _fx_lock = threading.RLock()
 #   - Price cache (in-memory, 15-min TTL): current_price, price_currency, timestamp
 _resolution_cache: dict[str, dict] = {}
 _resolution_cache_lock = threading.RLock()
-_SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
+_SYMBOL_CACHE_PATH = "/app/data/symbol_cache.json"
 
 # Price cache: keyed by resolved yf_symbol, 15-min TTL
 _price_cache: dict[str, dict] = {}
