@@ -1060,7 +1060,7 @@
         <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
         <td>${p.rsi != null ? p.rsi.toFixed(0) : "—"}</td>
         <td>${p.momentum_score != null ? p.momentum_score.toFixed(2) : "—"}</td>
-        <td>${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
+        <td${p.buy_priority_blocked_reason ? ` title="${esc(p.buy_priority_blocked_reason)}" style="cursor:help;border-bottom:1px dotted"` : ""}>${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
       `;
 
       tr.addEventListener("click", () => toggleDetail(p));

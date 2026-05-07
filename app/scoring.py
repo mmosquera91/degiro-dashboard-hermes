@@ -78,25 +78,27 @@ def compute_value_score(position: dict) -> Optional[float]:
     return round(pb, 2)
 
 
-def is_buyable(position: dict) -> bool:
+def is_buyable(position: dict) -> tuple[bool, str | None]:
     """Absolute quality gates before buy eligibility.
 
     Gates: RSI < 70 (if exists), distance_from_52w_high_pct < -3%, momentum_score > -25.
+    Returns (bool, reason) where reason is None if buyable, or a string describing the blocking gate.
     """
     rsi = position.get("rsi")
     if rsi is not None and rsi >= 70:
-        return False
+        return False, f"RSI {rsi:.0f}>=70"
 
     dist = position.get("distance_from_52w_high_pct")
     if dist is not None and dist >= -3:
         # Not far enough below 52w high — requires strictly < -3
-        return False
+        dist_abs = abs(dist)
+        return False, f"a {dist_abs:.0f}% del max 52s"
 
     momentum = position.get("momentum_score")
     if momentum is not None and momentum <= -25:
-        return False
+        return False, f"momentum {momentum:.0f}<=-25"
 
-    return True
+    return True, None
 
 
 def compute_scores(positions: list[dict]) -> list[dict]:
@@ -124,7 +126,8 @@ def compute_scores(positions: list[dict]) -> list[dict]:
         n = len(pool)
 
         # Pre-compute mask: which positions pass is_buyable
-        buyable_mask = [is_buyable(p) for p in pool]
+        buyable_results = [is_buyable(p) for p in pool]
+        buyable_mask = [r[0] for r in buyable_results]
 
         # Momentum scores (used as independent signal, not inverted)
         momentum_scores = [p.get("momentum_score") for p in pool]
@@ -189,6 +192,7 @@ def compute_scores(positions: list[dict]) -> list[dict]:
         for i, pos in enumerate(pool):
             if not buyable_mask[i]:
                 pos["buy_priority_score"] = None
+                pos["buy_priority_blocked_reason"] = buyable_results[i][1]
                 continue
 
             buy_score = (
