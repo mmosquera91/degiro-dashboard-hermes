@@ -116,7 +116,7 @@ def compute_scores(positions: list[dict]) -> list[dict]:
                 ni += 1
 
         # rsi
-        rsi_values = [p.get("rsi") for p in pool]
+        rsi_values = [p.get("rsi", 0) or 0 for p in pool]
         rsi_none_mask = [r is None for r in rsi_values]
         rsi_clean = [r for r in rsi_values if r is not None]
         norm_rsi_inv = _min_max_normalize([100 - r for r in rsi_clean]) if rsi_clean else [0.5]
@@ -128,7 +128,7 @@ def compute_scores(positions: list[dict]) -> list[dict]:
                 ni += 1
 
         # weight
-        weights = [p.get("weight") for p in pool]
+        weights = [p.get("weight", 0) or 0 for p in pool]
         weight_none_mask = [w is None for w in weights]
         weight_clean = [w for w in weights if w is not None]
         norm_weight_inv = _min_max_normalize([-w for w in weight_clean]) if weight_clean else [0.5]
