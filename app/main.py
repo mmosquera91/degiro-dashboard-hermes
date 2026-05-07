@@ -520,6 +520,8 @@ async def check_session_cookie(request: Request, call_next):
         or path.startswith("/static/")
         or path == "/health"
         or path == "/logout"
+        or path == "/api/hermes-context"
+        or path == "/api/session-token"
     ):
         return await call_next(request)
 
