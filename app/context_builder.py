@@ -99,7 +99,8 @@ def _build_plaintext(context: dict, date_str: str) -> str:
 
     # Portfolio summary
     lines.append("═══ PORTFOLIO SUMMARY ═══")
-    lines.append(f"  Total Value:      €{summary['total_value_eur']:,.2f}" if summary.get('total_value_eur') else "  Total Value:      N/A")
+    value = summary.get("total_value_eur")
+    lines.append(f"  Total Value:      €{value:,.2f}" if value is not None else "  Total Value:      N/A")
     lines.append(f"  Total Invested:   €{summary['total_invested']:,.2f}" if summary.get('total_invested') else "  Total Invested:   N/A")
     lines.append(f"  Total P&L:        €{summary['total_pl']:,.2f} ({summary['total_pl_pct']:+.2f}%)" if summary.get('total_pl') is not None else "  Total P&L:        N/A")
     lines.append(f"  ETF Allocation:   {summary['etf_allocation_pct']:.1f}% (target: {TARGET_ETF_PCT}%)" if summary.get('etf_allocation_pct') is not None else "  ETF Allocation:   N/A")
