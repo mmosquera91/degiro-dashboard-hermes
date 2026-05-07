@@ -995,12 +995,21 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         position["currency"] = "USD"
                     logger.debug(f"[STAMP] {symbol}: {old_price} → {fresh_price}")
                     if position.get("avg_buy_price", 0) > 0:
-                        position["unrealized_pl_pct"] = round(
-                            ((fresh_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
-                        )
+                        # avg_buy_price is always in EUR (from DeGiro's position data).
+                        # fresh_price is in yf_currency (EUR for European listings, USD for US).
+                        # Convert avg_buy_price to yf_currency before computing P&L% to ensure
+                        # both values are in the same currency.
+                        pos_ccy = position.get("currency", "EUR")
+                        avg_buy_in_pos_ccy = position["avg_buy_price"]
+                        if pos_ccy != "EUR":
+                            avg_buy_in_pos_ccy = position["avg_buy_price"] * get_fx_rate("EUR", pos_ccy)
                         position["unrealized_pl"] = round(
-                            (fresh_price - position["avg_buy_price"]) * position.get("quantity", 0), 2
+                            (fresh_price - avg_buy_in_pos_ccy) * position.get("quantity", 0), 2
                         )
+                        if avg_buy_in_pos_ccy > 0:
+                            position["unrealized_pl_pct"] = round(
+                                ((fresh_price - avg_buy_in_pos_ccy) / avg_buy_in_pos_ccy) * 100, 2
+                            )
                     position["52w_high"] = entry.get("fundamentals", {}).get("week52_high")
                     position["52w_low"] = None  # not cached
                 else:
@@ -1250,12 +1259,17 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                 position["price_source"] = "batch"
                 _update_price_cache(yf_symbol, yf_price, yf_currency)
                 if position["avg_buy_price"] > 0:
-                    position["unrealized_pl_pct"] = round(
-                        ((yf_price - position["avg_buy_price"]) / position["avg_buy_price"]) * 100, 2
-                    )
+                    pos_ccy = position.get("currency", "EUR")
+                    avg_buy_in_pos_ccy = position["avg_buy_price"]
+                    if pos_ccy != "EUR":
+                        avg_buy_in_pos_ccy = position["avg_buy_price"] * get_fx_rate("EUR", pos_ccy)
                     position["unrealized_pl"] = round(
-                        (yf_price - position["avg_buy_price"]) * position["quantity"], 2
+                        (yf_price - avg_buy_in_pos_ccy) * position["quantity"], 2
                     )
+                    if avg_buy_in_pos_ccy > 0:
+                        position["unrealized_pl_pct"] = round(
+                            ((yf_price - avg_buy_in_pos_ccy) / avg_buy_in_pos_ccy) * 100, 2
+                        )
 
         # 52w high/low and distance — only write when currencies match.
         if _price_currency_safe:
