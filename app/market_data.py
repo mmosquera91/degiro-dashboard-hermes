@@ -1538,56 +1538,79 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     # TODO: persist enriched metrics to cache in v2
     _post_batch_start = time.time()
     post_batch_enriched_count = 0
-    for pos in enriched:
-        yf_sym = pos.get("_resolved_yf_symbol", "")
-        if not yf_sym or pos.get("price_source") != "batch":
-            continue
-        if pos.get("rsi") is not None and pos.get("perf_30d") is not None:
-            continue  # already enriched through the regular history path
+
+    # Collect positions needing enrichment
+    _needs_enrichment = [
+        (i, pos) for i, pos in enumerate(enriched)
+        if pos.get("_resolved_yf_symbol")
+        and pos.get("price_source") == "batch"
+        and pos.get("rsi") is None
+        and pos.get("perf_30d") is None
+    ]
+
+    if _needs_enrichment:
+        _batch_size = 20
+
+        async def _post_enrich_one(idx: int, pos: dict) -> dict:
+            yf_sym = pos.get("_resolved_yf_symbol", "")
+            try:
+                ticker = yf.Ticker(yf_sym)
+                hist = ticker.history(period="1y", auto_adjust=True)
+                if hist is None or hist.empty:
+                    logger.warning("Post-batch enrichment: no 1y history for %s", yf_sym)
+                    return pos
+                if len(hist) < 14:
+                    _yf_throttle()
+                    hist = ticker.history(period="3mo", interval="1d", auto_adjust=True)
+
+                close = hist["Close"]
+                if len(close) < 2:
+                    return pos
+
+                pos["rsi"] = compute_rsi(close, period=14)
+                perf = _compute_performance(close)
+                pos["perf_30d"] = perf["perf_30d"]
+                pos["perf_90d"] = perf["perf_90d"]
+                pos["perf_ytd"] = perf["perf_ytd"]
+
+                current_price = pos.get("current_price")
+                if current_price is not None and current_price > 0:
+                    hist_52w_high = float(hist["High"].max()) if len(hist) > 0 else None
+                    hist_52w_low = float(hist["Low"].min()) if len(hist) > 0 else None
+                    pos["52w_low"] = round(hist_52w_low, 4) if hist_52w_low is not None else None
+                    if hist_52w_high is not None and hist_52w_high > 0:
+                        pos["52w_high"] = round(hist_52w_high, 4)
+                        pos["distance_from_52w_high_pct"] = round(
+                            ((current_price - hist_52w_high) / hist_52w_high) * 100, 2
+                        )
+                return pos
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "Too Many Requests" in err_str:
+                    logger.warning("Rate limited in post-batch enrichment for %s", yf_sym)
+                    return pos
+                logger.warning("Post-batch enrichment failed for %s: %s", yf_sym, str(e))
+                return pos
+
+        async def _run_post_batch() -> int:
+            count = 0
+            for batch_start in range(0, len(_needs_enrichment), _batch_size):
+                batch = _needs_enrichment[batch_start:batch_start + _batch_size]
+                tasks = [_post_enrich_one(i, pos) for i, pos in batch]
+                results = await asyncio.gather(*tasks)
+                for i, result in zip([idx for idx, _ in batch], results):
+                    enriched[i] = result
+                    count += 1
+                if batch_start + _batch_size < len(_needs_enrichment):
+                    _yf_throttle()
+            return count
 
         try:
-            ticker = yf.Ticker(yf_sym)
-            _yf_throttle()
-            hist = ticker.history(period="1y", auto_adjust=True)
-            if hist is None or hist.empty:
-                logger.warning("Post-batch enrichment: no 1y history for %s", yf_sym)
-                continue
-            if len(hist) < 14:
-                _yf_throttle()
-                hist = ticker.history(period="3mo", interval="1d", auto_adjust=True)
-
-            close = hist["Close"]
-            if len(hist) < 2:
-                continue
-
-            # RSI
-            pos["rsi"] = compute_rsi(close, period=14)
-
-            # Performance
-            perf = _compute_performance(close)
-            pos["perf_30d"] = perf["perf_30d"]
-            pos["perf_90d"] = perf["perf_90d"]
-            pos["perf_ytd"] = perf["perf_ytd"]
-
-            # 52w low / distance from 52w high from history
-            current_price = pos.get("current_price")
-            if current_price is not None and current_price > 0:
-                hist_52w_high = float(hist["High"].max()) if len(hist) > 0 else None
-                hist_52w_low = float(hist["Low"].min()) if len(hist) > 0 else None
-                pos["52w_low"] = round(hist_52w_low, 4) if hist_52w_low is not None else None
-                if hist_52w_high is not None and hist_52w_high > 0:
-                    pos["52w_high"] = round(hist_52w_high, 4)
-                    pos["distance_from_52w_high_pct"] = round(
-                        ((current_price - hist_52w_high) / hist_52w_high) * 100, 2
-                    )
-
-            post_batch_enriched_count += 1
-        except Exception as e:
-            err_str = str(e)
-            if "429" in err_str or "Too Many Requests" in err_str:
-                logger.warning("Rate limited in post-batch enrichment for %s", yf_sym)
-                break
-            logger.warning("Post-batch enrichment failed for %s: %s", yf_sym, str(e))
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            post_batch_enriched_count = asyncio.run(_run_post_batch())
+        else:
+            post_batch_enriched_count = loop.run_until_complete(_run_post_batch())
 
     _post_batch_elapsed = time.time() - _post_batch_start
     if post_batch_enriched_count > 0:
