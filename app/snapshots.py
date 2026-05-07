@@ -237,7 +237,11 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
         return []
 
     # Get first price for indexing
-    first_price = float(data["Close"].iloc[0].iloc[0]) if hasattr(data["Close"].iloc[0], 'iloc') else float(data["Close"].iloc[0])
+    try:
+        first_price = float(data["Close"].iloc[0].iloc[0]) if hasattr(data["Close"].iloc[0], 'iloc') else float(data["Close"].iloc[0])
+    except KeyError:
+        logger.warning("No 'Close' column in benchmark data for %s to %s", start_date, end_date)
+        return []
 
     result = []
     for idx, row in data.iterrows():
