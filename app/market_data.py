@@ -1507,8 +1507,14 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         any_rate_limited = any(r[1] for r in results)
         return all_enriched, any_rate_limited
 
-    loop = asyncio.get_running_loop()
-    enriched, _session_rate_limited = loop.run_until_complete(_run_all())
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running event loop (called from a thread via ThreadPoolExecutor).
+        # asyncio.run() creates a fresh loop — correct for thread contexts.
+        enriched, _session_rate_limited = asyncio.run(_run_all())
+    else:
+        enriched, _session_rate_limited = loop.run_until_complete(_run_all())
 
     # FX conversion to EUR — exactly once per position, after all async enrichment
     for enriched_pos in enriched:
