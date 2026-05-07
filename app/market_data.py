@@ -1484,8 +1484,19 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         loop = asyncio.get_running_loop()
         enriched_pos = await loop.run_in_executor(None, enrich_position, pos, price_batch)
         is_rl = enriched_pos.get("_enrichment_error") == "rate_limited"
+        return _sanitize_floats(enriched_pos), is_rl
 
-        # FX conversion to EUR
+    async def _run_all() -> tuple[list[dict], bool]:
+        tasks = [_enrich_one(i, pos) for i, pos in enumerate(positions)]
+        results = await asyncio.gather(*tasks)
+        all_enriched = [r[0] for r in results]
+        any_rate_limited = any(r[1] for r in results)
+        return all_enriched, any_rate_limited
+
+    enriched, _session_rate_limited = asyncio.run(_run_all())
+
+    # FX conversion to EUR — exactly once per position, after all async enrichment
+    for enriched_pos in enriched:
         pos_currency = enriched_pos.get("currency", "EUR")
         if pos_currency != base_currency:
             fx_rate = get_fx_rate(pos_currency, base_currency)
@@ -1499,17 +1510,6 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             enriched_pos["fx_rate"] = 1.0
             enriched_pos["current_value_eur"] = enriched_pos["current_value"]
             enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
-
-        return _sanitize_floats(enriched_pos), is_rl
-
-    async def _run_all() -> tuple[list[dict], bool]:
-        tasks = [_enrich_one(i, pos) for i, pos in enumerate(positions)]
-        results = await asyncio.gather(*tasks)
-        all_enriched = [r[0] for r in results]
-        any_rate_limited = any(r[1] for r in results)
-        return all_enriched, any_rate_limited
-
-    enriched, _session_rate_limited = asyncio.run(_run_all())
 
     # Post-batch enrichment pass: positions that hit the cache-warm fast path get
     # current_price from the batch fetch but skip the history fetch (line 952→1009),
