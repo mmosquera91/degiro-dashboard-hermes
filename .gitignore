@@ -29,3 +29,6 @@ vendor/
 coverage/
 .cache/
 tmp/
+
+# ── Runtime data (snapshots, caches) ──
+data/
