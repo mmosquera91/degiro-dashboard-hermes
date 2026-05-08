@@ -1,7 +1,7 @@
 # Brokr — Portfolio Intelligence
 
 [![CI](https://github.com/mmosquera91/degiro-dashboard-hermes/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mmosquera91/degiro-dashboard-hermes/actions/workflows/docker-publish.yml)
-[![Docker Image](https://img.shields.io/badge/ghcr-mm0squera91%2Fdegiro--dashboard--hermes-blue?logo=docker)](https://github.com/mmosquera91/degiro-dashboard-hermes/pkgs/container/degiro-dashboard-hermes)
+[![Docker Image](https://img.shields.io/badge/ghcr-mmosquera91%2Fdegiro--dashboard--hermes-blue?logo=docker)](https://github.com/mmosquera91/degiro-dashboard-hermes/pkgs/container/degiro-dashboard-hermes)
 
 Self-hosted portfolio analytics dashboard for long-term DeGiro investors. Brokr connects to your DeGiro account, enriches positions with live market data via yfinance, computes momentum and buy-priority scores, and produces structured context blocks for AI-powered analysis.
 
