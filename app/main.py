@@ -390,7 +390,7 @@ def _restore_portfolio_from_snapshot():
     """
     snapshot = load_latest_snapshot()
     if snapshot is None:
-        logger.error("No snapshot found on startup — portfolio NOT restored; dashboard will show empty state")
+        logger.warning("No snapshot found on startup — dashboard will show empty state until first refresh")
         return
 
     # Verify snapshot file still exists on disk (gap: restore succeeded but file gone)

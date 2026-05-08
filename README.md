@@ -133,10 +133,9 @@ Credentials are discarded immediately — only the session cookie is used.
 | `BROKR_AUTH_TOKEN` | — | **Yes** |
 | `APP_PASSWORD` | — | **Yes** |
 | `SECRET_KEY` | — | **Yes** |
-| `HOST_PORT` | `8000` | No |
+| `COOKIE_SECURE` | `false` | No — set `true` for HTTPS |
 | `TARGET_ETF_PCT` | `70` | No |
 | `TARGET_STOCK_PCT` | `30` | No |
-| `COOKIE_SECURE` | `true` | No — set `false` for local HTTP |
 
 ---
 
