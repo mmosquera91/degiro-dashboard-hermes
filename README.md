@@ -19,6 +19,7 @@ curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/ma
 # 2. Configure
 cp .env.example .env
 # → Edit .env: BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are required
+# → If using plain HTTP (most users): COOKIE_SECURE=false is already set — leave it
 
 # 3. Run
 docker compose up -d
