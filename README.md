@@ -1,218 +1,155 @@
 # Brokr — Portfolio Intelligence
 
 [![CI](https://github.com/mmosquera91/degiro-dashboard-hermes/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mmosquera91/degiro-dashboard-hermes/actions/workflows/docker-publish.yml)
-[![Docker Image](https://img.shields.io/badge/ghcr-mmosquera91%2Fdegiro--dashboard--hermes-blue?logo=docker)](https://github.com/mmosquera91/degiro-dashboard-hermes/pkgs/container/degiro-dashboard-hermes)
+[![Docker](https://img.shields.io/badge/ghcr-mm0squera91%2Fdegiro--dashboard--hermes-blue?logo=docker)](https://github.com/mmosquera91/degiro-dashboard-hermes/pkgs/container/degiro-dashboard-hermes)
+[![Python](https://img.shields.io/badge/python-3.11-blue?logo=python)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-120%20passing-teal)](https://github.com/mmosquera91/degiro-dashboard-hermes)
 
-Self-hosted portfolio analytics dashboard for long-term DeGiro investors. Brokr connects to your DeGiro account, enriches positions with live market data via yfinance, computes momentum and buy-priority scores, and produces structured context blocks for AI-powered analysis.
+Portfolio analytics dashboard for long-term DeGiro investors. Pulls your positions, enriches them with live market data, and generates structured context for AI-powered portfolio analysis.
 
 ---
 
 ## Quick Start
 
-### Download docker-compose.prod.yml + .env.example (recommended)
-
 ```bash
-curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/master/docker-compose.prod.yml
+# 1. Download
+curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/master/docker-compose.yml
 curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/master/.env.example
+
+# 2. Configure
 cp .env.example .env
-# Edit .env — BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are REQUIRED
+# → Edit .env: BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are required
 
-docker compose -f docker-compose.prod.yml up -d
-```
-
-Dashboard at **http://localhost:8000**
-
-### From source (for development)
-
-```bash
-git clone git@github.com:mmosquera91/degiro-dashboard-hermes.git brokr && cd brokr
-cp .env.example .env
+# 3. Run
 docker compose up -d
 ```
 
+Dashboard at **http://localhost:8000** — no build, no clone, just download and go.
+
+To update: `docker compose pull && docker compose up -d`
+
 ---
 
-## Architecture
+## What Brokr Does
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.11, FastAPI, uvicorn |
-| DeGiro API | degiro-connector 3.0.35 |
-| Market data | yfinance (prices, RSI, 52w range, sector, P/E, performance) |
-| Frontend | Vanilla JS + Chart.js v4 + Lucide icons |
-| Font | Inter (Google Fonts) |
-| Deploy | Docker Compose (single container, `network_mode: host`) |
+- **Portfolio** — fetches your DeGiro positions via browser session injection
+- **Enrichment** — live prices, RSI, 52w range, P/E, multi-period performance (yfinance)
+- **Scoring** — momentum, value, and buy-priority scores with quality gates
+- **Benchmark** — portfolio vs S&P 500 with historical snapshots
+- **AI Export** — structured JSON + plaintext context block for AI agents
 
-### Auth Flow
+Brokr provides **data and metrics only**. It doesn't make buy/sell decisions — it gives AI agents clean, structured data to reason with.
 
-Brokr uses a **dual-layer auth system**:
+---
 
-1. **Browser Session** — password-protected login via Jinja2 template. Sets signed `brokr_session` cookie validated by middleware on every page request.
+## Stack
 
-2. **API Bearer Token** — JS calls `/api/session-token` after page load to get `BROKR_AUTH_TOKEN`. All `/api/*` endpoints require `Authorization: Bearer <token>` header.
+`Python 3.11` `FastAPI` `degiro-connector 3.0.35` `yfinance` `Chart.js v4` `Vanilla JS`
+
+### Auth
+
+Dual-layer: **browser session cookie** (login page) → **API bearer token** (JS calls).  
+Credentials are never stored on disk — DeGiro session held in memory with 30-min TTL.
 
 ### Data Flow
 
 ```
-DeGiro API ──→ portfolio positions ──→ yfinance enrichment ──→ scoring engine
-                                         │                         │
-                                         ▼                         ▼
-                                   market_data.py            scoring.py
-                                   (prices, RSI,            (momentum, value,
-                                    52w, P/E, perf)          buy priority)
-                                                                    │
-                                                                    ▼
-                                                           context_builder.py
-                                                           (JSON + plaintext for AI)
+DeGiro → positions → yfinance enrichment → scoring engine → AI context
 ```
 
 ---
 
-## API Reference
+## API
 
-### Authentication
+### Auth & Session
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/api/session` | Bearer | Inject DeGiro JSESSIONID from browser. Body: `{session_id, int_account?}` |
-| `DELETE` | `/api/session` | Bearer | Clear DeGiro session and portfolio cache |
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/session` | Inject DeGiro JSESSIONID. Body: `{session_id, int_account?}` |
+| `DELETE` | `/api/session` | Clear session and cache |
 
 ### Portfolio
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/api/portfolio` | Bearer | Full portfolio with enrichment, scores, and top candidates. Returns cache if stale. |
-| `GET` | `/api/portfolio-raw` | Bearer | Raw DeGiro positions without yfinance (~2-3s). |
-| `POST` | `/api/refresh-prices` | Bearer | Force re-enrichment of cached positions with live prices. |
-| `GET` | `/api/enrichment-status` | None | Poll enrichment progress: `{enriching, last_enriched_at, positions_enriched}` |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/portfolio` | Full portfolio with enrichment (~9s). Cached if stale |
+| `GET` | `/api/portfolio-raw` | Raw DeGiro positions (~2-3s) |
+| `POST` | `/api/refresh-prices` | Force re-enrichment |
+| `GET` | `/api/enrichment-status` | Poll progress: `{enriching, last_enriched_at}` |
 
 ### Analytics
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/api/hermes-context` | Bearer | Structured JSON + plaintext block for AI analysis |
-| `GET` | `/api/benchmark` | Bearer | S&P 500 benchmark comparison vs portfolio |
-| `GET` | `/api/snapshots` | Bearer | List all stored portfolio snapshots |
-| `POST` | `/api/snapshots/save` | Bearer | Save current portfolio state as snapshot |
-| `DELETE` | `/api/snapshots/{date}` | Bearer | Delete a specific snapshot |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/hermes-context` | Structured JSON + plaintext for AI analysis |
+| `GET` | `/api/benchmark` | Portfolio vs S&P 500 |
+| `GET` | `/api/snapshots` | Historical snapshots |
+| `POST` | `/api/snapshots/save` | Save current state |
+| `DELETE` | `/api/snapshots/{date}` | Delete snapshot |
 
-### Admin
+### Admin & System
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `DELETE` | `/api/admin/symbol-cache` | Clear yfinance symbol resolution cache |
-| `POST` | `/api/admin/reload-overrides` | Reload symbol overrides from `/data/symbol_overrides.json` |
-
-### System
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check — returns `{status: "ok"}` |
-| `GET` | `/api/session-token` | Bootstrap endpoint — returns bearer token for JS API calls |
+| `DELETE` | `/api/admin/symbol-cache` | Clear symbol cache |
+| `POST` | `/api/admin/reload-overrides` | Reload symbol overrides |
+| `GET` | `/health` | Health check |
+| `GET` | `/api/session-token` | Bootstrap endpoint for JS auth |
 
 ---
 
 ## Hermes Integration
 
-Brokr generates a ready-to-paste context block for AI agents. Click **Export for Hermes** in the dashboard or hit `GET /api/hermes-context`.
+Click **Export for Hermes** in the dashboard or hit `GET /api/hermes-context`. The context block includes:
 
-### What's in the context
+- Portfolio summary (total value, P&L, ETF/stock allocation vs 70/30 targets, cash)
+- Positions ranked by momentum score (weakest first)
+- Per-position: RSI, 52w range, P/E, 30d/90d/YTD performance, scores
+- Top 3 buy candidates (ETFs and stocks)
+- Benchmark vs S&P 500 with historical comparison
+- Attribution breakdown per position
 
-- **Portfolio Summary** — total value, P&L, allocation vs targets (70/30 ETF/stock), cash
-- **Positions Table** — sorted by momentum score, weakest first
-- **Detailed Metrics** — per-position: RSI, 52w range, P/E, 30d/90d/YTD performance, momentum/value/buy priority scores
-- **Top Buy Candidates** — top 3 ETFs and stocks ranked by buy priority
-- **Benchmark vs S&P 500** — indexed performance comparison with historical snapshots
-- **Attribution** — absolute and relative contribution of each position
+The AI agent handles news, sentiment, macro, and buy/sell recommendations — Brokr just provides the data.
 
-### How Brokr + Hermes work together
+---
 
-Brokr provides **portfolio data and metrics only**. The AI agent (Hermes) handles:
-- News and sentiment analysis
-- Macroeconomic context
-- Earnings reports
-- Buy/sell/hold recommendations
+## DeGiro Session Injection
 
-Brokr doesn't make decisions — it gives the agent clean, structured data to reason with.
+DeGiro blocks automated login. The recommended flow:
+
+1. Log into trader.degiro.nl in your browser
+2. DevTools → Application → Cookies → `trader.degiro.nl` → copy `JSESSIONID`
+3. In Brokr dashboard → **Browser Session** tab → paste JSESSIONID + intAccount
+
+Credentials are discarded immediately — only the session cookie is used.
 
 ---
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HOST_PORT` | `8000` | Port the dashboard listens on |
-| `BROKR_AUTH_TOKEN` | *(required)* | Bearer token for API auth |
-| `APP_PASSWORD` | *(required)* | Password for browser login |
-| `SECRET_KEY` | *(required)* | Key for signing session cookies |
-| `TARGET_ETF_PCT` | `70` | Target ETF allocation percentage |
-| `TARGET_STOCK_PCT` | `30` | Target stock allocation percentage |
-| `COOKIE_SECURE` | `true` | Set `false` for local HTTP development |
-
----
-
-## Deployment
-
-### Production (pre-built image)
-
-```bash
-# 1. Create your .env file
-cp .env.example .env
-# Edit: BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are required
-
-# 2. Start
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### From source (for development)
-
-```bash
-git clone git@github.com:mmosquera91/degiro-dashboard-hermes.git brokr && cd brokr
-cp .env.example .env
-docker compose up -d --build
-```
-
-Container uses `network_mode: host`. For bridge networking (Mac/Windows), override with `network_mode: bridge` and add `ports:` in your compose file.
-
-### DeGiro Session Injection
-
-DeGiro blocks automated login with 400/503 due to anti-bot fingerprinting. The recommended flow:
-
-1. Log into trader.degiro.nl in your browser
-2. Open DevTools → Application → Cookies → `trader.degiro.nl`
-3. Copy the `JSESSIONID` value
-4. In the Brokr dashboard, tab **Browser Session**, paste JSESSIONID + your intAccount
-5. Brokr creates a session using your browser-authenticated cookie
-
-Credentials are never stored on disk.
-
----
-
-## Security
-
-- **Credentials never stored.** Username, password, and 2FA codes are used only for the duration of the API call and discarded immediately.
-- **Session in memory only.** DeGiro session token held server-side with 30-minute TTL. Lost on container restart.
-- **No database.** All state is in-memory — no persistent credential storage.
-- **Bearer token auth** on all `/api/*` endpoints.
-- **Rate limiting** — 5 login attempts per IP per 60 seconds.
-- **Signed cookies** — HttpOnly, SameSite=Lax, Secure (conditional on HTTPS).
-- **SRI hashes** on CDN resources (Chart.js, Lucide).
-- **Run behind HTTPS** in production (nginx + certbot).
+| Variable | Default | Required |
+|----------|---------|----------|
+| `BROKR_AUTH_TOKEN` | — | **Yes** |
+| `APP_PASSWORD` | — | **Yes** |
+| `SECRET_KEY` | — | **Yes** |
+| `HOST_PORT` | `8000` | No |
+| `TARGET_ETF_PCT` | `70` | No |
+| `TARGET_STOCK_PCT` | `30` | No |
+| `COOKIE_SECURE` | `true` | No — set `false` for local HTTP |
 
 ---
 
 ## Development
 
-### Setup
-
 ```bash
-cd ~/workspace/brokr
-docker compose up -d --build
+git clone git@github.com:mmosquera91/degiro-dashboard-hermes.git brokr && cd brokr
+cp .env.example .env
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
 ### Running Tests
 
-Tests must run inside the Docker container (host lacks `degiro-connector`):
+Tests run inside Docker (host lacks `degiro-connector`). 120 passing as of Sprint 6.
 
 ```bash
 docker cp tests/ brokr:/app/tests/
@@ -220,19 +157,12 @@ docker exec brokr pip install pytest pytest-asyncio httpx -q
 docker exec brokr bash -c "cd /app && python -m pytest tests/ -q"
 ```
 
-**120 tests passing** (as of Sprint 6).
-
-### Key Commands
+### Useful Commands
 
 ```bash
-# Rebuild after code changes
-docker compose up -d --build
-
-# View logs
-docker logs brokr --tail 50 -f
-
-# Verify container is running as appuser (not root)
-docker exec brokr id   # must show uid=1000(appuser)
+docker compose -f docker-compose.dev.yml up -d --build   # rebuild after changes
+docker logs brokr --tail 50 -f                            # view logs
+docker exec brokr id                                       # verify uid=1000(appuser)
 ```
 
 ### Project Structure
@@ -240,69 +170,47 @@ docker exec brokr id   # must show uid=1000(appuser)
 ```
 brokr/
 ├── app/
-│   ├── main.py              # FastAPI app, all routes, auth middleware
-│   ├── degiro_client.py     # DeGiro API integration, session management
-│   ├── market_data.py       # yfinance enrichment, FX rates, RSI, performance
+│   ├── main.py              # FastAPI app, routes, auth middleware
+│   ├── degiro_client.py     # DeGiro API + session management
+│   ├── market_data.py       # yfinance enrichment, FX, RSI, performance
 │   ├── scoring.py           # Momentum, value, buy priority scoring
-│   ├── context_builder.py   # Hermes context generation (JSON + plaintext)
-│   ├── snapshots.py         # Portfolio snapshot storage, benchmark comparison
-│   ├── health_checks.py     # Health alert computation
-│   ├── rate_limiter.py      # In-memory IP-based rate limiter
-│   ├── schemas.py           # Pydantic v2 request/response models
-│   └── static/
-│       ├── index.html       # Dashboard SPA
-│       ├── style.css        # Dark theme (#0f0f0f, #1a1a1a, teal #01696f)
-│       └── app.js           # Vanilla JS, Chart.js charts, API calls
-├── templates/
-│   ├── login.html           # Password-protected login page
-│   └── index.html           # Dashboard template
+│   ├── context_builder.py   # AI context JSON + plaintext
+│   ├── snapshots.py         # Historical P&L + benchmark
+│   ├── health_checks.py     # Health alerts
+│   ├── rate_limiter.py      # IP-based rate limiting
+│   ├── schemas.py           # Pydantic v2 models
+│   └── static/              # Vanilla JS, Chart.js, dark theme
 ├── tests/                   # Pytest suite (120 tests)
-├── Dockerfile               # python:3.11-slim, USER appuser (UID 1000)
-├── docker-compose.yml       # Service "brokr", bind mount snapshots
-├── DECISIONS.md             # Architecture decision records
-├── agents.md                # Agent-facing project context
-└── README.md                # This file
+├── Dockerfile               # python:3.11-slim, appuser (UID 1000)
+├── docker-compose.yml       # Production (pre-built image)
+├── docker-compose.dev.yml   # Development (build from source)
+├── DECISIONS.md             # Architecture decisions
+└── agents.md                # Context for AI coding agents
 ```
+
+---
+
+## Security
+
+- No credential storage — username/password discarded after session creation
+- Session in memory only, lost on container restart
+- Stateless — no database, no persistent auth
+- Bearer token on all `/api/*` endpoints
+- Rate limiting: 5 attempts/IP/60s on login
+- Signed cookies: HttpOnly, SameSite=Lax, conditional Secure
+- SRI hashes on CDN resources
 
 ---
 
 ## Sprint History
 
-### Sprint 1 — Critical Fixes
-Division by zero guards, IndexError on empty DeGiro responses, race condition locks.
+**Sprint 1-2** — Critical fixes (zero-division, IndexError, race conditions) + security hardening (bearer auth, rate limiting, signed cookies, XSS, SRI).
 
-### Sprint 2 — Security Hardening
-Bearer token auth, rate limiting, signed cookies, XSS escaping, SRI hashes, timing-safe comparison.
+**Sprint 3-4** — 101-unit test suite + architecture (Pydantic v2, pinned deps, session injection).
 
-### Sprint 3 — Test Coverage
-101 tests across 4 phases (unit, integration, edge cases, regression).
+**Sprint 5** — Dashboard UX: live KPI cards, benchmark Y-axis fix, mobile table with sticky columns.
 
-### Sprint 4 — Architecture
-Pydantic v2 schemas, pinned dependencies, Jinja2 templates, `/api/session` injection endpoint, Health Alerts.
-
-### Sprint 5 — Dashboard UX
-KPI cards with live values, daily portfolio valuation, benchmark Y-axis fix, mobile table with sticky column, allocation bar layout.
-
-### Sprint 6 — Bug Squash & Optimization (current)
-- **Block A:** 7 HIGH-priority bugs fixed — FX duplication (H4), event loop crash (H5), scoring defaults (H6), P&L% miscalculation (H7), N/A display (H8), Chart.js memory leak (H9), benchmark price KeyError (C3).
-- **Block B:** Post-batch enrichment parallelized with `asyncio.gather` — enrichment time reduced from ~13.2s to ~9.1s steady state.
-- **Infrastructure:** Docker volume → bind mount + UID alignment — eliminated `PermissionError` on snapshot writes.
-
----
-
-## FAQ
-
-**Q: Why not use the degiro-connector login directly?**  
-A: DeGiro blocks automated login with 400/503 errors. Browser session injection (JSESSIONID) is the reliable workaround.
-
-**Q: Where are my credentials stored?**  
-A: Nowhere. They're used once to establish a session and immediately discarded. Not in environment files, not in Docker volumes, not in localStorage.
-
-**Q: Can I run this without Docker?**  
-A: Yes — `pip install -r requirements.txt && python start.py`. But Docker is the tested deployment path.
-
-**Q: How do I update?**  
-A: `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`
+**Sprint 6** — Bug squash (7 HIGH bugs), enrichment parallelized (13.2s → 9.1s), Docker volume → bind mount, scoring overhaul with quality gates, Docker image on GHCR.
 
 ---
 
