@@ -1,18 +1,41 @@
 # Brokr — Portfolio Intelligence
 
+[![CI](https://github.com/mmosquera91/degiro-dashboard-hermes/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mmosquera91/degiro-dashboard-hermes/actions/workflows/docker-publish.yml)
+[![Docker Image](https://img.shields.io/badge/ghcr-mm0squera91%2Fdegiro--dashboard--hermes-blue?logo=docker)](https://github.com/mmosquera91/degiro-dashboard-hermes/pkgs/container/degiro-dashboard-hermes)
+
 Self-hosted portfolio analytics dashboard for long-term DeGiro investors. Brokr connects to your DeGiro account, enriches positions with live market data via yfinance, computes momentum and buy-priority scores, and produces structured context blocks for AI-powered analysis.
 
 ---
 
 ## Quick Start
 
+### From Docker image (recommended)
+
 ```bash
-git clone <repo-url> brokr && cd brokr
+docker pull ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+
+# Create .env (see Environment Variables below)
 cp .env.example .env
-docker compose up -d
+# Edit .env — BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are REQUIRED
+
+docker run -d \
+  --name brokr \
+  --network host \
+  --restart unless-stopped \
+  --env-file .env \
+  -v ./data/snapshots:/data/snapshots \
+  ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
 ```
 
 Dashboard at **http://localhost:8000**
+
+### From source (for development)
+
+```bash
+git clone git@github.com:mmosquera91/degiro-dashboard-hermes.git brokr && cd brokr
+cp .env.example .env
+docker compose up -d
+```
 
 ---
 
@@ -137,7 +160,20 @@ Brokr doesn't make decisions — it gives the agent clean, structured data to re
 
 ## Deployment
 
-### Docker Compose (default)
+### Pre-built image (easiest)
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+
+# Run (network_mode: host — use port mapping for macOS/Windows)
+docker run -d --name brokr --network host --restart unless-stopped \
+  --env-file .env \
+  -v ./data/snapshots:/data/snapshots \
+  ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+```
+
+### Docker Compose (source build)
 
 ```bash
 docker compose up -d --build
