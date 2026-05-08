@@ -9,7 +9,7 @@ Self-hosted portfolio analytics dashboard for long-term DeGiro investors. Brokr 
 
 ## Quick Start
 
-### Download docker-compose.prod.yml + .env.example
+### Download docker-compose.prod.yml + .env.example (recommended)
 
 ```bash
 curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/master/docker-compose.prod.yml
