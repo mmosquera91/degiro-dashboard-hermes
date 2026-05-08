@@ -1060,7 +1060,7 @@
         <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
         <td>${p.rsi != null ? p.rsi.toFixed(0) : "—"}</td>
         <td>${p.momentum_score != null ? p.momentum_score.toFixed(2) : "—"}</td>
-        <td${p.buy_priority_blocked_reason ? ` title="${esc(p.buy_priority_blocked_reason)}" style="cursor:help;border-bottom:1px dotted"` : ""}>${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
+        <td>${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
       `;
 
       tr.addEventListener("click", () => toggleDetail(p));
@@ -1084,6 +1084,7 @@
             <div class="detail-item"><label>YTD Perf</label><span>${p.perf_ytd != null ? p.perf_ytd.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>P/E Ratio</label><span>${p.pe_ratio != null && isFinite(p.pe_ratio) ? Number(p.pe_ratio).toFixed(1) : "—"}</span></div>
             <div class="detail-item"><label>Value Score</label><span>${p.value_score != null ? p.value_score.toFixed(2) : "—"}</span></div>
+            ${p.buy_priority_blocked_reason ? `<div class="detail-item reason"><label>Blocked</label><span>${esc(p.buy_priority_blocked_reason)}</span></div>` : ""}
           </div>
         </td>
       `;
