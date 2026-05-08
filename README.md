@@ -192,7 +192,7 @@ brokr/
 
 ## Security
 
-- No credential storage — username/password discarded after session creation
+- No credential storage — JSESSIONID token discarded after session creation
 - Session in memory only, lost on container restart
 - Stateless — no database, no persistent auth
 - Bearer token on all `/api/*` endpoints
