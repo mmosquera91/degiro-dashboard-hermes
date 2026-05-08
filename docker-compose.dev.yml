@@ -1,6 +1,7 @@
 services:
   brokr:
     image: ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+    build: .
     container_name: brokr
     network_mode: host
     environment:
