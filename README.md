@@ -9,22 +9,15 @@ Self-hosted portfolio analytics dashboard for long-term DeGiro investors. Brokr 
 
 ## Quick Start
 
-### From Docker image (recommended)
+### Download docker-compose.prod.yml + .env.example
 
 ```bash
-docker pull ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
-
-# Create .env (see Environment Variables below)
+curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/master/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/mmosquera91/degiro-dashboard-hermes/master/.env.example
 cp .env.example .env
 # Edit .env — BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are REQUIRED
 
-docker run -d \
-  --name brokr \
-  --network host \
-  --restart unless-stopped \
-  --env-file .env \
-  -v ./data/snapshots:/data/snapshots \
-  ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 Dashboard at **http://localhost:8000**
@@ -160,52 +153,26 @@ Brokr doesn't make decisions — it gives the agent clean, structured data to re
 
 ## Deployment
 
-### Pre-built image (easiest)
+### Production (pre-built image)
 
 ```bash
-# Pull the latest image
-docker pull ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+# 1. Create your .env file
+cp .env.example .env
+# Edit: BROKR_AUTH_TOKEN, APP_PASSWORD, and SECRET_KEY are required
 
-# Run (network_mode: host — use port mapping for macOS/Windows)
-docker run -d --name brokr --network host --restart unless-stopped \
-  --env-file .env \
-  -v ./data/snapshots:/data/snapshots \
-  ghcr.io/mmosquera91/degiro-dashboard-hermes:latest
+# 2. Start
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-### Docker Compose (source build)
+### From source (for development)
 
 ```bash
+git clone git@github.com:mmosquera91/degiro-dashboard-hermes.git brokr && cd brokr
+cp .env.example .env
 docker compose up -d --build
 ```
 
-Container uses `network_mode: host`. For bridge networking (Mac/Windows), set `NETWORK_MODE=bridge` and add `ports: "8000:8000"` to `docker-compose.yml`.
-
-### Production with HTTPS
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name brokr.yourdomain.com;
-
-    ssl_certificate     /etc/letsencrypt/live/brokr.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/brokr.yourdomain.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-server {
-    listen 80;
-    server_name brokr.yourdomain.com;
-    return 301 https://$host$request_uri;
-}
-```
+Container uses `network_mode: host`. For bridge networking (Mac/Windows), override with `network_mode: bridge` and add `ports:` in your compose file.
 
 ### DeGiro Session Injection
 
@@ -335,7 +302,7 @@ A: Nowhere. They're used once to establish a session and immediately discarded. 
 A: Yes — `pip install -r requirements.txt && python start.py`. But Docker is the tested deployment path.
 
 **Q: How do I update?**  
-A: `docker compose down && git pull && docker compose up -d --build`
+A: `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`
 
 ---
 
