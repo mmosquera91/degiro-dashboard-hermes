@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import pathlib
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -984,9 +985,14 @@ def _infer_stock_country_from_name(name: str, symbol: str) -> Optional[str]:
         " Novo": "Denmark",
     }
     upper_name = name.upper()
-    for company, country in known.items():
-        if company.upper() in upper_name:
-            return country
+    # Use word-boundary matching to prevent substring false positives
+    # e.g. "ING" must not match inside "CORNING" or "HOLDINGS"
+    for company in sorted(known.keys(), key=len, reverse=True):
+        # Match whole words only: the company name must be surrounded by
+        # non-alphanumeric chars or string boundaries
+        pattern = r'(?<!\w)' + re.escape(company.upper()) + r'(?!\w)'
+        if re.search(pattern, upper_name):
+            return known[company]
 
     # Default: US-listed stocks typically end with Inc, Corp, Inc Class A, Corp Class A
     if any(upper_name.endswith(suffix) for suffix in ["INC", "CORP", "INC CLASS A", "CORP CLASS A"]):
