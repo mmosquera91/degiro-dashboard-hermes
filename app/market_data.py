@@ -796,6 +796,133 @@ def _infer_etf_category_from_name(name: str) -> Optional[str]:
         return "ESG / Sustainable"
     return None
 
+def _infer_stock_sector_from_name(name: str) -> Optional[str]:
+    """Infer sector from stock name as a fallback when yfinance has no sector data."""
+    if not name:
+        return None
+    n = name.lower()
+    if any(k in n for k in ["bank", "banc", "financial", "credit", "insurance", "holdings"]):
+        return "Financial Services"
+    if any(k in n for k in ["pharma", "bio", "health", "medical", "drug", "therapeutics"]):
+        return "Healthcare"
+    if any(k in n for k in ["semiconductor", "chip", "micro", "nvidia", "intel", "amd", "qualcomm"]):
+        return "Technology"
+    if any(k in n for k in ["software", "cloud", "data", "cyber", "digital", "google", "meta", "amazon"]):
+        return "Technology"
+    if any(k in n for k in ["oil", "gas", "energy", "petroleum", "shell", "bp", "total"]):
+        return "Energy"
+    if any(k in n for k in ["auto", "motor", "tesla", "ford", "bmw", "volkswagen"]):
+        return "Consumer Cyclical"
+    if any(k in n for k in ["retail", "shop", "store", "amazon"]):
+        return "Consumer Cyclical"
+    if any(k in n for k in ["telecom", "communication", "mobile"]):
+        return "Communication Services"
+    if any(k in n for k in ["steel", "mining", "material", "chemical"]):
+        return "Basic Materials"
+    if any(k in n for k in ["utility", "electric", "water", "gas"]):
+        return "Utilities"
+    if any(k in n for k in ["real estate", "reit", "property"]):
+        return "Real Estate"
+    if any(k in n for k in ["aerospace", "defense", "military", "lockheed"]):
+        return "Industrials"
+    if any(k in n for k in ["food", "beverage", "consumer", "unilever", "nestle"]):
+        return "Consumer Defensive"
+    return None
+
+def _infer_stock_country_from_name(name: str, symbol: str) -> Optional[str]:
+    """Infer country from stock name or symbol as a fallback when yfinance has no country data."""
+    n = name.lower()
+
+    # Country keywords in name
+    if any(k in n for k in ["netherlands", "dutch", "holland"]):
+        return "Netherlands"
+    if any(k in n for k in ["germany", "german", "deutschland"]):
+        return "Germany"
+    if any(k in n for k in ["france", "french", "français"]):
+        return "France"
+    if any(k in n for k in ["united kingdom", "british", "uk ", "england"]):
+        return "United Kingdom"
+    if any(k in n for k in ["spain", "spanish"]):
+        return "Spain"
+    if any(k in n for k in ["italy", "italian", "italiana"]):
+        return "Italy"
+    if any(k in n for k in ["china", "chinese"]):
+        return "China"
+    if any(k in n for k in ["japan", "japanese", "nippon"]):
+        return "Japan"
+    if any(k in n for k in ["india", "indian"]):
+        return "India"
+    if any(k in n for k in ["canada", "canadian"]):
+        return "Canada"
+    if any(k in n for k in ["switzerland", "swiss"]):
+        return "Switzerland"
+    if any(k in n for k in ["australia", "australian"]):
+        return "Australia"
+    if any(k in n for k in ["south korea", "korean", "korea"]):
+        return "South Korea"
+
+    # Exchange suffix mapping
+    suffix_map = {
+        ".AS": "Netherlands",
+        ".PA": "France",
+        ".DE": "Germany",
+        ".L": "United Kingdom",
+        ".MI": "Italy",
+        ".MC": "Spain",
+        ".TO": "Canada",
+        ".SI": "Singapore",
+        ".HK": "Hong Kong",
+        ".AX": "Australia",
+        ".SW": "Switzerland",
+        ".HE": "Finland",
+        ".F": "Finland",
+        ".EAM": "Netherlands",
+        ".EPA": "France",
+        ".ETR": "Germany",
+    }
+    if "." in symbol:
+        suffix = "." + symbol.split(".")[-1]
+        if suffix in suffix_map:
+            return suffix_map[suffix]
+
+    # Known company-country mappings
+    known: dict[str, str] = {
+        "ASML": "Netherlands",
+        "SAP": "Germany",
+        "LVMH": "France",
+        "TOTAL": "France",
+        "TOTALENERGIES": "France",
+        "SHELL": "United Kingdom",
+        "ING": "Netherlands",
+        "SIEMENS": "Germany",
+        "BMW": "Germany",
+        "VOLKSWAGEN": "Germany",
+        "DAIMLER": "Germany",
+        "BASF": "Germany",
+        "BAYERN": "Germany",
+        "NESTLE": "Switzerland",
+        "NOVARTIS": "Switzerland",
+        "ROCHE": "Switzerland",
+        "UBS": "Switzerland",
+        "CREDIT SUISSE": "Switzerland",
+        "BBVA": "Spain",
+        "TELEFONICA": "Spain",
+        "INTEL": "United States",
+        "AMD": "United States",
+        "INTC": "United States",
+        "NVDA": "United States",
+        "TSM": "Taiwan",
+        "TSLA": "United States",
+        "NVO": "Denmark",
+        " Novo": "Denmark",
+    }
+    upper_name = name.upper()
+    for company, country in known.items():
+        if company.upper() in upper_name:
+            return country
+
+    return None
+
 def _infer_country_from_etf_name(name: str, category: str) -> str:
     """Infer geographic region from ETF name or category for geo chart."""
     n = (name + " " + (category or "")).lower()
@@ -1100,7 +1227,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                 position["sector"] = (
                     info.get("sector")
                     or info.get("industry")
-                    or None
+                    or _infer_stock_sector_from_name(position.get("name", ""))
                 )
 
             # Country
@@ -1110,7 +1237,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     info.get("category", "") or ""
                 )
             else:
-                position["country"] = info.get("country", None)
+                position["country"] = info.get("country") or _infer_stock_country_from_name(position.get("name", ""), position.get("symbol", ""))
 
             # P/E ratio (stocks only)
             if position.get("asset_type") == "STOCK":
