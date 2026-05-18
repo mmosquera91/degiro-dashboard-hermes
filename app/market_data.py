@@ -493,6 +493,25 @@ def _resolve_yf_symbol(
 
     symbol = symbol.strip()
 
+    # Step -1: Check manual overrides (ISIN-keyed, highest priority — must beat cache)
+    # This runs BEFORE the numeric check so that ISIN overrides can rescue
+    # numeric DeGiro symbols (e.g. "724" → C3.ai via ISIN US12468P1049 → "AI")
+    if isin:
+        with _symbol_overrides_lock:
+            override = _symbol_overrides.get(isin.strip().upper(), "")
+        if override:
+            logger.debug("Symbol override for ISIN %s: %s", isin, override)
+            cache_key = f"{symbol}:{isin}"
+            with _resolution_cache_lock:
+                _resolution_cache[cache_key] = {
+                    "yf_symbol": override,
+                    "exchange": "",
+                    "currency": "",
+                    "method": "override",
+                }
+            _save_symbol_cache()
+            return override
+
     # Skip numeric symbols (vwdId leaking through) — never a valid Yahoo ticker
     if symbol.isdigit():
         logger.debug("Skipping numeric symbol %s — not a valid Yahoo ticker", symbol)
@@ -509,22 +528,6 @@ def _resolve_yf_symbol(
         symbol = symbol.rsplit(".", 1)[0] + "-" + after_dot
 
     cache_key = f"{symbol}:{isin}"
-
-    # Step -1: Check manual overrides (ISIN-keyed, highest priority — must beat cache)
-    if isin:
-        with _symbol_overrides_lock:
-            override = _symbol_overrides.get(isin.strip().upper(), "")
-        if override:
-            logger.debug("Symbol override for ISIN %s: %s", isin, override)
-            with _resolution_cache_lock:
-                _resolution_cache[cache_key] = {
-                    "yf_symbol": override,
-                    "exchange": "",
-                    "currency": "",
-                    "method": "override",
-                }
-            _save_symbol_cache()
-            return override
 
     # Check resolution cache first — return directly on hit (no re-validation call)
     with _resolution_cache_lock:

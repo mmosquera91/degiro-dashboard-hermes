@@ -10,6 +10,9 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     volumes:
       - ./data/snapshots:/data/snapshots
     healthcheck:
