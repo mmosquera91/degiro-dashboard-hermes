@@ -38,7 +38,7 @@ from .schemas import (
     ReloadOverridesResponse,
     LogoutResponse,
 )
-from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache
+from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache, _infer_stock_sector_from_name, _infer_stock_country_from_name
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
@@ -410,6 +410,14 @@ def _restore_portfolio_from_snapshot():
         portfolio_data["positions"] = compute_portfolio_weights(portfolio_data["positions"])
         portfolio_data["positions"] = compute_scores(portfolio_data["positions"])
         logger.info("Re-scored %d restored positions from snapshot", len(portfolio_data["positions"]))
+
+        # Apply sector/country inference for stocks with missing data
+        for pos in portfolio_data["positions"]:
+            if pos.get("asset_type") != "ETF":
+                if not pos.get("sector"):
+                    pos["sector"] = _infer_stock_sector_from_name(pos.get("name", "")) or pos.get("sector")
+                if not pos.get("country"):
+                    pos["country"] = _infer_stock_country_from_name(pos.get("name", ""), pos.get("symbol", "")) or pos.get("country")
     except Exception as e:
         logger.warning("Could not re-score restored positions: %s", e)
     try:
@@ -638,6 +646,13 @@ async def get_portfolio():
         with _sync_lock:
             portfolio = _session["portfolio"]
             if portfolio is not None:
+                # Fill missing sector/country for stocks via inference (avoids stale gaps from snapshot restore)
+                for pos in portfolio.get("positions", []):
+                    if pos.get("asset_type") != "ETF":
+                        if not pos.get("sector"):
+                            pos["sector"] = _infer_stock_sector_from_name(pos.get("name", "")) or pos.get("sector")
+                        if not pos.get("country"):
+                            pos["country"] = _infer_stock_country_from_name(pos.get("name", ""), pos.get("symbol", "")) or pos.get("country")
                 pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
                 portfolio["daily_change_pct"] = pct
                 portfolio["daily_change_eur"] = eur
