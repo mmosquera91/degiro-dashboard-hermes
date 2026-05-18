@@ -801,32 +801,67 @@ def _infer_stock_sector_from_name(name: str) -> Optional[str]:
     if not name:
         return None
     n = name.lower()
-    if any(k in n for k in ["bank", "banc", "financial", "credit", "insurance", "holdings"]):
-        return "Financial Services"
-    if any(k in n for k in ["pharma", "bio", "health", "medical", "drug", "therapeutics"]):
+
+    # AI / quantum / computing — Technology
+    if any(k in n for k in ["ai ", "ai.", "quantum", "computing", "ionq", "ondas"]):
+        return "Technology"
+
+    # Technology keywords
+    if any(k in n for k in ["technologies", "technology", "software", "cloud", "data",
+                             "cyber", "digital", "networks", "cybersecurity", "security",
+                             "nvidia", "intel", "amd", "qualcomm", "semiconductor",
+                             "coreweave", "applovin", "intuitive"]):
+        return "Technology"
+    if any(k in n for k in ["google", "meta", "amazon"]):
+        return "Technology"
+    if "logic" in n:
+        return "Technology"
+
+    # Healthcare
+    if any(k in n for k in ["pharma", "bio", "health", "medical", "drug", "therapeutics", "unitedhealth"]):
         return "Healthcare"
-    if any(k in n for k in ["semiconductor", "chip", "micro", "nvidia", "intel", "amd", "qualcomm"]):
-        return "Technology"
-    if any(k in n for k in ["software", "cloud", "data", "cyber", "digital", "google", "meta", "amazon"]):
-        return "Technology"
+
+    # Energy
     if any(k in n for k in ["oil", "gas", "energy", "petroleum", "shell", "bp", "total"]):
         return "Energy"
-    if any(k in n for k in ["auto", "motor", "tesla", "ford", "bmw", "volkswagen"]):
+
+    # Consumer Cyclical — automotive, retail
+    if any(k in n for k in ["auto", "motor", "tesla", "ford", "bmw", "volkswagen",
+                             "automotive", "rivian", "xpeng", "retail", "shop", "store"]):
         return "Consumer Cyclical"
-    if any(k in n for k in ["retail", "shop", "store", "amazon"]):
-        return "Consumer Cyclical"
-    if any(k in n for k in ["telecom", "communication", "mobile"]):
+
+    # Communication Services
+    if any(k in n for k in ["telecom", "communication", "mobile", "nokia", "gaming", "esports"]):
         return "Communication Services"
-    if any(k in n for k in ["steel", "mining", "material", "chemical"]):
+
+    # Basic Materials
+    if any(k in n for k in ["steel", "mining", "material", "chemical", "corning", "glass"]):
         return "Basic Materials"
+
+    # Utilities
     if any(k in n for k in ["utility", "electric", "water", "gas"]):
         return "Utilities"
+
+    # Real Estate
     if any(k in n for k in ["real estate", "reit", "property"]):
         return "Real Estate"
-    if any(k in n for k in ["aerospace", "defense", "military", "lockheed"]):
+
+    # Industrials — aerospace, space, logistics, robotics, automation
+    if any(k in n for k in ["aviation", "aerospace", "space", "logistics", "freight",
+                             "cargo", "shipping", "robotics", "automation", "symbotic",
+                             "wire", "redwire", "defense", "military", "lockheed"]):
         return "Industrials"
-    if any(k in n for k in ["food", "beverage", "consumer", "unilever", "nestle"]):
+
+    # Consumer Defensive — food, beverage, grocery
+    if any(k in n for k in ["food", "beverage", "farmers", "grocery", "market",
+                             "unilever", "nestle", "consumer"]):
         return "Consumer Defensive"
+
+    # Financial Services
+    if any(k in n for k in ["bank", "banc", "financial", "credit", "insurance",
+                             "holdings", "hathaway", "berkshire"]):
+        return "Financial Services"
+
     return None
 
 def _infer_stock_country_from_name(name: str, symbol: str) -> Optional[str]:
@@ -887,6 +922,7 @@ def _infer_stock_country_from_name(name: str, symbol: str) -> Optional[str]:
 
     # Known company-country mappings
     known: dict[str, str] = {
+        # European
         "ASML": "Netherlands",
         "SAP": "Germany",
         "LVMH": "France",
@@ -907,12 +943,42 @@ def _infer_stock_country_from_name(name: str, symbol: str) -> Optional[str]:
         "CREDIT SUISSE": "Switzerland",
         "BBVA": "Spain",
         "TELEFONICA": "Spain",
+        "NOKIA": "Finland",
+        "NOVO NORDISK": "Denmark",
+        # US tech / growth
         "INTEL": "United States",
         "AMD": "United States",
         "INTC": "United States",
         "NVDA": "United States",
+        "NVIDIA": "United States",
         "TSM": "Taiwan",
         "TSLA": "United States",
+        "AMAZON": "United States",
+        "PALANTIR": "United States",
+        "BERKSHIRE": "United States",
+        "UNITEDHEALTH": "United States",
+        "PALO ALTO": "United States",
+        "C3.AI": "United States",
+        "PALLADYNE": "United States",
+        "REDWIRE": "United States",
+        "SYMBOTIC": "United States",
+        "INTUITIVE MACHINES": "United States",
+        "ONDA": "United States",
+        "IONQ": "United States",
+        "ARCHER AVIATION": "United States",
+        "QUANTUM": "United States",
+        "D-WAVE": "United States",
+        "APPLOVIN": "United States",
+        "POET TECHNOLOGIES": "United States",
+        "FREIGHTO": "United States",
+        "CORNING": "United States",
+        "SPROUTS": "United States",
+        "RIVIAN": "United States",
+        "LIGHTWAVE": "United States",
+        "COREWEAVE": "United States",
+        "RIGETTI": "United States",
+        "ARM": "United Kingdom",
+        "XPENG": "China",
         "NVO": "Denmark",
         " Novo": "Denmark",
     }
@@ -920,6 +986,10 @@ def _infer_stock_country_from_name(name: str, symbol: str) -> Optional[str]:
     for company, country in known.items():
         if company.upper() in upper_name:
             return country
+
+    # Default: US-listed stocks typically end with Inc, Corp, Inc Class A, Corp Class A
+    if any(upper_name.endswith(suffix) for suffix in ["INC", "CORP", "INC CLASS A", "CORP CLASS A"]):
+        return "United States"
 
     return None
 
