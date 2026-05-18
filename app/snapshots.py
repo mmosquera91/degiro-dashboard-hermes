@@ -88,7 +88,7 @@ def _prune_old_snapshots() -> None:
     if SNAPSHOT_RETENTION_DAYS <= 0:
         return  # 0 = disabled
     snapshot_dir = Path(SNAPSHOT_DIR)
-    cutoff = datetime.now().date()
+    cutoff = datetime.utcnow().date()
     from datetime import timedelta
     cutoff -= timedelta(days=SNAPSHOT_RETENTION_DAYS)
 
@@ -203,7 +203,7 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
         return []
 
     # Ensure end_date is exclusive-inclusive: add 1 day so today's data is included
-    end_dt_padded = end_dt + timedelta(days=1)
+    end_dt_padded = end_dt + timedelta(days=2)
 
     # If range is less than 7 days, pad start back to ensure trading days are covered
     if (end_dt - start_dt).days < 7:
