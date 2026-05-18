@@ -818,7 +818,8 @@ def _infer_stock_sector_from_name(name: str) -> Optional[str]:
         return "Technology"
 
     # Healthcare
-    if any(k in n for k in ["pharma", "bio", "health", "medical", "drug", "therapeutics", "unitedhealth"]):
+    if any(k in n for k in ["pharma", "bio", "health", "medical", "drug", "therapeutics", "unitedhealth",
+                             "nordisk"]):
         return "Healthcare"
 
     # Energy
