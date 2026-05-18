@@ -329,7 +329,7 @@ docker compose -f docker-compose.dev.yml up -d --build
 
 ### Running Tests
 
-Tests run inside Docker (host lacks `degiro-connector`). 120 passing as of Sprint 6.
+Tests run inside Docker (host lacks `degiro-connector`). 121 passing as of Sprint 6.
 
 ```bash
 docker cp tests/ brokr:/app/tests/
@@ -391,6 +391,8 @@ brokr/
 **Sprint 5** — Dashboard UX: live KPI cards, benchmark Y-axis fix, mobile table with sticky columns.
 
 **Sprint 6** — Bug squash (7 HIGH bugs), enrichment parallelized (13.2s → 9.1s), Docker volume → bind mount, scoring overhaul with quality gates, Docker image on GHCR.
+
+**Bloque J (2026-05-18)** — Benchmark UTC fix, stock sector/country inference, scoring collapse fix (n<4 + std floor), Pi-hole DNS bypass, word-boundary matching, ISIN override for numeric symbols. 47/47 symbols resolve, 121 tests.
 
 ---
 
