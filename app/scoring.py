@@ -23,11 +23,14 @@ def _zscore_normalize(values: list[float]) -> list[float]:
     filled = [v if v is not None else median_val for v in values]
 
     n = len(filled)
-    if n < 3:
+    if n < 4:
         return [0.5] * n
 
     mean_val = float(np.mean(filled))
     std_val = float(np.std(filled, ddof=1))
+
+    if std_val > 0 and std_val < 0.01:
+        std_val = 0.01
 
     if std_val == 0:
         return [0.5] * n
