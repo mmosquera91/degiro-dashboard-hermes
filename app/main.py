@@ -224,6 +224,7 @@ def _build_raw_portfolio_summary(positions: list, cash_available: float) -> dict
         p["perf_30d"] = None
         p["perf_90d"] = None
         p["perf_ytd"] = None
+        p["perf_1y"] = None
         p["pe_ratio"] = None
         p["sector"] = None
         p["country"] = None

@@ -727,6 +727,7 @@ def _compute_performance(hist_close: pd.Series) -> dict:
         "perf_30d": None,
         "perf_90d": None,
         "perf_ytd": None,
+        "perf_1y": None,
     }
 
     try:
@@ -760,6 +761,12 @@ def _compute_performance(hist_close: pd.Series) -> dict:
             price_ytd = float(ytd_data.iloc[0])
             if price_ytd > 0:
                 result["perf_ytd"] = round(((current - price_ytd) / price_ytd) * 100, 2)
+
+        # 1-year performance
+        if len(hist_close) >= 20:  # ~252 trading days in a year, require ~20 data points minimum
+            price_1y = float(hist_close.iloc[-252]) if len(hist_close) >= 252 else float(hist_close.iloc[0])
+            if price_1y > 0:
+                result["perf_1y"] = round(((current - price_1y) / price_1y) * 100, 2)
 
     except Exception as e:
         logger.warning("Performance computation failed: %s", str(e))
@@ -1146,6 +1153,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
     position["perf_30d"] = None
     position["perf_90d"] = None
     position["perf_ytd"] = None
+    position["perf_1y"] = None
     position["pe_ratio"] = None
     position["sector"] = None
     position["country"] = None
@@ -1441,6 +1449,7 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
             position["perf_30d"] = perf["perf_30d"]
             position["perf_90d"] = perf["perf_90d"]
             position["perf_ytd"] = perf["perf_ytd"]
+            position["perf_1y"] = perf["perf_1y"]
 
             # Price: use batch prefetch first, then price cache, then per-ticker history
             yf_price = 0.0
@@ -1787,6 +1796,7 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                 pos["perf_30d"] = perf["perf_30d"]
                 pos["perf_90d"] = perf["perf_90d"]
                 pos["perf_ytd"] = perf["perf_ytd"]
+                pos["perf_1y"] = perf["perf_1y"]
 
                 current_price = pos.get("current_price")
                 if current_price is not None and current_price > 0:

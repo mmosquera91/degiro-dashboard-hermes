@@ -44,22 +44,22 @@ def _zscore_normalize(values: list[float]) -> list[float]:
 def compute_momentum_score(position: dict) -> Optional[float]:
     """Compute momentum score for a single position.
 
-    Momentum score = weighted average of 30d (20%), 90d (30%), YTD (50%) performance.
+    Momentum score = weighted average of 30d (20%), 90d (30%), 1Y (50%) performance.
     """
     perf_30d = position.get("perf_30d")
     perf_90d = position.get("perf_90d")
-    perf_ytd = position.get("perf_ytd")
+    perf_1y = position.get("perf_1y")
 
-    # Need at least YTD performance
-    if perf_ytd is None and perf_90d is None and perf_30d is None:
+    # Need at least 1Y performance
+    if perf_1y is None and perf_90d is None and perf_30d is None:
         return None
 
     # Fill missing with 0
     p30 = perf_30d if perf_30d is not None else 0.0
     p90 = perf_90d if perf_90d is not None else 0.0
-    pytd = perf_ytd if perf_ytd is not None else 0.0
+    p1y = perf_1y if perf_1y is not None else 0.0
 
-    return round((0.20 * p30) + (0.30 * p90) + (0.50 * pytd), 2)
+    return round((0.20 * p30) + (0.30 * p90) + (0.50 * p1y), 2)
 
 
 def compute_value_score(position: dict) -> Optional[float]:

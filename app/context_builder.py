@@ -158,7 +158,7 @@ def _build_plaintext(context: dict, date_str: str) -> str:
             lines.append(f"    Value: €{p.get('current_value_eur', 0):,.2f}  P&L: €{p.get('unrealized_pl_eur', 0):,.2f} ({p.get('unrealized_pl_pct', 0):+.2f}%)")
             lines.append(f"    52w High/Low: {p.get('52w_high', 'N/A')} / {p.get('52w_low', 'N/A')}  Distance from high: {p.get('distance_from_52w_high_pct', 'N/A')}%")
             lines.append(f"    RSI(14): {p.get('rsi', 'N/A')}  P/E: {p.get('pe_ratio', 'N/A')}")
-            lines.append(f"    Perf 30d: {p.get('perf_30d', 'N/A')}%  90d: {p.get('perf_90d', 'N/A')}%  YTD: {p.get('perf_ytd', 'N/A')}%")
+            lines.append(f"    Perf 30d: {p.get('perf_30d', 'N/A')}%  90d: {p.get('perf_90d', 'N/A')}%  YTD: {p.get('perf_ytd', 'N/A')}%  1Y: {p.get('perf_1y', 'N/A')}%")
             lines.append(f"    Momentum Score: {p.get('momentum_score', 'N/A')}  Value Score: {p.get('value_score', 'N/A')}  Buy Priority: {p.get('buy_priority_score', 'N/A')}")
             lines.append("")
 

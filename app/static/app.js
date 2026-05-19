@@ -1082,6 +1082,7 @@
             <div class="detail-item"><label>30d Perf</label><span>${p.perf_30d != null ? p.perf_30d.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>90d Perf</label><span>${p.perf_90d != null ? p.perf_90d.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>YTD Perf</label><span>${p.perf_ytd != null ? p.perf_ytd.toFixed(1) + "%" : "—"}</span></div>
+            <div class="detail-item"><label>1Y Perf</label><span>${p.perf_1y != null ? p.perf_1y.toFixed(1) + "%" : "—"}</span></div>
             <div class="detail-item"><label>P/E Ratio</label><span>${p.pe_ratio != null && isFinite(p.pe_ratio) ? Number(p.pe_ratio).toFixed(1) : "—"}</span></div>
             <div class="detail-item"><label>Value Score</label><span>${p.value_score != null ? p.value_score.toFixed(2) : "—"}</span></div>
             ${p.buy_priority_blocked_reason ? `<div class="detail-item reason"><label>Blocked</label><span>${esc(p.buy_priority_blocked_reason)}</span></div>` : ""}

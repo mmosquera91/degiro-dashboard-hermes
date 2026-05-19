@@ -75,10 +75,11 @@ If 1-year history has fewer than 14 data points, falls back to 3-month history.
 
 **Distance from 52w High** — `((current_price − 52w_high) / 52w_high) × 100`. Negative = below the high. Displayed as an absolute percentage (e.g. "12% below").
 
-**Performance (30d / 90d / YTD)**:
+**Performance (30d / 90d / YTD / 1Y)**:
 - **30d**: `((current − price_22_days_ago) / price_22_days_ago) × 100` (~22 trading days/month)
 - **90d**: `((current − price_63_days_ago) / price_63_days_ago) × 100` (~63 trading days/quarter)
 - **YTD**: `((current − first_price_of_year) / first_price_of_year) × 100`
+- **1Y**: `((current − price_252_days_ago) / price_252_days_ago) × 100` (~252 trading days/year)
 
 ### Scoring System
 
@@ -86,9 +87,9 @@ Scoring happens in three stages. Positions are scored independently within two p
 
 #### 1. Momentum Score
 
-`momentum = 0.20 × perf_30d + 0.30 × perf_90d + 0.50 × perf_ytd`
+`momentum = 0.20 × perf_30d + 0.30 × perf_90d + 0.50 × perf_1y`
 
-YTD performance carries the most weight because it captures the primary trend. Missing periods default to 0 (neutral). All positions get a momentum score regardless of buy eligibility.
+1Y performance carries the most weight because it captures the primary trend. Missing periods default to 0 (neutral). All positions get a momentum score regardless of buy eligibility.
 
 #### 2. Value Score
 
@@ -171,13 +172,14 @@ Distance from 52w high = ((120.00 − 140.50) / 140.50) × 100 = −14.6%
 RSI(14) = 62 (Wilder's smoothing on daily closes)
 perf_30d = ((120 − 108) / 108) × 100 = +11.1%
 perf_90d = ((120 − 95) / 95) × 100 = +26.3%
+perf_1y = ((120 − 70) / 70) × 100 = +71.4%
 perf_ytd = ((120 − 80) / 80) × 100 = +50.0%
 ```
 
 **Step 3 — Scoring**
 
 ```
-Momentum = 0.20 × 11.1 + 0.30 × 26.3 + 0.50 × 50.0 = +35.1
+Momentum = 0.20 × 11.1 + 0.30 × 26.3 + 0.50 × 71.4 = +42.6
 Value (P/E=65, P/B=42) = (65 + 42) / 2 = 53.5
 ```
 
