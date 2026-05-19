@@ -298,7 +298,7 @@ DeGiro blocks automated login. The recommended flow:
 2. DevTools → Application → Cookies → `trader.degiro.nl` → copy `JSESSIONID`
 3. In Brokr dashboard → **Browser Session** tab → paste JSESSIONID + intAccount
 
-Credentials are discarded immediately — only the session cookie is used.
+No credentials are used or stored — only the session cookie is used.
 
 ---
 
