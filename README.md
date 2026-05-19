@@ -86,9 +86,7 @@ Scoring happens in three stages. Positions are scored independently within two p
 
 #### 1. Momentum Score
 
-```
-momentum = 0.20 × perf_30d + 0.30 × perf_90d + 0.50 × perf_ytd
-```
+`momentum = 0.20 × perf_30d + 0.30 × perf_90d + 0.50 × perf_ytd`
 
 YTD performance carries the most weight because it captures the primary trend. Missing periods default to 0 (neutral). All positions get a momentum score regardless of buy eligibility.
 
@@ -108,8 +106,7 @@ Average of `trailingPE` and `priceToBook` from yfinance `ticker.info`. Lower = c
 
 **Composite score** — for positions that pass all gates:
 
-```
-buy_priority = 0.20 × value + 0.15 × momentum + 0.20 × distance + 0.15 × RSI_inv + 0.20 × weight_inv + 0.10 × recency
+`buy_priority = 0.20×value + 0.15×momentum + 0.20×distance + 0.15×RSI_inv + 0.20×weight_inv + 0.10×recency`
 
 | Factor | Weight | What it rewards |
 |--------|--------|-----------------|
@@ -122,9 +119,7 @@ buy_priority = 0.20 × value + 0.15 × momentum + 0.20 × distance + 0.15 × RSI
 
 **Normalization** — each factor is z-score normalized within its pool (ETF or Stock), then mapped to [0, 1]:
 
-```
-normalized = max(0, min(1, 0.5 + (value − mean) / (3 × std)))
-```
+`normalized = max(0, min(1, 0.5 + (value − mean) / (3 × std)))`
 
 If a pool has fewer than 3 positions, all factors default to 0.5 (neutral). Missing data (e.g. no P/E) also gets 0.5.
 
