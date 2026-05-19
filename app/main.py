@@ -675,6 +675,16 @@ async def get_portfolio():
             # Fetch raw portfolio from DeGiro
             raw = DeGiroClient.fetch_portfolio(trading_api)
 
+            # Fetch recent orders for recency penalty
+            try:
+                recent_orders = DeGiroClient.fetch_recent_orders(trading_api)
+                for pos in raw.get("positions", []):
+                    pid = pos.get("product_id")
+                    if pid and pid in recent_orders:
+                        pos["last_buy_date"] = recent_orders[pid]
+            except Exception as e:
+                logger.warning("Recent orders fetch failed (non-blocking): %s", str(e))
+
             # Enrich with yfinance data
             positions = await asyncio.to_thread(enrich_positions, raw)
 

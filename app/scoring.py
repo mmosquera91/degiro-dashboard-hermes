@@ -1,11 +1,14 @@
 """Scoring logic — momentum score and buy priority score."""
 
 import logging
+from datetime import date as date_type, datetime as dt_type
 from typing import Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+COOLDOWN_DAYS = 10
 
 
 def _zscore_normalize(values: list[float]) -> list[float]:
@@ -192,6 +195,41 @@ def compute_scores(positions: list[dict]) -> list[dict]:
             if not has_none:
                 ni += 1
 
+        # recency — days since last buy (cooldown penalty)
+        today = date_type.today()
+        recency_factors = []
+        for pos in pool:
+            last_buy = pos.get("last_buy_date")
+            if last_buy:
+                try:
+                    if isinstance(last_buy, str):
+                        parsed = dt_type.fromisoformat(last_buy.replace("Z", "+00:00"))
+                        buy_date = parsed.date() if hasattr(parsed, "date") else parsed
+                    elif isinstance(last_buy, (dt_type, date_type)):
+                        buy_date = last_buy.date() if hasattr(last_buy, "date") else last_buy
+                    else:
+                        buy_date = None
+                    if buy_date:
+                        days_since = (today - buy_date).days
+                        recency_factors.append(max(0.0, min(1.0, days_since / COOLDOWN_DAYS)))
+                    else:
+                        recency_factors.append(1.0)
+                except Exception:
+                    recency_factors.append(1.0)
+            else:
+                recency_factors.append(1.0)
+
+        recency_none_mask = [r == 1.0 and pos.get("last_buy_date") is None
+                             for pos, r in zip(pool, recency_factors)]
+        recency_clean = [r for r, is_none in zip(recency_factors, recency_none_mask) if not is_none]
+        norm_recency = _zscore_normalize(recency_clean) if recency_clean else [0.5]
+        norm_recency_full = []
+        ni = 0
+        for is_none in recency_none_mask:
+            norm_recency_full.append(0.5 if is_none else norm_recency[ni])
+            if not is_none:
+                ni += 1
+
         for i, pos in enumerate(pool):
             if not buyable_mask[i]:
                 pos["buy_priority_score"] = None
@@ -199,11 +237,12 @@ def compute_scores(positions: list[dict]) -> list[dict]:
                 continue
 
             buy_score = (
-                0.25 * norm_value_full[i]
-                + 0.20 * norm_momentum_full[i]
+                0.20 * norm_value_full[i]
+                + 0.15 * norm_momentum_full[i]
                 + 0.20 * norm_distance_full[i]
                 + 0.15 * norm_rsi_full[i]
                 + 0.20 * norm_weight_full[i]
+                + 0.10 * norm_recency_full[i]
             )
             pos["buy_priority_score"] = round(buy_score, 2)
 

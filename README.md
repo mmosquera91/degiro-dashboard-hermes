@@ -109,16 +109,16 @@ Average of `trailingPE` and `priceToBook` from yfinance `ticker.info`. Lower = c
 **Composite score** — for positions that pass all gates:
 
 ```
-buy_priority = 0.25 × value + 0.20 × momentum + 0.20 × distance + 0.15 × RSI_inv + 0.20 × weight_inv
-```
+buy_priority = 0.20 × value + 0.15 × momentum + 0.20 × distance + 0.15 × RSI_inv + 0.20 × weight_inv + 0.10 × recency
 
 | Factor | Weight | What it rewards |
 |--------|--------|-----------------|
-| Value | 25% | Low P/E and P/B (cheap) |
-| Momentum | 20% | Positive recent performance |
+| Value | 20% | Low P/E and P/B (cheap) |
+| Momentum | 15% | Positive recent performance |
 | Distance from 52w high | 20% | Far below the 52-week high (good entry) |
 | RSI inverse | 15% | Low RSI (oversold) |
 | Weight inverse | 20% | Small position (diversification benefit) |
+| Recency | 10% | Not purchased recently (10-day cooldown) |
 
 **Normalization** — each factor is z-score normalized within its pool (ETF or Stock), then mapped to [0, 1]:
 
@@ -201,13 +201,14 @@ momentum_norm  = 0.78  (strong upward trend)
 distance_norm  = 0.82  (14.6% below high → good entry)
 rsi_inv_norm   = 0.55  (RSI 62 → slightly above midpoint)
 weight_inv_norm = 0.70  (small position → diversification bonus)
+recency_norm   = 1.00  (no recent purchase)
 
-Buy Priority = 0.25×0.35 + 0.20×0.78 + 0.20×0.82 + 0.15×0.55 + 0.20×0.70
-             = 0.088 + 0.156 + 0.164 + 0.083 + 0.140
-             = 0.63
+Buy Priority = 0.20×0.35 + 0.15×0.78 + 0.20×0.82 + 0.15×0.55 + 0.20×0.70 + 0.10×1.00
+             = 0.070 + 0.117 + 0.164 + 0.083 + 0.140 + 0.100
+             = 0.67
 ```
 
-NVDA scores **0.63** — a solid candidate driven by good entry distance and momentum, limited by a high P/E. If it had RSI 75, it would fail the quality gate and get `buy_priority_score = None`.
+NVDA scores **0.67** — a solid candidate driven by good entry distance and momentum, limited by a high P/E. If it had RSI 75, it would fail the quality gate and get `buy_priority_score = None`.
 
 ### Data Sources
 

@@ -11,9 +11,11 @@ from degiro_connector.trading.api import API as TradingAPI
 from degiro_connector.trading.models.credentials import Credentials
 from degiro_connector.trading.models.account import UpdateRequest, UpdateOption
 from degiro_connector.trading.models.login import Login, LoginError, LoginSuccess
+from degiro_connector.trading.models.order import HistoryRequest as OrderHistoryRequest
 from degiro_connector.core.exceptions import DeGiroConnectionError, CaptchaRequiredError, MaintenanceError
 from degiro_connector.core.constants import urls
 from degiro_connector.core.abstracts.abstract_action import AbstractAction
+from datetime import date, timedelta, datetime as dt
 
 logger = logging.getLogger(__name__)
 
@@ -925,3 +927,73 @@ class DeGiroClient:
             except Exception as e:
                 logger.error("Failed to fetch portfolio: %s", str(e))
                 raise RuntimeError(f"Failed to fetch portfolio: {str(e)}") from e
+
+    @staticmethod
+    def fetch_recent_orders(trading_api: TradingAPI, days: int = 30) -> dict[int, str]:
+        """Fetch recent buy orders and return a mapping of product_id → last_buy_date (ISO string).
+
+        Only BUY orders are considered. For each product, only the most recent buy date is kept.
+        Returns an empty dict on failure (non-blocking).
+        """
+        try:
+            request = OrderHistoryRequest(
+                from_date=date.today() - timedelta(days=days),
+                to_date=date.today(),
+            )
+            response = trading_api.get_orders_history.call(history_request=request)
+
+            # Handle both model and dict response formats
+            if hasattr(response, "model_dump"):
+                orders_data = response.model_dump(mode="python", by_alias=True)
+            elif hasattr(response, "data"):
+                orders_data = response.data if isinstance(response.data, dict) else {}
+            else:
+                orders_data = response if isinstance(response, dict) else {}
+
+            # Navigate to the orders list — may be nested under 'data' or 'orders'
+            orders_list = orders_data.get("orders", orders_data.get("data", []))
+            if not isinstance(orders_list, list):
+                orders_list = []
+
+            # Build product_id → last_buy_date mapping (only BUY orders)
+            product_last_buy: dict[int, str] = {}
+            for order in orders_list:
+                if not isinstance(order, dict):
+                    continue
+                buysell = str(order.get("buysell", order.get("buySell", ""))).upper()
+                if buysell != "B":
+                    continue
+                pid = order.get("product_id", order.get("productId", 0))
+                if not pid:
+                    continue
+                try:
+                    pid = int(pid)
+                except (ValueError, TypeError):
+                    continue
+
+                # Extract date — may be a datetime object, date object, or ISO string
+                order_date = order.get("date", order.get("orderDate", order.get("createdAt")))
+                if order_date is None:
+                    continue
+
+                if isinstance(order_date, (dt, date)):
+                    date_str = order_date.isoformat() if isinstance(order_date, dt) else order_date.isoformat()
+                elif isinstance(order_date, str):
+                    # Parse and re-serialize to ensure ISO format
+                    try:
+                        parsed = dt.fromisoformat(order_date.replace("Z", "+00:00"))
+                        date_str = parsed.date().isoformat()
+                    except ValueError:
+                        date_str = order_date[:10] if len(order_date) >= 10 else order_date
+                else:
+                    continue
+
+                existing = product_last_buy.get(pid)
+                if existing is None or date_str > existing:
+                    product_last_buy[pid] = date_str
+
+            return product_last_buy
+
+        except Exception as e:
+            logger.warning("fetch_recent_orders failed (non-blocking): %s", str(e))
+            return {}
