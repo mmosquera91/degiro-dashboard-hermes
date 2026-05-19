@@ -971,8 +971,8 @@ class DeGiroClient:
                 except (ValueError, TypeError):
                     continue
 
-                # Extract date — may be a datetime object, date object, or ISO string
-                order_date = order.get("date", order.get("orderDate", order.get("createdAt")))
+                # Extract date — 'created' is the field name in HistoryItem
+                order_date = order.get("created", order.get("date", order.get("createdAt")))
                 if order_date is None:
                     continue
 
@@ -992,6 +992,7 @@ class DeGiroClient:
                 if existing is None or date_str > existing:
                     product_last_buy[pid] = date_str
 
+            logger.info("fetch_recent_orders: found %d buy orders for %d products", len(orders_list), len(product_last_buy))
             return product_last_buy
 
         except Exception as e:
