@@ -1081,6 +1081,7 @@ def _get_cached_fundamentals(cache_key: str) -> Optional[dict]:
 
 def _update_fundamentals_cache(cache_key: str, sector: Optional[str],
                                country: Optional[str], pe_ratio: Optional[float],
+                               price_to_book: Optional[float],
                                week52_high: Optional[float], currency: str,
                                short_name: Optional[str]) -> None:
     """Update fundamentals in the resolution cache entry and persist to disk."""
@@ -1092,6 +1093,7 @@ def _update_fundamentals_cache(cache_key: str, sector: Optional[str],
             "sector": sector,
             "country": country,
             "pe_ratio": pe_ratio,
+            "price_to_book": price_to_book,
             "week52_high": week52_high,
             "currency": currency,
             "short_name": short_name,
@@ -1326,6 +1328,11 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     position["pe_ratio"] = float(raw_pe) if raw_pe is not None else None
                 except (ValueError, TypeError):
                     position["pe_ratio"] = None
+                raw_pb = info.get("priceToBook", None)
+                try:
+                    position["price_to_book"] = float(raw_pb) if raw_pb is not None else None
+                except (ValueError, TypeError):
+                    position["price_to_book"] = None
 
             # 52-week high/low from info
             wk52_high = info.get("fiftyTwoWeekHigh", None)
@@ -1358,7 +1365,8 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
             _update_fundamentals_cache(
                 cache_key,
                 position.get("sector"), position.get("country"),
-                position.get("pe_ratio"), wk52_high,
+                position.get("pe_ratio"), position.get("price_to_book"),
+                wk52_high,
                 yf_currency, short_name,
             )
         else:

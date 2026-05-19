@@ -65,7 +65,7 @@ def compute_value_score(position: dict) -> Optional[float]:
     Averages trailing_pe and price_to_book (both from yfinance).
     If neither is available → None (gets 0.5 in normalize).
     """
-    pe = position.get("trailing_pe")
+    pe = position.get("pe_ratio")
     pb = position.get("price_to_book")
 
     has_pe = pe is not None and pe > 0
@@ -201,9 +201,9 @@ def compute_scores(positions: list[dict]) -> list[dict]:
             buy_score = (
                 0.25 * norm_value_full[i]
                 + 0.20 * norm_momentum_full[i]
-                + 0.30 * norm_distance_full[i]
+                + 0.20 * norm_distance_full[i]
                 + 0.15 * norm_rsi_full[i]
-                + 0.10 * norm_weight_full[i]
+                + 0.20 * norm_weight_full[i]
             )
             pos["buy_priority_score"] = round(buy_score, 2)
 
