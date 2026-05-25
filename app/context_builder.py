@@ -33,8 +33,10 @@ def build_hermes_context(portfolio: dict) -> dict:
         "portfolio_summary": {
             "total_value_eur": portfolio.get("total_value"),
             "total_invested": portfolio.get("total_invested"),
-            "total_pl": portfolio.get("total_pl"),
-            "total_pl_pct": portfolio.get("total_pl_pct"),
+            "total_pl": portfolio.get("unrealized_pl_total"),
+            "total_pl_pct": portfolio.get("unrealized_pl_total_pct"),
+            "true_total_pl": portfolio.get("true_total_pl"),
+            "true_total_pl_pct": portfolio.get("true_total_pl_pct"),
             "etf_allocation_pct": portfolio.get("etf_allocation_pct"),
             "stock_allocation_pct": portfolio.get("stock_allocation_pct"),
             "target_etf_pct": TARGET_ETF_PCT,
