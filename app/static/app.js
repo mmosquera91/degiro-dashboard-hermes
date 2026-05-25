@@ -522,28 +522,36 @@
     const comparisonDiv = $("#benchmark-comparison-table");
     if (comparisonDiv) comparisonDiv.classList.add("hidden");
 
-    // Compute indexed portfolio values using ROI (not raw total_value).
-    // ROI = unrealized_pl_total / total_invested — immune to deposits/withdrawals.
-    // Indexed to 100 at first snapshot: value = (1 + roi) / (1 + first_roi) * 100
+    // Compute indexed portfolio values using TWR chain (Time-Weighted Return).
+    // TWR is immune to deposits/withdrawals:
+    //   cash_flow = invested_end - invested_start (≈ new money in)
+    //   period_return = value_end / (value_start + cash_flow) - 1
+    //   TWR = (1+r1)(1+r2)...(1+rn) - 1, indexed to 100
     // Falls back to total_value-based indexing for old snapshots without P&L data.
     if (snapshots.length < 2) return;
     const hasPLData = snapshots.some(s => s.total_invested != null && s.total_invested > 0);
     let indexedPortfolio;
     if (hasPLData) {
-      indexedPortfolio = snapshots.map(s => {
-        const invested = s.total_invested || 0;
-        const pl = s.unrealized_pl_total || 0;
-        const roi = invested > 0 ? pl / invested : 0;
-        return { date: s.date, raw: s.total_value_eur, roi, value: (1 + roi) * 100 };
-      });
-      // Normalize so first snapshot = 100
-      const firstRoi = indexedPortfolio[0].roi || 0;
-      const base = 1 + firstRoi;
-      if (base > 0) {
-        indexedPortfolio = indexedPortfolio.map(p => ({
-          ...p,
-          value: ((1 + p.roi) / base) * 100,
-        }));
+      // Build TWR chain
+      let cumulative = 1.0; // starts at 1.0, multiplied by (1 + period_return) each step
+      indexedPortfolio = [{ date: snapshots[0].date, raw: snapshots[0].total_value_eur, value: 100.0 }];
+      for (let i = 1; i < snapshots.length; i++) {
+        const prev = snapshots[i - 1];
+        const curr = snapshots[i];
+        const valueStart = prev.total_value_eur || 0;
+        const valueEnd = curr.total_value_eur || 0;
+        const investedStart = prev.total_invested || 0;
+        const investedEnd = curr.total_invested || 0;
+        const cashFlow = investedEnd - investedStart; // positive = deposit
+        // Period return adjusted for cash flows
+        const denominator = valueStart + cashFlow;
+        const periodReturn = denominator > 0 ? (valueEnd / denominator) - 1 : 0;
+        cumulative *= (1 + periodReturn);
+        indexedPortfolio.push({
+          date: curr.date,
+          raw: curr.total_value_eur,
+          value: cumulative * 100,
+        });
       }
     } else {
       // Fallback: old snapshots without total_invested
@@ -551,7 +559,6 @@
       indexedPortfolio = snapshots.map(s => ({
         date: s.date,
         raw: s.total_value_eur,
-        roi: 0,
         value: baseValue > 0 ? (s.total_value_eur / baseValue) * 100 : 100,
       }));
     }
