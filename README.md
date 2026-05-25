@@ -136,7 +136,7 @@ If a pool has fewer than 3 positions, all factors default to 0.5 (neutral). Miss
 - `absolute_contribution = position_return × weight`
 - `relative_contribution = (position_return − benchmark_return) × weight`
 
-**Benchmark** — S&P 500 (`^GSPC`), indexed to 100 at the date of your first snapshot. Each snapshot records `benchmark_return_pct` for comparison.
+**Benchmark** — S&P 500 (`^GSPC`), indexed to 100 at the date of your first snapshot. Portfolio line uses Time-Weighted Return (TWR) so deposits/withdrawals don't inflate returns. Each snapshot records `total_invested`, `unrealized_pl_total`, and `benchmark_return_pct`.
 
 ### Worked Example
 
@@ -391,6 +391,8 @@ brokr/
 **Sprint 6** — Bug squash (7 HIGH bugs), enrichment parallelized (13.2s → 9.1s), Docker volume → bind mount, scoring overhaul with quality gates, Docker image on GHCR.
 
 **Bloque J (2026-05-18)** — Benchmark UTC fix, stock sector/country inference, scoring collapse fix (n<4 + std floor), Pi-hole DNS bypass, word-boundary matching, ISIN override for numeric symbols. 47/47 symbols resolve, 121 tests.
+
+**Bloque O (2026-05-25)** — Benchmark TWR chain: portfolio vs S&P 500 now uses Time-Weighted Return instead of raw total_value indexing. Deposits/withdrawals no longer inflate returns. Snapshots store `total_invested` + `unrealized_pl_total`. `wrapt<2` pinned for degiro-connector compat.
 
 ---
 
