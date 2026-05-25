@@ -40,6 +40,8 @@ def save_snapshot(
     benchmark_value: float,
     benchmark_return_pct: float,
     portfolio_data: Optional[dict] = None,
+    total_invested: float = 0.0,
+    unrealized_pl_total: float = 0.0,
 ) -> None:
     """Save a portfolio snapshot to {SNAPSHOT_DIR}/{date_str}.json.
 
@@ -52,6 +54,8 @@ def save_snapshot(
         benchmark_value: Indexed benchmark value (100 at portfolio start).
         benchmark_return_pct: Benchmark return percentage since portfolio start.
         portfolio_data: Optional full portfolio data dict for restoration.
+        total_invested: Sum of (avg_buy_price * quantity) across positions (cost basis).
+        unrealized_pl_total: total_value_eur - total_invested.
     """
     # Validate date format before constructing file path (T-04-01)
     try:
@@ -66,6 +70,8 @@ def save_snapshot(
     snapshot = _sanitize_floats({
         "date": date_str,
         "total_value_eur": round(total_value_eur, 2),
+        "total_invested": round(total_invested, 2),
+        "unrealized_pl_total": round(unrealized_pl_total, 2),
         "benchmark_value": round(benchmark_value, 4),
         "benchmark_return_pct": round(benchmark_return_pct, 4),
         "portfolio_data": portfolio_data,

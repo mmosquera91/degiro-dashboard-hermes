@@ -104,6 +104,8 @@ class LogoutResponse(BaseModel):
 class SnapshotListItem(BaseModel):
     date: str
     total_value_eur: float | None
+    total_invested: float | None = None
+    unrealized_pl_total: float | None = None
     benchmark_value: float | None
     benchmark_return_pct: float | None
     has_portfolio_data: bool

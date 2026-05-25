@@ -62,6 +62,8 @@ class TestSaveSnapshot:
             105.5,
             5.5,
             sample_portfolio,
+            total_invested=10000.0,
+            unrealized_pl_total=2345.67,
         )
 
         file_path = temp_snapshot_dir / f"{date_str}.json"
@@ -72,6 +74,8 @@ class TestSaveSnapshot:
 
         assert data["date"] == date_str
         assert data["total_value_eur"] == 12345.67
+        assert data["total_invested"] == 10000.0
+        assert data["unrealized_pl_total"] == 2345.67
         assert data["benchmark_value"] == 105.5
         assert data["benchmark_return_pct"] == 5.5
         assert data["portfolio_data"] == sample_portfolio
@@ -92,6 +96,8 @@ class TestSaveSnapshot:
             data = json.load(f)
 
         assert data["portfolio_data"] is None
+        assert data["total_invested"] == 0.0
+        assert data["unrealized_pl_total"] == 0.0
 
     def test_atomic_write_pattern(self, temp_snapshot_dir, sample_portfolio):
         """SNAP-03: Snapshot write uses temp file + rename pattern, no .tmp left behind."""

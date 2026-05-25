@@ -508,7 +508,7 @@
           <table class="comparison-table">
             <tr><th>Metric</th><th>Portfolio</th><th>S&P 500</th></tr>
             <tr><td>Value (Indexed)</td><td>100.00</td><td>${(snap.benchmark_value || 100).toFixed(2)}</td></tr>
-            <tr><td>Return</td><td>—</td><td>${(snap.benchmark_return_pct || 0).toFixed(2)}%</td></tr>
+            <tr><td>Return</td><td>${snap.total_invested > 0 ? ((snap.unrealized_pl_total || 0) / snap.total_invested * 100).toFixed(2) + '%' : '—'}</td><td>${(snap.benchmark_return_pct || 0).toFixed(2)}%</td></tr>
           </table>
           <p class="benchmark-note">Only one snapshot recorded. Chart will appear after next portfolio refresh.</p>
         `;
@@ -522,14 +522,39 @@
     const comparisonDiv = $("#benchmark-comparison-table");
     if (comparisonDiv) comparisonDiv.classList.add("hidden");
 
-    // Compute indexed portfolio values (all relative to first snapshot = 100)
+    // Compute indexed portfolio values using ROI (not raw total_value).
+    // ROI = unrealized_pl_total / total_invested — immune to deposits/withdrawals.
+    // Indexed to 100 at first snapshot: value = (1 + roi) / (1 + first_roi) * 100
+    // Falls back to total_value-based indexing for old snapshots without P&L data.
     if (snapshots.length < 2) return;
-    const baseValue = snapshots[0].total_value_eur;
-    const indexedPortfolio = snapshots.map(s => ({
-      date: s.date,
-      raw: s.total_value_eur,
-      value: baseValue > 0 ? (s.total_value_eur / baseValue) * 100 : 100
-    }));
+    const hasPLData = snapshots.some(s => s.total_invested != null && s.total_invested > 0);
+    let indexedPortfolio;
+    if (hasPLData) {
+      indexedPortfolio = snapshots.map(s => {
+        const invested = s.total_invested || 0;
+        const pl = s.unrealized_pl_total || 0;
+        const roi = invested > 0 ? pl / invested : 0;
+        return { date: s.date, raw: s.total_value_eur, roi, value: (1 + roi) * 100 };
+      });
+      // Normalize so first snapshot = 100
+      const firstRoi = indexedPortfolio[0].roi || 0;
+      const base = 1 + firstRoi;
+      if (base > 0) {
+        indexedPortfolio = indexedPortfolio.map(p => ({
+          ...p,
+          value: ((1 + p.roi) / base) * 100,
+        }));
+      }
+    } else {
+      // Fallback: old snapshots without total_invested
+      const baseValue = snapshots[0].total_value_eur;
+      indexedPortfolio = snapshots.map(s => ({
+        date: s.date,
+        raw: s.total_value_eur,
+        roi: 0,
+        value: baseValue > 0 ? (s.total_value_eur / baseValue) * 100 : 100,
+      }));
+    }
 
     if (benchmarkSeries.length === 0) {
       if (chartWrap) {

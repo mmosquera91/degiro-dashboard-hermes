@@ -375,6 +375,8 @@ def _save_snapshot_for_portfolio(portfolio: dict) -> None:
             benchmark_value,
             benchmark_return_pct,
             safe_portfolio,
+            total_invested=safe_portfolio.get("total_invested", 0.0),
+            unrealized_pl_total=safe_portfolio.get("unrealized_pl_total", 0.0),
         )
     except Exception as e:
         logger.warning("Snapshot save failed (non-blocking): %s", str(e))
@@ -1014,6 +1016,8 @@ async def list_snapshots():
         {
             "date": s["date"],
             "total_value_eur": s.get("total_value_eur"),
+            "total_invested": s.get("total_invested"),
+            "unrealized_pl_total": s.get("unrealized_pl_total"),
             "benchmark_value": s.get("benchmark_value"),
             "benchmark_return_pct": s.get("benchmark_return_pct"),
             "has_portfolio_data": s.get("portfolio_data") is not None,
