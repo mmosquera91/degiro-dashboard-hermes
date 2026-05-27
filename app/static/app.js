@@ -39,7 +39,7 @@
         const data = await res.json();
         _authToken = data.token;
       }
-    } catch (_) {}
+    } catch (err) { console.warn("Auth token fetch failed:", err); }
   }
 
   async function apiFetch(url, options = {}) {
@@ -386,7 +386,7 @@
         const res1 = await apiFetch("/api/enrichment-status");
         const status1 = await res1.json();
         if (status1.enriching) break;
-      } catch (_) {}
+      } catch (err) { console.warn("Enrichment status poll failed:", err); }
     }
 
     // Phase 2: poll until enriching flips back to false
@@ -403,7 +403,7 @@
           if (bmData) { benchmarkData = bmData; renderBenchmark(bmData); renderAttribution(bmData); }
           return true;
         }
-      } catch (_) {}
+      } catch (err) { console.warn("Enrichment status poll failed:", err); }
     }
     ToastManager.show("Timed out — refresh manually", "error");
     setOperationActive(false);

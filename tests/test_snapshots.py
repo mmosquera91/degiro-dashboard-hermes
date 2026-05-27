@@ -162,3 +162,35 @@ class TestLoadLatestSnapshot:
         """SNAP-02: load_latest_snapshot() returns None when no snapshots exist."""
         result = snapshots.load_latest_snapshot()
         assert result is None
+
+    def test_load_latest_snapshot_falls_back_on_corrupted_newest(self, temp_snapshot_dir):
+        """SNAP-04: load_latest_snapshot() skips corrupted newest and returns the previous valid snapshot."""
+        # Write a valid older snapshot
+        valid_snapshot = {
+            "date": "2026-04-22",
+            "total_value_eur": 10000.0,
+            "total_invested": 9000.0,
+            "unrealized_pl_total": 1000.0,
+            "benchmark_value": 100.0,
+            "benchmark_return_pct": 0.0,
+            "portfolio_data": None,
+        }
+        (temp_snapshot_dir / "2026-04-22.json").write_text(
+            json.dumps(valid_snapshot)
+        )
+
+        # Write a corrupted newer snapshot
+        (temp_snapshot_dir / "2026-04-23.json").write_text("NOT VALID JSON {{{")
+
+        result = snapshots.load_latest_snapshot()
+
+        assert result is not None, "Should fall back to previous valid snapshot"
+        assert result["date"] == "2026-04-22"
+
+    def test_load_latest_snapshot_returns_none_when_all_corrupted(self, temp_snapshot_dir):
+        """SNAP-05: load_latest_snapshot() returns None when all snapshots are corrupted."""
+        (temp_snapshot_dir / "2026-04-22.json").write_text("CORRUPT")
+        (temp_snapshot_dir / "2026-04-23.json").write_text("ALSO CORRUPT")
+
+        result = snapshots.load_latest_snapshot()
+        assert result is None

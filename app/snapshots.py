@@ -170,16 +170,21 @@ def load_latest_snapshot() -> Optional[dict]:
     if not snapshots:
         return None
 
-    latest_path = sorted(snapshots, key=lambda p: p.name)[-1]
-    with open(latest_path, "r") as f:
-        data = json.load(f)
+    for latest_path in sorted(snapshots, key=lambda p: p.name, reverse=True):
+        try:
+            with open(latest_path, "r") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Skipping corrupted snapshot %s: %s", latest_path.name, e)
+            continue
 
-    # Backward compatibility: old snapshots lack portfolio_data
-    if "portfolio_data" not in data:
-        data["portfolio_data"] = None
+        if "portfolio_data" not in data:
+            data["portfolio_data"] = None
 
-    logger.info("Loaded latest snapshot: %s", latest_path.name)
-    return data
+        logger.info("Loaded latest snapshot: %s", latest_path.name)
+        return data
+
+    return None
 
 
 def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:

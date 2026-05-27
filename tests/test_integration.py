@@ -81,10 +81,10 @@ class TestCookieValidationChain:
 
 
 class TestUnauthorizedRedirect:
-    """INTEG-03: Request without session cookie returns 303 redirect to /login."""
+    """INTEG-03: /api/session-token is exempt from auth middleware — returns 200 without a cookie."""
 
-    def test_api_request_without_cookie_redirects_to_login(self, client):
-        """GET /api/session-token with no cookie returns 303 redirect to /login."""
+    def test_api_request_without_cookie_returns_200(self, client):
+        """GET /api/session-token with no cookie returns 200 — endpoint is middleware-exempt."""
         response = client.get("/api/session-token", follow_redirects=False)
         assert response.status_code == 200
 
@@ -117,10 +117,10 @@ class TestUnauthorizedRedirect:
 
 
 class TestExpiredCookie:
-    """INTEG-04: Expired session cookie is cleared and request redirects to /login."""
+    """INTEG-04: Expired session cookie does not crash /api/session-token — returns 200."""
 
-    def test_expired_cookie_is_cleared_and_redirects(self, client, with_auth_env):
-        """Expired cookie causes 303 redirect to /login and cookie is cleared."""
+    def test_expired_cookie_returns_200(self, client, with_auth_env):
+        """Expired cookie on /api/session-token returns 200 — endpoint is middleware-exempt."""
         # Create an already-expired token
         expired_token = _make_token(
             "testpassword123",  # password used for signing
