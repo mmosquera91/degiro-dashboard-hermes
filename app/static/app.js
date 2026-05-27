@@ -1615,6 +1615,13 @@ function renderHealthAlerts() {
     const retPctEl = $("#indexa-kpi-return-pct");
     retPctEl.textContent = retPct != null ? fmtPct(retPct) : "—";
     setSignClass(retPctEl, retPct);
+    // Period returns in sub-text
+    const perf = indexaPerformance || {};
+    const periods = [];
+    if (perf.time_return_last_year != null) periods.push("1Y: " + fmtPct(perf.time_return_last_year * 100));
+    if (perf.time_return_last_month != null) periods.push("1M: " + fmtPct(perf.time_return_last_month * 100));
+    if (perf.time_return_last_week != null) periods.push("1W: " + fmtPct(perf.time_return_last_week * 100));
+    $("#indexa-kpi-return-pct-sub").textContent = periods.length ? periods.join(" · ") : "since inception";
 
     if (last) {
       $("#indexa-kpi-last-contrib").textContent = fmtEur(last.amount);
@@ -1624,8 +1631,7 @@ function renderHealthAlerts() {
       $("#indexa-kpi-last-contrib-sub").textContent = "no data";
     }
 
-    const perf = indexaPerformance || {};
-    const annualEl = $("#indexa-kpi-annual-return");
+    let annualEl = $("#indexa-kpi-annual-return");
     const annual = perf.time_return_annual != null ? perf.time_return_annual * 100 : null;
     annualEl.textContent = annual != null ? fmtPct(annual) : "—";
     setSignClass(annualEl, annual);
@@ -1644,6 +1650,19 @@ function renderHealthAlerts() {
     const dd = perf.max_drawdown;
     ddEl.textContent = dd != null ? fmtPct(dd * 100) : "—";
     setSignClass(ddEl, dd);
+    // Drawdown EUR + period dates
+    const ddSub = [];
+    if (perf.max_drawdown_EUR != null) ddSub.push(fmtEur(perf.max_drawdown_EUR));
+    if (perf.max_drawdown_start && perf.max_drawdown_end) {
+      const fmtD = s => {
+        const c = String(s).replace(/-/g, '');
+        const d = new Date(c.slice(0,4) + '-' + c.slice(4,6) + '-' + c.slice(6,8));
+        return d.toLocaleDateString("en", { month: "short", year: "2-digit" });
+      };
+      ddSub.push(fmtD(perf.max_drawdown_start) + " → " + fmtD(perf.max_drawdown_end));
+    }
+    const ddSubEl = $("#indexa-kpi-drawdown-sub");
+    if (ddSubEl) ddSubEl.textContent = ddSub.join(" · ");
 
     // Risk Profile
     const riskEl = $("#indexa-kpi-risk");

@@ -984,6 +984,12 @@ async def get_indexa_performance():
         else []
     )
     drawdowns = data.get("drawdowns") or {}
+    # Also check raw return obj for drawdown fields
+    if not drawdowns:
+        drawdowns = return_obj.get("drawdowns") or {}
+    max_dd_eur = drawdowns.get("max_drawdown_EUR")
+    max_dd_start = drawdowns.get("start_date_max_drawdown")
+    max_dd_end = drawdowns.get("end_date_max_drawdown")
 
     return {
         "series": series,
@@ -998,6 +1004,9 @@ async def get_indexa_performance():
         "volatility": data.get("volatility"),
         "sharpe_ratio": data.get("sharpe_ratio"),
         "max_drawdown": drawdowns.get("max_drawdown"),
+        "max_drawdown_EUR": max_dd_eur,
+        "max_drawdown_start": max_dd_start,
+        "max_drawdown_end": max_dd_end,
         "raw": data,
     }
 

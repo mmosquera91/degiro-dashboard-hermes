@@ -82,6 +82,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260527-otn | Fix Indexa Capital data extraction (backend + frontend) | 2026-05-27 | 3b259c7 | [260527-otn-fix-indexa-data-extraction](./quick/260527-otn-fix-indexa-data-extraction/) |
+| 20260527-ie | Indexa Capital tab enhancements (KPIs, funds table, chart) | 2026-05-27 | 1523bd6 | [20260527-indexa-enhancements](./quick/20260527-indexa-enhancements/) |
 
 ## Deferred Items
 
