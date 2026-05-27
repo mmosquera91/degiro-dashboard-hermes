@@ -1744,9 +1744,14 @@ function renderHealthAlerts() {
       const dayMap = { "1m": 30, "6m": 180, "1y": 365, "5y": 1825 };
       const days = dayMap[indexaChartRange];
       if (days) {
-        const lastDate = new Date(entries[entries.length - 1].date);
+        // Parse YYYYMMDD or YYYY-MM-DD safely
+        function parseDate(s) {
+          const c = String(s).replace(/-/g, '');
+          return new Date(c.slice(0,4) + '-' + c.slice(4,6) + '-' + c.slice(6,8));
+        }
+        const lastDate = parseDate(entries[entries.length - 1].date);
         const cutoff = new Date(lastDate.getTime() - days * 86400000);
-        entries = entries.filter(e => new Date(e.date) >= cutoff);
+        entries = entries.filter(e => parseDate(e.date) >= cutoff);
       }
     }
 
