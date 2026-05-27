@@ -210,6 +210,11 @@
         lucide.createIcons({ nodes: [elBtnPrivacy] });
       }
     }
+    // Re-render Indexa charts so Y-axis/tooltips reflect privacy state
+    if (indexaLoaded) {
+      renderIndexaAllocationChart();
+      renderIndexaPerformanceChart();
+    }
   }
 
   // ─── Browser Session Auth ───
@@ -1834,7 +1839,23 @@ function renderHealthAlerts() {
           },
         },
         scales: {
-          x: { ticks: { color: "#888", font: { family: "Inter", size: 10 }, maxTicksLimit: 8 }, grid: { color: "#2a2a2a" } },
+          x: {
+            ticks: {
+              color: "#888",
+              font: { family: "Inter", size: 10 },
+              maxTicksLimit: 8,
+              callback: function(val, idx) {
+                const raw = String(this.getLabelForValue(val));
+                const c = raw.replace(/-/g, '');
+                if (c.length < 8) return raw;
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const m = parseInt(c.slice(4, 6), 10) - 1;
+                const y = c.slice(2, 4);
+                return m >= 0 && m < 12 ? months[m] + " '" + y : raw;
+              },
+            },
+            grid: { color: "#2a2a2a" },
+          },
           y: {
             ticks: {
               color: "#888",
