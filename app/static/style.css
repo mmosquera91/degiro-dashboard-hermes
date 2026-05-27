@@ -944,7 +944,7 @@ body.view-degiro .indexa-only { display: none !important; }
   html { font-size: 13px; }
   .header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
   .header-left { gap: 10px; flex: 1 1 auto; min-width: 0; }
-  .header-logo { height: 36px; }
+  .header-logo { height: 46px; }
   .header-right { gap: 6px; flex: 0 0 auto; }
   .main { padding: 14px; }
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -969,10 +969,11 @@ body.view-degiro .indexa-only { display: none !important; }
 @media (max-width: 420px) {
   html { font-size: 12px; }
   .header { flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
-  .header-left { flex: 1 1 100%; justify-content: space-between; }
-  .header-right { flex: 1 1 100%; justify-content: flex-end; gap: 4px; }
-  .header-logo { height: 30px; }
-  .tab-btn { padding: 4px 10px; font-size: 0.72rem; }
+  .header-left { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
+  .header-right { flex: 0 0 auto; justify-content: flex-end; gap: 4px; }
+  .header-logo { height: 40px; }
+  .btn-label { display: none; }
+  .tab-btn { padding: 3px 8px; font-size: 0.7rem; }
   .btn { padding: 4px 8px; font-size: 0.72rem; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .modal {
@@ -1377,5 +1378,11 @@ body.privacy-mode .private-value:active {
 }
 
 @media (max-width: 420px) {
-  .indexa-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .indexa-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .indexa-kpi-grid .kpi-card { padding: 10px 12px; }
+  .indexa-kpi-grid .kpi-card .card-value { font-size: 1.15rem; }
+  .indexa-kpi-grid .kpi-card .card-sub { word-break: break-word; font-size: 0.68rem; }
+  .indexa-charts { grid-template-columns: 1fr; }
+  #indexa-view .chart-wrap { height: 220px; }
+  .chart-range-buttons { flex-wrap: wrap; }
 }
