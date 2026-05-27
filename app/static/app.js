@@ -1503,12 +1503,15 @@ function renderHealthAlerts() {
 
   function indexaInvestedTotal() {
     const pf = indexaPortfolio || {};
-    const pr = (indexaPerformance && indexaPerformance.raw) || {};
+    const perf = indexaPerformance || {};
+    const pr = perf.raw || {};
     const raw = pf.raw || {};
     const candidates = [
+      pf.total_invested,
+      perf.investment,
+      pr.return && pr.return.investment,
       pr.return && pr.return.total_invested,
       pr.return && pr.return.invested_amount,
-      pr.total_invested,
       raw.total_invested,
       raw.invested_amount,
     ];
@@ -1517,8 +1520,11 @@ function renderHealthAlerts() {
   }
 
   function indexaReturnEur() {
-    const pr = (indexaPerformance && indexaPerformance.raw) || {};
+    const perf = indexaPerformance || {};
+    const pr = perf.raw || {};
     const candidates = [
+      perf.pl,
+      pr.return && pr.return.pl,
       pr.return && pr.return.return_currency,
       pr.return && pr.return.return_amount,
       pr.return_currency,
@@ -1532,7 +1538,13 @@ function renderHealthAlerts() {
   }
 
   function indexaReturnPct() {
-    const pr = (indexaPerformance && indexaPerformance.raw) || {};
+    const perf = indexaPerformance || {};
+    const pr = perf.raw || {};
+    // Indexa returns fractional (0.527 = 52.7%); convert to percent.
+    if (perf.time_return != null && isFinite(perf.time_return)) return perf.time_return * 100;
+    if (pr.return && pr.return.time_return != null && isFinite(pr.return.time_return)) {
+      return pr.return.time_return * 100;
+    }
     const candidates = [
       pr.return && pr.return.return_percentage,
       pr.return && pr.return.twror_percentage,

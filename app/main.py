@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import threading
+from typing import Any
 
 import httpx
 from pathlib import Path
@@ -917,11 +918,47 @@ async def get_indexa_portfolio():
         logger.error("Indexa portfolio fetch error: %s", e)
         raise HTTPException(status_code=502, detail="Indexa upstream error")
 
-    instruments = data.get("instrument_accounts") or data.get("positions") or []
+    portfolio = data.get("portfolio") or {}
+    instrument_accounts = data.get("instrument_accounts") or []
+    raw_positions = (
+        instrument_accounts[0].get("positions", [])
+        if instrument_accounts and isinstance(instrument_accounts[0], dict)
+        else []
+    )
+    instruments_amount = portfolio.get("instruments_amount")
+
+    positions: list[dict[str, Any]] = []
+    for p in raw_positions:
+        if not isinstance(p, dict):
+            continue
+        instrument = p.get("instrument") or {}
+        amount = p.get("amount")
+        weight: float | None = None
+        if (
+            isinstance(amount, (int, float))
+            and isinstance(instruments_amount, (int, float))
+            and instruments_amount > 0
+        ):
+            weight = (amount / instruments_amount) * 100
+        positions.append(
+            {
+                "name": instrument.get("name"),
+                "isin": instrument.get("isin_code"),
+                "amount": amount,
+                "cost_amount": p.get("cost_amount"),
+                "weight": weight,
+                "asset_class": instrument.get("asset_class"),
+                "price": p.get("price"),
+                "titles": p.get("titles"),
+            }
+        )
+
     return {
-        "positions": instruments if isinstance(instruments, list) else [],
-        "total_value": data.get("total_amount") or data.get("total_value"),
-        "allocation": data.get("portfolio") or data.get("allocation") or {},
+        "positions": positions,
+        "total_value": portfolio.get("total_amount"),
+        "total_invested": portfolio.get("instruments_cost"),
+        "cash": portfolio.get("cash_amount"),
+        "allocation": portfolio,
         "raw": data,
     }
 
@@ -938,9 +975,28 @@ async def get_indexa_performance():
         logger.error("Indexa performance fetch error: %s", e)
         raise HTTPException(status_code=502, detail="Indexa upstream error")
 
-    series = data.get("return") or data.get("performance") or data.get("series") or []
+    return_obj = data.get("return") or {}
+    total_amounts = return_obj.get("total_amounts") or {}
+    series = (
+        [{"date": d, "value": v} for d, v in sorted(total_amounts.items())]
+        if isinstance(total_amounts, dict)
+        else []
+    )
+    drawdowns = data.get("drawdowns") or {}
+
     return {
-        "series": series if isinstance(series, list) else [],
+        "series": series,
+        "time_return": return_obj.get("time_return"),
+        "time_return_annual": return_obj.get("time_return_annual"),
+        "time_return_last_year": return_obj.get("time_return_last_year"),
+        "time_return_last_month": return_obj.get("time_return_last_month"),
+        "time_return_last_week": return_obj.get("time_return_last_week"),
+        "pl": return_obj.get("pl"),
+        "investment": return_obj.get("investment"),
+        "total_amount": return_obj.get("total_amount"),
+        "volatility": data.get("volatility"),
+        "sharpe_ratio": data.get("sharpe_ratio"),
+        "max_drawdown": drawdowns.get("max_drawdown"),
         "raw": data,
     }
 

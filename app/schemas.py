@@ -128,20 +128,38 @@ class HermesContextResponse(BaseModel):
 class IndexaPortfolioResponse(BaseModel):
     """Portfolio snapshot from Indexa Capital.
 
-    Shape is kept flexible — Indexa response includes nested instrument lists,
-    allocation breakdowns, and totals that we surface as-is to the frontend.
+    Positions are flattened to {name, isin, amount, cost_amount, weight,
+    asset_class, price, titles}. Totals come from raw.portfolio.
     """
     model_config = ConfigDict(extra="allow")
 
     positions: list[dict[str, Any]] = []
     total_value: float | None = None
+    total_invested: float | None = None
+    cash: float | None = None
     allocation: dict[str, Any] = {}
     raw: dict[str, Any] = {}
 
 
 class IndexaPerformanceResponse(BaseModel):
-    """Performance time series from Indexa Capital."""
+    """Performance time series + KPIs from Indexa Capital.
+
+    series is a sorted array of {date, value} pairs derived from
+    raw.return.total_amounts. Returns (time_return, etc.) are fractional
+    (0.527 == 52.7%).
+    """
     model_config = ConfigDict(extra="allow")
 
     series: list[dict[str, Any]] = []
+    time_return: float | None = None
+    time_return_annual: float | None = None
+    time_return_last_year: float | None = None
+    time_return_last_month: float | None = None
+    time_return_last_week: float | None = None
+    pl: float | None = None
+    investment: float | None = None
+    total_amount: float | None = None
+    volatility: float | None = None
+    sharpe_ratio: float | None = None
+    max_drawdown: float | None = None
     raw: dict[str, Any] = {}
