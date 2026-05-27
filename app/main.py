@@ -538,6 +538,7 @@ async def check_session_cookie(request: Request, call_next):
         or path == "/logout"
         or path == "/api/hermes-context"
         or path == "/api/session-token"
+        or path.startswith("/api/indexa/")
     ):
         return await call_next(request)
 
