@@ -475,6 +475,24 @@ body.view-degiro .indexa-only { display: none !important; }
 
 .chart-wrap canvas { width: 100% !important; height: 100% !important; }
 
+.chart-range-buttons {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.chart-range-buttons .range-btn {
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+}
+.chart-range-buttons .range-btn:hover { border-color: #666; color: #ccc; }
+.chart-range-buttons .range-btn.active { border-color: var(--teal); color: var(--teal); }
+
 /* ─── POSITIONS TABLE ─── */
 .positions-section { margin-bottom: 20px; }
 

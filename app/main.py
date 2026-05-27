@@ -43,6 +43,7 @@ from .schemas import (
     LogoutResponse,
     IndexaPortfolioResponse,
     IndexaPerformanceResponse,
+    IndexaTransactionsResponse,
 )
 from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache, _infer_stock_sector_from_name, _infer_stock_country_from_name
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
@@ -999,6 +1000,22 @@ async def get_indexa_performance():
         "max_drawdown": drawdowns.get("max_drawdown"),
         "raw": data,
     }
+
+
+@app.get("/api/indexa/transactions", dependencies=[Depends(verify_brok_token)], response_model=IndexaTransactionsResponse)
+async def get_indexa_transactions():
+    try:
+        data = await indexa_client.get_cash_transactions()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail="Indexa request failed")
+    except httpx.HTTPError as e:
+        logger.error("Indexa transactions fetch error: %s", e)
+        raise HTTPException(status_code=502, detail="Indexa upstream error")
+
+    transactions = data if isinstance(data, list) else []
+    return {"transactions": transactions, "raw": {}}
 
 
 # ─── Session Token ───

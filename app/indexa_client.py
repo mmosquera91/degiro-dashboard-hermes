@@ -112,6 +112,11 @@ class IndexaClient:
         self._store("performance", data)
         return data
 
-    async def get_cash_transactions(self) -> dict[str, Any]:
+    async def get_cash_transactions(self) -> list:
+        cached = self._cached("cash_transactions")
+        if cached is not None:
+            return cached
         account = await self._ensure_account()
-        return await self._request("GET", f"/accounts/{account}/cash-transactions")
+        data = await self._request("GET", f"/accounts/{account}/cash-transactions")
+        self._store("cash_transactions", data)
+        return data

@@ -141,6 +141,11 @@ class IndexaPortfolioResponse(BaseModel):
     raw: dict[str, Any] = {}
 
 
+class IndexaTransactionsResponse(BaseModel):
+    transactions: list[dict[str, Any]] = []
+    raw: dict[str, Any] = {}
+
+
 class IndexaPerformanceResponse(BaseModel):
     """Performance time series + KPIs from Indexa Capital.
 

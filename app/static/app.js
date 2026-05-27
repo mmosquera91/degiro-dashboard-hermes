@@ -1405,6 +1405,8 @@ function renderHealthAlerts() {
   let indexaLoading = false;
   let indexaPortfolio = null;
   let indexaPerformance = null;
+  let indexaTransactions = null;
+  let indexaChartRange = "all";
 
   function switchView(view) {
     const isIndexa = view === "indexa";
@@ -1440,9 +1442,10 @@ function renderHealthAlerts() {
     indexaLoading = true;
     showIndexaEmpty("Loading Indexa portfolio…", "", false);
     try {
-      const [pRes, perfRes] = await Promise.all([
+      const [pRes, perfRes, txRes] = await Promise.all([
         apiFetch("/api/indexa/portfolio"),
         apiFetch("/api/indexa/performance"),
+        apiFetch("/api/indexa/transactions"),
       ]);
 
       if (!pRes.ok || !perfRes.ok) {
@@ -1462,6 +1465,10 @@ function renderHealthAlerts() {
 
       indexaPortfolio = await pRes.json();
       indexaPerformance = await perfRes.json();
+      if (txRes.ok) {
+        const txData = await txRes.json();
+        indexaTransactions = txData.transactions || [];
+      }
       indexaLoaded = true;
       renderIndexa();
     } catch (err) {
@@ -1499,6 +1506,15 @@ function renderHealthAlerts() {
     renderIndexaFunds();
     if (privacyMode) document.body.classList.add("privacy-mode");
     lucide.createIcons();
+
+    document.querySelectorAll(".range-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        indexaChartRange = btn.dataset.range;
+        document.querySelectorAll(".range-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderIndexaPerformanceChart();
+      });
+    });
   }
 
   function indexaInvestedTotal() {
@@ -1558,29 +1574,12 @@ function renderHealthAlerts() {
   }
 
   function indexaLastContribution() {
-    const pf = indexaPortfolio || {};
-    const raw = pf.raw || {};
-    const sources = [raw.cash_transactions, raw.transactions].filter(Array.isArray);
-    for (const arr of sources) {
-      const contribs = arr.filter(t => {
-        const amt = t.amount != null ? t.amount : t.amount_eur;
-        const ty = String(t.type || t.transaction_type || "").toLowerCase();
-        if (amt == null || amt <= 0) return false;
-        return ty.includes("contrib") || ty.includes("deposit") || ty.includes("transfer") || ty === "";
-      });
-      if (!contribs.length) continue;
-      contribs.sort((a, b) => {
-        const da = String(a.date || a.value_date || "");
-        const db = String(b.date || b.value_date || "");
-        return db.localeCompare(da);
-      });
-      const last = contribs[0];
-      return {
-        amount: last.amount != null ? last.amount : last.amount_eur,
-        date: last.date || last.value_date,
-      };
-    }
-    return null;
+    const arr = Array.isArray(indexaTransactions) ? indexaTransactions : [];
+    const deposits = arr.filter(t => t.amount != null && t.amount > 0);
+    if (!deposits.length) return null;
+    deposits.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    const last = deposits[0];
+    return { amount: last.amount, date: last.date };
   }
 
   function renderIndexaKPIs() {
@@ -1726,7 +1725,7 @@ function renderHealthAlerts() {
     if (!canvas) return;
     if (charts.indexaPerformance) { charts.indexaPerformance.destroy(); charts.indexaPerformance = null; }
     const series = indexaPerformanceSeries();
-    const entries = series.map(s => {
+    let entries = series.map(s => {
       const date = s.date || s.value_date || s.day;
       const value = (s.value != null ? s.value
                   : s.amount != null ? s.amount
@@ -1741,12 +1740,23 @@ function renderHealthAlerts() {
     }).filter(e => e.date != null && e.value != null);
     entries.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
+    if (entries.length && indexaChartRange !== "all") {
+      const dayMap = { "1m": 30, "6m": 180, "1y": 365, "5y": 1825 };
+      const days = dayMap[indexaChartRange];
+      if (days) {
+        const lastDate = new Date(entries[entries.length - 1].date);
+        const cutoff = new Date(lastDate.getTime() - days * 86400000);
+        entries = entries.filter(e => new Date(e.date) >= cutoff);
+      }
+    }
+
     if (!entries.length) {
       const wrap = canvas.parentElement;
       if (wrap) wrap.innerHTML = '<div class="chart-empty"><span class="chart-empty-icon">📈</span><span class="chart-empty-text">No performance data yet</span></div>';
       return;
     }
 
+    const isPrivacy = document.body.classList.contains("privacy-mode");
     const labels = entries.map(e => e.date);
     const values = entries.map(e => e.value);
     const datasets = [{
@@ -1782,7 +1792,17 @@ function renderHealthAlerts() {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: true, position: "bottom", labels: { color: "#888", font: { family: "Inter", size: 10 } } },
-          tooltip: { enabled: true },
+          tooltip: {
+            enabled: true,
+            callbacks: {
+              label: function(ctx) {
+                if (document.body.classList.contains("privacy-mode")) return ctx.dataset.label + ": ***";
+                const v = ctx.parsed.y;
+                if (Math.abs(v) >= 1000) return ctx.dataset.label + ": €" + (v / 1000).toFixed(1) + "k";
+                return ctx.dataset.label + ": €" + v.toFixed(0);
+              },
+            },
+          },
         },
         scales: {
           x: { ticks: { color: "#888", font: { family: "Inter", size: 10 }, maxTicksLimit: 8 }, grid: { color: "#2a2a2a" } },
@@ -1791,6 +1811,7 @@ function renderHealthAlerts() {
               color: "#888",
               font: { family: "Inter", size: 10 },
               callback: function(v) {
+                if (document.body.classList.contains("privacy-mode")) return "***";
                 if (Math.abs(v) >= 1000) return "€" + (v / 1000).toFixed(0) + "k";
                 return "€" + v.toFixed(0);
               },
