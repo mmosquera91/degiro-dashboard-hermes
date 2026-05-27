@@ -1614,6 +1614,21 @@ function renderHealthAlerts() {
       $("#indexa-kpi-last-contrib").textContent = "—";
       $("#indexa-kpi-last-contrib-sub").textContent = "no data";
     }
+
+    const perf = indexaPerformance || {};
+    const annualEl = $("#indexa-kpi-annual-return");
+    const annual = perf.time_return_annual != null ? perf.time_return_annual * 100 : null;
+    annualEl.textContent = annual != null ? fmtPct(annual) : "—";
+    setSignClass(annualEl, annual);
+
+    const volEl = $("#indexa-kpi-volatility");
+    const vol = perf.volatility != null ? perf.volatility * 100 : null;
+    volEl.textContent = vol != null ? vol.toFixed(2) + "%" : "—";
+
+    const sharpeEl = $("#indexa-kpi-sharpe");
+    const sharpe = perf.sharpe_ratio;
+    sharpeEl.textContent = sharpe != null ? sharpe.toFixed(2) : "—";
+    setSignClass(sharpeEl, sharpe);
   }
 
   function indexaFundEntries() {
@@ -1621,14 +1636,16 @@ function renderHealthAlerts() {
     return positions.map(p => {
       const instr = p.instrument || {};
       const name = p.name || instr.name || p.instrument_name || "Unknown";
-      const isin = p.isin || instr.isin || "";
+      const isin = p.isin || instr.isin || p.isin_code || instr.isin_code || "";
       const amount = (p.amount != null ? p.amount
                     : p.value != null ? p.value
                     : p.amount_eur != null ? p.amount_eur
                     : p.market_value != null ? p.market_value
                     : null);
+      const costAmount = p.cost_amount != null ? p.cost_amount : null;
       const percentage = p.percentage != null ? p.percentage : (p.weight != null ? p.weight : null);
-      return { name, isin, amount, percentage };
+      const assetClass = p.asset_class || instr.asset_class || null;
+      return { name, isin, amount, costAmount, percentage, assetClass };
     });
   }
 
@@ -1769,10 +1786,25 @@ function renderHealthAlerts() {
         },
         scales: {
           x: { ticks: { color: "#888", font: { family: "Inter", size: 10 }, maxTicksLimit: 8 }, grid: { color: "#2a2a2a" } },
-          y: { ticks: { color: "#888", font: { family: "Inter", size: 10 } }, grid: { color: "#2a2a2a" } },
+          y: {
+            ticks: {
+              color: "#888",
+              font: { family: "Inter", size: 10 },
+              callback: function(v) {
+                if (Math.abs(v) >= 1000) return "€" + (v / 1000).toFixed(0) + "k";
+                return "€" + v.toFixed(0);
+              },
+            },
+            grid: { color: "#2a2a2a" },
+          },
         },
       },
     });
+  }
+
+  function fmtAssetClass(ac) {
+    if (!ac) return "—";
+    return ac.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   }
 
   function renderIndexaFunds() {
@@ -1780,18 +1812,26 @@ function renderHealthAlerts() {
     if (!body) return;
     const entries = indexaFundEntries();
     if (!entries.length) {
-      body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px;">No funds found</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px;">No funds found</td></tr>';
       return;
     }
     entries.sort((a, b) => (b.amount || 0) - (a.amount || 0));
-    body.innerHTML = entries.map(e => `
+    body.innerHTML = entries.map(e => {
+      const gl = (e.amount != null && e.costAmount != null) ? e.amount - e.costAmount : null;
+      const glClass = gl != null ? (gl >= 0 ? "positive" : "negative") : "";
+      const glText = gl != null ? (gl >= 0 ? "+" : "") + fmtEur(gl) : "—";
+      return `
       <tr>
         <td class="col-name">${esc(e.name)}</td>
         <td>${esc(e.isin || "—")}</td>
+        <td><span style="font-size:0.72rem;color:var(--text-dim)">${esc(fmtAssetClass(e.assetClass))}</span></td>
         <td class="private-value">${fmtEur(e.amount)}</td>
+        <td class="private-value">${fmtEur(e.costAmount)}</td>
+        <td class="private-value ${glClass}">${glText}</td>
         <td>${e.percentage != null ? e.percentage.toFixed(1) + "%" : "—"}</td>
       </tr>
-    `).join("");
+    `;
+    }).join("");
   }
 
   // ─── Helpers ───
