@@ -81,6 +81,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260527-x2v | Improve mobile responsiveness of dashboard header and Indexa tab | 2026-05-27 | 00ffc3f | [260527-x2v-improve-the-mobile-responsiveness-of-the](./quick/260527-x2v-improve-the-mobile-responsiveness-of-the/) |
 | 260527-otn | Fix Indexa Capital data extraction (backend + frontend) | 2026-05-27 | 3b259c7 | [260527-otn-fix-indexa-data-extraction](./quick/260527-otn-fix-indexa-data-extraction/) |
 | 20260527-ie | Indexa Capital tab enhancements (KPIs, funds table, chart) | 2026-05-27 | 1523bd6 | [20260527-indexa-enhancements](./quick/20260527-indexa-enhancements/) |
 
@@ -96,5 +97,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-05-27
-Stopped at: Completed quick task 260527-otn: Fix Indexa Capital data extraction
+Stopped at: Completed quick task 260527-x2v: Improve mobile responsiveness of dashboard
 Resume file: None
