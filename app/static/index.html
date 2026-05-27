@@ -18,24 +18,32 @@
   <header class="header">
     <div class="header-left">
         <img src="/static/logo.svg" alt="Brokr" class="header-logo">
+        <nav class="tab-nav" role="tablist" aria-label="Broker">
+          <button id="tab-degiro" class="tab-btn active" role="tab" aria-selected="true" data-view="degiro">DeGiro</button>
+          <button id="tab-indexa" class="tab-btn" role="tab" aria-selected="false" data-view="indexa">Indexa</button>
+        </nav>
       </div>
     <div class="header-right">
-      <span id="last-refresh" class="last-refresh"></span>
-      <span id="stale-badge" class="stale-badge hidden">
+      <span id="last-refresh" class="last-refresh degiro-only"></span>
+      <span id="stale-badge" class="stale-badge degiro-only hidden">
         <i data-lucide="alert-triangle" class="icon-sm"></i>
         <span class="stale-text">Data may be stale</span>
       </span>
-      <button id="btn-refresh" class="btn btn-outline" title="Sync portfolio from DeGiro">
+      <button id="btn-refresh" class="btn btn-outline degiro-only" title="Sync portfolio from DeGiro">
         <i data-lucide="refresh-cw" class="icon-sm"></i>
         <span class="btn-label">Sync DeGiro</span>
       </button>
-      <button id="btn-update-prices" class="btn btn-outline" title="Refresh prices from yfinance" disabled>
+      <button id="btn-update-prices" class="btn btn-outline degiro-only" title="Refresh prices from yfinance" disabled>
         <i data-lucide="trending-up" class="icon-sm"></i>
         <span class="btn-label">Update Prices</span>
       </button>
-      <button id="btn-export" class="btn btn-outline" title="Export for Hermes" style="display:none;">
+      <button id="btn-export" class="btn btn-outline degiro-only" title="Export for Hermes" style="display:none;">
         <i data-lucide="clipboard-copy" class="icon-sm"></i>
         <span class="btn-label">Export for Hermes</span>
+      </button>
+      <button id="btn-refresh-indexa" class="btn btn-outline indexa-only hidden" title="Refresh Indexa data">
+        <i data-lucide="refresh-cw" class="icon-sm"></i>
+        <span class="btn-label">Refresh Indexa</span>
       </button>
       <button id="btn-privacy" aria-label="Toggle privacy mode" title="Privacy mode">
         <i data-lucide="eye" class="icon-sm"></i>
@@ -51,6 +59,9 @@
 
   <!-- MAIN CONTENT -->
   <main class="main">
+
+    <!-- DEGIRO VIEW -->
+    <div id="degiro-view" class="view active">
 
     <!-- EMPTY STATE -->
     <div id="empty-state" class="empty-state">
@@ -272,6 +283,95 @@
       </details>
 
     </div>
+    </div><!-- /#degiro-view -->
+
+    <!-- INDEXA VIEW -->
+    <div id="indexa-view" class="view hidden">
+
+      <!-- INDEXA EMPTY/ERROR STATE -->
+      <div id="indexa-empty" class="empty-state hidden">
+        <i data-lucide="piggy-bank" class="empty-icon"></i>
+        <h2 id="indexa-empty-title">Indexa Capital</h2>
+        <p id="indexa-empty-msg">Loading your robo-advisor portfolio…</p>
+        <button id="btn-indexa-retry" class="btn btn-primary hidden">
+          <i data-lucide="refresh-cw" class="icon-sm"></i>
+          Retry
+        </button>
+      </div>
+
+      <!-- INDEXA DASHBOARD -->
+      <div id="indexa-dashboard" class="dashboard hidden">
+
+        <!-- KPI CARDS -->
+        <section class="kpi-grid indexa-kpi-grid">
+          <div class="card kpi-card accent-teal">
+            <span class="card-label">Portfolio Value</span>
+            <span id="indexa-kpi-value" class="card-value private-value">—</span>
+            <span id="indexa-kpi-value-sub" class="card-sub">—</span>
+          </div>
+          <div class="card kpi-card">
+            <span class="card-label">Total Invested</span>
+            <span id="indexa-kpi-invested" class="card-value private-value">—</span>
+            <span id="indexa-kpi-invested-sub" class="card-sub">—</span>
+          </div>
+          <div class="card kpi-card accent-green">
+            <span class="card-label">Return (EUR)</span>
+            <span id="indexa-kpi-return-eur" class="card-value private-value">—</span>
+            <span id="indexa-kpi-return-eur-sub" class="card-sub">—</span>
+          </div>
+          <div class="card kpi-card accent-gold">
+            <span class="card-label">Return (%)</span>
+            <span id="indexa-kpi-return-pct" class="card-value">—</span>
+            <span id="indexa-kpi-return-pct-sub" class="card-sub">since inception</span>
+          </div>
+          <div class="card kpi-card">
+            <span class="card-label">Last Contribution</span>
+            <span id="indexa-kpi-last-contrib" class="card-value private-value">—</span>
+            <span id="indexa-kpi-last-contrib-sub" class="card-sub">—</span>
+          </div>
+        </section>
+
+        <!-- CHARTS -->
+        <section class="charts-section indexa-charts">
+          <div class="card chart-card">
+            <h3 class="chart-title">Allocation by Fund</h3>
+            <div class="chart-wrap">
+              <canvas id="chart-indexa-allocation"></canvas>
+            </div>
+          </div>
+          <div class="card chart-card">
+            <h3 class="chart-title">Performance</h3>
+            <div class="chart-wrap">
+              <canvas id="chart-indexa-performance"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- FUNDS TABLE -->
+        <section class="positions-section">
+          <div class="card">
+            <div class="positions-header">
+              <h3 class="chart-title">Funds</h3>
+            </div>
+            <div class="table-wrap">
+              <table class="positions-table">
+                <thead>
+                  <tr>
+                    <th class="col-name">Name</th>
+                    <th>ISIN</th>
+                    <th>Value</th>
+                    <th>Weight%</th>
+                  </tr>
+                </thead>
+                <tbody id="indexa-funds-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div><!-- /#indexa-view -->
+
   </main>
 
   <!-- CREDENTIAL MODAL -->

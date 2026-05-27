@@ -79,6 +79,7 @@
 
   // ─── Init ───
   document.addEventListener("DOMContentLoaded", () => {
+    document.body.classList.add("view-degiro");
     lucide.createIcons();
     bindEvents();
     // Try loading cached portfolio on page load (works even if session expired)
@@ -139,6 +140,24 @@
         if (e.target.open) renderSnapshotManager();
       });
     }
+
+    // Tab switching
+    const tabDegiroBtn = $("#tab-degiro");
+    const tabIndexaBtn = $("#tab-indexa");
+    if (tabDegiroBtn) tabDegiroBtn.addEventListener("click", () => switchView("degiro"));
+    if (tabIndexaBtn) tabIndexaBtn.addEventListener("click", () => switchView("indexa"));
+
+    const btnRefreshIndexa = $("#btn-refresh-indexa");
+    if (btnRefreshIndexa) btnRefreshIndexa.addEventListener("click", () => {
+      indexaLoaded = false;
+      loadIndexaData(true);
+    });
+
+    const btnIndexaRetry = $("#btn-indexa-retry");
+    if (btnIndexaRetry) btnIndexaRetry.addEventListener("click", () => {
+      indexaLoaded = false;
+      loadIndexaData(true);
+    });
 
     // Manual snapshot save button
     const btnSaveSnapshot = document.getElementById("btn-save-snapshot");
@@ -1379,6 +1398,388 @@ function renderHealthAlerts() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // ─── Indexa Capital ───
+  let indexaLoaded = false;
+  let indexaLoading = false;
+  let indexaPortfolio = null;
+  let indexaPerformance = null;
+
+  function switchView(view) {
+    const isIndexa = view === "indexa";
+    document.body.classList.toggle("view-indexa", isIndexa);
+    document.body.classList.toggle("view-degiro", !isIndexa);
+
+    const degiroView = document.getElementById("degiro-view");
+    const indexaView = document.getElementById("indexa-view");
+    if (degiroView) degiroView.classList.toggle("hidden", isIndexa);
+    if (indexaView) indexaView.classList.toggle("hidden", !isIndexa);
+
+    const tabDe = document.getElementById("tab-degiro");
+    const tabIn = document.getElementById("tab-indexa");
+    if (tabDe) {
+      tabDe.classList.toggle("active", !isIndexa);
+      tabDe.setAttribute("aria-selected", String(!isIndexa));
+    }
+    if (tabIn) {
+      tabIn.classList.toggle("active", isIndexa);
+      tabIn.setAttribute("aria-selected", String(isIndexa));
+    }
+
+    const refreshIndexaBtn = document.getElementById("btn-refresh-indexa");
+    if (refreshIndexaBtn) refreshIndexaBtn.classList.toggle("hidden", !isIndexa);
+
+    if (isIndexa && !indexaLoaded && !indexaLoading) {
+      loadIndexaData();
+    }
+  }
+
+  async function loadIndexaData() {
+    if (indexaLoading) return;
+    indexaLoading = true;
+    showIndexaEmpty("Loading Indexa portfolio…", "", false);
+    try {
+      const [pRes, perfRes] = await Promise.all([
+        apiFetch("/api/indexa/portfolio"),
+        apiFetch("/api/indexa/performance"),
+      ]);
+
+      if (!pRes.ok || !perfRes.ok) {
+        const failing = pRes.ok ? perfRes : pRes;
+        let detail = "";
+        try { const j = await failing.json(); detail = j.detail || ""; } catch (e) { /* ignore */ }
+        const status = failing.status;
+        if (status === 503) {
+          showIndexaEmpty("Indexa Capital not configured", detail || "Set INDEXA_API_TOKEN to enable this view.", true);
+        } else if (status === 401) {
+          showIndexaEmpty("Authentication required", "Reload the page and log back in.", true);
+        } else {
+          showIndexaEmpty("Indexa unavailable", detail || ("Upstream returned " + status + "."), true);
+        }
+        return;
+      }
+
+      indexaPortfolio = await pRes.json();
+      indexaPerformance = await perfRes.json();
+      indexaLoaded = true;
+      renderIndexa();
+    } catch (err) {
+      console.error("Indexa load error:", err);
+      showIndexaEmpty("Indexa unavailable", err.message || "Network error", true);
+    } finally {
+      indexaLoading = false;
+    }
+  }
+
+  function showIndexaEmpty(title, msg, showRetry) {
+    const empty = $("#indexa-empty");
+    const dash = $("#indexa-dashboard");
+    if (!empty || !dash) return;
+    empty.classList.remove("hidden");
+    dash.classList.add("hidden");
+    const t = $("#indexa-empty-title");
+    const m = $("#indexa-empty-msg");
+    const retry = $("#btn-indexa-retry");
+    if (t) t.textContent = title;
+    if (m) m.textContent = msg || "";
+    if (retry) retry.classList.toggle("hidden", !showRetry);
+    lucide.createIcons();
+  }
+
+  function renderIndexa() {
+    if (!indexaPortfolio) return;
+    const empty = $("#indexa-empty");
+    const dash = $("#indexa-dashboard");
+    if (empty) empty.classList.add("hidden");
+    if (dash) dash.classList.remove("hidden");
+    renderIndexaKPIs();
+    renderIndexaAllocationChart();
+    renderIndexaPerformanceChart();
+    renderIndexaFunds();
+    if (privacyMode) document.body.classList.add("privacy-mode");
+    lucide.createIcons();
+  }
+
+  function indexaInvestedTotal() {
+    const pf = indexaPortfolio || {};
+    const pr = (indexaPerformance && indexaPerformance.raw) || {};
+    const raw = pf.raw || {};
+    const candidates = [
+      pr.return && pr.return.total_invested,
+      pr.return && pr.return.invested_amount,
+      pr.total_invested,
+      raw.total_invested,
+      raw.invested_amount,
+    ];
+    for (const c of candidates) if (c != null && isFinite(c)) return c;
+    return null;
+  }
+
+  function indexaReturnEur() {
+    const pr = (indexaPerformance && indexaPerformance.raw) || {};
+    const candidates = [
+      pr.return && pr.return.return_currency,
+      pr.return && pr.return.return_amount,
+      pr.return_currency,
+      pr.return_amount,
+    ];
+    for (const c of candidates) if (c != null && isFinite(c)) return c;
+    const v = indexaPortfolio && indexaPortfolio.total_value;
+    const inv = indexaInvestedTotal();
+    if (v != null && inv != null) return v - inv;
+    return null;
+  }
+
+  function indexaReturnPct() {
+    const pr = (indexaPerformance && indexaPerformance.raw) || {};
+    const candidates = [
+      pr.return && pr.return.return_percentage,
+      pr.return && pr.return.twror_percentage,
+      pr.return_percentage,
+    ];
+    for (const c of candidates) if (c != null && isFinite(c)) return c;
+    const r = indexaReturnEur();
+    const inv = indexaInvestedTotal();
+    if (r != null && inv != null && inv > 0) return (r / inv) * 100;
+    return null;
+  }
+
+  function indexaLastContribution() {
+    const pf = indexaPortfolio || {};
+    const raw = pf.raw || {};
+    const sources = [raw.cash_transactions, raw.transactions].filter(Array.isArray);
+    for (const arr of sources) {
+      const contribs = arr.filter(t => {
+        const amt = t.amount != null ? t.amount : t.amount_eur;
+        const ty = String(t.type || t.transaction_type || "").toLowerCase();
+        if (amt == null || amt <= 0) return false;
+        return ty.includes("contrib") || ty.includes("deposit") || ty.includes("transfer") || ty === "";
+      });
+      if (!contribs.length) continue;
+      contribs.sort((a, b) => {
+        const da = String(a.date || a.value_date || "");
+        const db = String(b.date || b.value_date || "");
+        return db.localeCompare(da);
+      });
+      const last = contribs[0];
+      return {
+        amount: last.amount != null ? last.amount : last.amount_eur,
+        date: last.date || last.value_date,
+      };
+    }
+    return null;
+  }
+
+  function renderIndexaKPIs() {
+    const pf = indexaPortfolio || {};
+    const value = pf.total_value;
+    const invested = indexaInvestedTotal();
+    const retEur = indexaReturnEur();
+    const retPct = indexaReturnPct();
+    const last = indexaLastContribution();
+    const numFunds = (pf.positions || []).length;
+
+    $("#indexa-kpi-value").textContent = fmtEur(value);
+    $("#indexa-kpi-value-sub").textContent = numFunds + (numFunds === 1 ? " fund" : " funds");
+
+    $("#indexa-kpi-invested").textContent = fmtEur(invested);
+    $("#indexa-kpi-invested-sub").textContent = invested != null ? "principal" : "not reported";
+
+    const retEurEl = $("#indexa-kpi-return-eur");
+    retEurEl.textContent = fmtEur(retEur);
+    setSignClass(retEurEl, retEur);
+    $("#indexa-kpi-return-eur-sub").textContent = "since inception";
+
+    const retPctEl = $("#indexa-kpi-return-pct");
+    retPctEl.textContent = retPct != null ? fmtPct(retPct) : "—";
+    setSignClass(retPctEl, retPct);
+
+    if (last) {
+      $("#indexa-kpi-last-contrib").textContent = fmtEur(last.amount);
+      $("#indexa-kpi-last-contrib-sub").textContent = last.date ? new Date(last.date).toLocaleDateString() : "—";
+    } else {
+      $("#indexa-kpi-last-contrib").textContent = "—";
+      $("#indexa-kpi-last-contrib-sub").textContent = "no data";
+    }
+  }
+
+  function indexaFundEntries() {
+    const positions = (indexaPortfolio && indexaPortfolio.positions) || [];
+    return positions.map(p => {
+      const instr = p.instrument || {};
+      const name = p.name || instr.name || p.instrument_name || "Unknown";
+      const isin = p.isin || instr.isin || "";
+      const amount = (p.amount != null ? p.amount
+                    : p.value != null ? p.value
+                    : p.amount_eur != null ? p.amount_eur
+                    : p.market_value != null ? p.market_value
+                    : null);
+      const percentage = p.percentage != null ? p.percentage : (p.weight != null ? p.weight : null);
+      return { name, isin, amount, percentage };
+    });
+  }
+
+  function renderIndexaAllocationChart() {
+    const canvas = $("#chart-indexa-allocation");
+    if (!canvas) return;
+    if (charts.indexaAllocation) { charts.indexaAllocation.destroy(); charts.indexaAllocation = null; }
+    const entries = indexaFundEntries().filter(e => e.amount != null && e.amount > 0);
+    if (!entries.length) {
+      const wrap = canvas.parentElement;
+      if (wrap) wrap.innerHTML = '<div class="chart-empty"><span class="chart-empty-icon">📊</span><span class="chart-empty-text">No allocation data</span></div>';
+      return;
+    }
+    const labels = entries.map(e => truncate(e.name, 30));
+    const values = entries.map(e => e.amount);
+    const colors = generateColors(entries.length);
+    charts.indexaAllocation = new Chart(canvas, {
+      type: "doughnut",
+      data: { labels: labels, datasets: [{ data: values, backgroundColor: colors, borderColor: "#1a1a1a", borderWidth: 2 }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "55%",
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) + "%" : "0%";
+                if (document.body.classList.contains("privacy-mode")) {
+                  return ctx.label + ": " + pct;
+                }
+                const eur = ctx.parsed.toLocaleString("de-DE", {
+                  style: "currency", currency: "EUR",
+                  minimumFractionDigits: 0, maximumFractionDigits: 0,
+                });
+                return ctx.label + ": " + eur + " (" + pct + ")";
+              },
+            },
+          },
+          legend: {
+            display: true,
+            position: "bottom",
+            labels: {
+              color: "#888",
+              font: { family: "Inter", size: 10 },
+              boxWidth: 12,
+              generateLabels: function(chart) {
+                const d = Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart);
+                d.forEach(l => { if (l.text && l.text.length > 24) l.text = l.text.substring(0, 22) + "…"; });
+                return d;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function indexaPerformanceSeries() {
+    const perf = indexaPerformance || {};
+    const raw = perf.raw || {};
+    const candidates = [
+      Array.isArray(perf.series) && perf.series.length ? perf.series : null,
+      raw.return && raw.return.time_series,
+      raw.return && raw.return.returns,
+      raw.time_series,
+      Array.isArray(raw.performance) ? raw.performance : null,
+    ];
+    for (const c of candidates) {
+      if (Array.isArray(c) && c.length) return c;
+    }
+    return [];
+  }
+
+  function renderIndexaPerformanceChart() {
+    const canvas = $("#chart-indexa-performance");
+    if (!canvas) return;
+    if (charts.indexaPerformance) { charts.indexaPerformance.destroy(); charts.indexaPerformance = null; }
+    const series = indexaPerformanceSeries();
+    const entries = series.map(s => {
+      const date = s.date || s.value_date || s.day;
+      const value = (s.value != null ? s.value
+                  : s.amount != null ? s.amount
+                  : s.total_amount != null ? s.total_amount
+                  : s.return_amount != null ? s.return_amount
+                  : null);
+      const invested = (s.invested != null ? s.invested
+                     : s.total_invested != null ? s.total_invested
+                     : s.cash_amount != null ? s.cash_amount
+                     : null);
+      return { date: date, value: value, invested: invested };
+    }).filter(e => e.date != null && e.value != null);
+    entries.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    if (!entries.length) {
+      const wrap = canvas.parentElement;
+      if (wrap) wrap.innerHTML = '<div class="chart-empty"><span class="chart-empty-icon">📈</span><span class="chart-empty-text">No performance data yet</span></div>';
+      return;
+    }
+
+    const labels = entries.map(e => e.date);
+    const values = entries.map(e => e.value);
+    const datasets = [{
+      label: "Portfolio",
+      data: values,
+      borderColor: "#01696f",
+      backgroundColor: "rgba(1,105,111,0.08)",
+      fill: true,
+      tension: 0.3,
+      pointRadius: 0,
+      borderWidth: 2,
+    }];
+    if (entries.some(e => e.invested != null)) {
+      datasets.push({
+        label: "Invested",
+        data: entries.map(e => e.invested != null ? e.invested : null),
+        borderColor: "#d97706",
+        backgroundColor: "transparent",
+        fill: false,
+        tension: 0,
+        pointRadius: 0,
+        borderWidth: 2,
+        borderDash: [4, 3],
+        spanGaps: true,
+      });
+    }
+
+    charts.indexaPerformance = new Chart(canvas, {
+      type: "line",
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: "bottom", labels: { color: "#888", font: { family: "Inter", size: 10 } } },
+          tooltip: { enabled: true },
+        },
+        scales: {
+          x: { ticks: { color: "#888", font: { family: "Inter", size: 10 }, maxTicksLimit: 8 }, grid: { color: "#2a2a2a" } },
+          y: { ticks: { color: "#888", font: { family: "Inter", size: 10 } }, grid: { color: "#2a2a2a" } },
+        },
+      },
+    });
+  }
+
+  function renderIndexaFunds() {
+    const body = $("#indexa-funds-body");
+    if (!body) return;
+    const entries = indexaFundEntries();
+    if (!entries.length) {
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px;">No funds found</td></tr>';
+      return;
+    }
+    entries.sort((a, b) => (b.amount || 0) - (a.amount || 0));
+    body.innerHTML = entries.map(e => `
+      <tr>
+        <td class="col-name">${esc(e.name)}</td>
+        <td>${esc(e.isin || "—")}</td>
+        <td class="private-value">${fmtEur(e.amount)}</td>
+        <td>${e.percentage != null ? e.percentage.toFixed(1) + "%" : "—"}</td>
+      </tr>
+    `).join("");
   }
 
   // ─── Helpers ───

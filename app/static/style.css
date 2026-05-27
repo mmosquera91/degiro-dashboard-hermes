@@ -63,8 +63,42 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 0px;
+  gap: 16px;
 }
+
+/* ─── TAB NAV ─── */
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-offset);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.tab-btn {
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 500;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab-btn:hover { color: var(--text); }
+
+.tab-btn.active {
+  background: var(--teal);
+  color: #fff;
+}
+
+/* hide degiro-only controls when indexa view is active, and vice versa */
+body.view-indexa .degiro-only { display: none !important; }
+body.view-degiro .indexa-only { display: none !important; }
 
 .logo { width: 28px; height: 28px; }
 .header-logo { height: 60px; width: auto; margin-left: -5px; display: block; }
@@ -1294,3 +1328,26 @@ body.privacy-mode .private-value:active {
 
 /* ─── HERO ─── */
 /* removed */
+
+/* ─── INDEXA VIEW ─── */
+.indexa-kpi-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.indexa-charts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#indexa-view .chart-wrap { height: 260px; }
+
+@media (max-width: 768px) {
+  .tab-nav { padding: 2px; }
+  .tab-btn { padding: 5px 12px; font-size: 0.78rem; }
+  .header-left { gap: 10px; }
+  .indexa-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .indexa-charts { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .indexa-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
