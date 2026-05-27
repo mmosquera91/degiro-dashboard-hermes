@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import threading
+
+import httpx
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, date
 from contextlib import asynccontextmanager
@@ -17,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 
 from .degiro_client import DeGiroClient
+from .indexa_client import IndexaClient
 from . import schemas
 from .schemas import (
     AuthRequest,
@@ -37,6 +40,8 @@ from .schemas import (
     SymbolCacheClearResponse,
     ReloadOverridesResponse,
     LogoutResponse,
+    IndexaPortfolioResponse,
+    IndexaPerformanceResponse,
 )
 from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache, _infer_stock_sector_from_name, _infer_stock_country_from_name
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
@@ -892,6 +897,51 @@ async def hermes_context():
         portfolio = _session["portfolio"]
 
     return build_hermes_context(portfolio if portfolio is not None else {})
+
+
+# ─── Indexa Capital (read-only) ───
+
+indexa_client = IndexaClient()
+
+
+@app.get("/api/indexa/portfolio", dependencies=[Depends(verify_brok_token)], response_model=IndexaPortfolioResponse)
+async def get_indexa_portfolio():
+    try:
+        data = await indexa_client.get_portfolio()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail="Indexa request failed")
+    except httpx.HTTPError as e:
+        logger.error("Indexa portfolio fetch error: %s", e)
+        raise HTTPException(status_code=502, detail="Indexa upstream error")
+
+    instruments = data.get("instrument_accounts") or data.get("positions") or []
+    return {
+        "positions": instruments if isinstance(instruments, list) else [],
+        "total_value": data.get("total_amount") or data.get("total_value"),
+        "allocation": data.get("portfolio") or data.get("allocation") or {},
+        "raw": data,
+    }
+
+
+@app.get("/api/indexa/performance", dependencies=[Depends(verify_brok_token)], response_model=IndexaPerformanceResponse)
+async def get_indexa_performance():
+    try:
+        data = await indexa_client.get_performance()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail="Indexa request failed")
+    except httpx.HTTPError as e:
+        logger.error("Indexa performance fetch error: %s", e)
+        raise HTTPException(status_code=502, detail="Indexa upstream error")
+
+    series = data.get("return") or data.get("performance") or data.get("series") or []
+    return {
+        "series": series if isinstance(series, list) else [],
+        "raw": data,
+    }
 
 
 # ─── Session Token ───

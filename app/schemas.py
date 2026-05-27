@@ -120,3 +120,28 @@ class HermesContextResponse(BaseModel):
 
     json: dict[str, Any]
     plaintext: str
+
+
+# ─── Indexa Capital ────────────────────────────────────────────────────────────
+
+
+class IndexaPortfolioResponse(BaseModel):
+    """Portfolio snapshot from Indexa Capital.
+
+    Shape is kept flexible — Indexa response includes nested instrument lists,
+    allocation breakdowns, and totals that we surface as-is to the frontend.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    positions: list[dict[str, Any]] = []
+    total_value: float | None = None
+    allocation: dict[str, Any] = {}
+    raw: dict[str, Any] = {}
+
+
+class IndexaPerformanceResponse(BaseModel):
+    """Performance time series from Indexa Capital."""
+    model_config = ConfigDict(extra="allow")
+
+    series: list[dict[str, Any]] = []
+    raw: dict[str, Any] = {}
