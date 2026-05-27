@@ -1018,6 +1018,34 @@ async def get_indexa_transactions():
     return {"transactions": transactions, "raw": {}}
 
 
+@app.get("/api/indexa/user-info", dependencies=[Depends(verify_brok_token)])
+async def get_indexa_user_info():
+    try:
+        data = await indexa_client.get_user_info()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail="Indexa request failed")
+    except httpx.HTTPError as e:
+        logger.error("Indexa user-info fetch error: %s", e)
+        raise HTTPException(status_code=502, detail="Indexa upstream error")
+
+    accounts = data.get("accounts") or []
+    acc = accounts[0] if accounts else {}
+    profile = acc.get("profile") or {}
+    risk_obj = profile.get("risk") or {}
+    return {
+        "risk_tolerance": risk_obj.get("tolerance"),
+        "risk_capacity": risk_obj.get("capacity"),
+        "risk_total": risk_obj.get("total"),
+        "selected_risk": profile.get("selected_risk") or acc.get("risk"),
+        "pbc_risk": acc.get("pbc_risk"),
+        "expected_return": acc.get("expected_return"),
+        "style": acc.get("style") or profile.get("style"),
+        "funded_at": acc.get("funded_at"),
+    }
+
+
 # ─── Session Token ───
 
 @app.get("/api/session-token", response_model=SessionTokenResponse)

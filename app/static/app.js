@@ -1406,6 +1406,7 @@ function renderHealthAlerts() {
   let indexaPortfolio = null;
   let indexaPerformance = null;
   let indexaTransactions = null;
+  let indexaUserInfo = null;
   let indexaChartRange = "all";
 
   function switchView(view) {
@@ -1442,10 +1443,11 @@ function renderHealthAlerts() {
     indexaLoading = true;
     showIndexaEmpty("Loading Indexa portfolio…", "", false);
     try {
-      const [pRes, perfRes, txRes] = await Promise.all([
+      const [pRes, perfRes, txRes, userRes] = await Promise.all([
         apiFetch("/api/indexa/portfolio"),
         apiFetch("/api/indexa/performance"),
         apiFetch("/api/indexa/transactions"),
+        apiFetch("/api/indexa/user-info"),
       ]);
 
       if (!pRes.ok || !perfRes.ok) {
@@ -1468,6 +1470,9 @@ function renderHealthAlerts() {
       if (txRes.ok) {
         const txData = await txRes.json();
         indexaTransactions = txData.transactions || [];
+      }
+      if (userRes.ok) {
+        indexaUserInfo = await userRes.json();
       }
       indexaLoaded = true;
       renderIndexa();
@@ -1628,6 +1633,25 @@ function renderHealthAlerts() {
     const sharpe = perf.sharpe_ratio;
     sharpeEl.textContent = sharpe != null ? sharpe.toFixed(2) : "—";
     setSignClass(sharpeEl, sharpe);
+
+    // Max Drawdown
+    const ddEl = $("#indexa-kpi-drawdown");
+    const dd = perf.max_drawdown;
+    ddEl.textContent = dd != null ? fmtPct(dd * 100) : "—";
+    setSignClass(ddEl, dd);
+
+    // Risk Profile
+    const riskEl = $("#indexa-kpi-risk");
+    const riskSubEl = $("#indexa-kpi-risk-sub");
+    const ui = indexaUserInfo || {};
+    const riskTotal = ui.risk_total;
+    if (riskTotal != null) {
+      riskEl.textContent = riskTotal + "/10";
+      riskSubEl.textContent = (ui.pbc_risk || "") + (ui.expected_return != null ? " · " + (ui.expected_return * 100).toFixed(1) + "% exp." : "");
+    } else {
+      riskEl.textContent = "—";
+      riskSubEl.textContent = "not available";
+    }
   }
 
   function indexaFundEntries() {
