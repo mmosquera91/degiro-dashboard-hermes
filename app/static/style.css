@@ -1011,6 +1011,25 @@ body.view-degiro .indexa-only { display: none !important; }
   .indexa-kpi-grid .kpi-card .card-value { font-size: 1.15rem; }
   .indexa-kpi-grid .kpi-card .card-sub { word-break: break-word; font-size: var(--text-xs); }
   .chart-wrap { height: 190px; }
+  /* scroll-ux: pin name column at small mobile too */
+  .col-name {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--surface);
+  }
+  .table-wrap { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-wrap::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.5));
+    pointer-events: none;
+    z-index: 2;
+  }
 }
 
 /* ─── RESPONSIVE — 420px mobile ─── */
@@ -1032,12 +1051,46 @@ body.view-degiro .indexa-only { display: none !important; }
   }
   .card-value-main { font-size: 1.25rem; }
   .chart-title { font-size: var(--text-sm); }
-  .table-wrap { margin: 0 -14px; padding: 0 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
-  .table-wrap::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 30px; background: linear-gradient(to right, transparent, rgba(0,0,0,0.3)); pointer-events: none; }
+  /* Positions table: enhanced scroll-ux treatment */
+  .table-wrap {
+    margin: 0 -14px;
+    padding: 0 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+  }
+  /* Strengthened scroll-shadow on dark surface — wider gradient, more opaque */
+  .table-wrap::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 48px;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.6));
+    pointer-events: none;
+    z-index: 2;
+  }
   .positions-table { font-size: 0.75rem; min-width: 680px; }
-  .col-name { min-width: 120px; position: sticky; left: 0; z-index: 3; background: var(--surface); }
-  .positions-table th { position: sticky; top: 0; z-index: 4; background: var(--surface); }
+  /* Pinned name column (sticky first column) */
+  .col-name {
+    min-width: 120px;
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--surface);
+  }
+  /* Pinned header row: header th above body, name-column header highest */
+  .positions-table th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: var(--surface);
+  }
   .positions-table th:first-child { z-index: 5; }
+  /* Increased touch targets for easier tapping on mobile */
+  .positions-table td { padding: 11px 10px; }
+  .positions-table th { padding: 10px 10px; }
   .chart-range-buttons { flex-wrap: wrap; }
 }
 
