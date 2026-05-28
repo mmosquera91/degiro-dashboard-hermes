@@ -5,7 +5,7 @@ milestone_name: milestone
 status: milestone_complete
 stopped_at: Roadmap created for v1.3 Test Coverage Sprint
 last_updated: "2026-05-27T15:55:00.000Z"
-last_activity: 2026-05-27 -- Completed quick task 260527-otn: Fix Indexa Capital data extraction
+last_activity: 2026-05-28 -- Completed quick task 260528-wtv: Comprehensive UI revamp of the Brokr dashboard
 progress:
   total_phases: 4
   completed_phases: 4
@@ -81,6 +81,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260528-wtv | Comprehensive UI revamp — design tokens, responsive breakpoints, micro-interactions, a11y, dark-mode consistency, scroll-ux positions table | 2026-05-28 | fa8471f | [260528-wtv-do-a-comprehensive-ui-revamp-of-the-brok](./quick/260528-wtv-do-a-comprehensive-ui-revamp-of-the-brok/) |
 | 260527-x2v | Improve mobile responsiveness of dashboard header and Indexa tab | 2026-05-27 | 00ffc3f | [260527-x2v-improve-the-mobile-responsiveness-of-the](./quick/260527-x2v-improve-the-mobile-responsiveness-of-the/) |
 | 260527-otn | Fix Indexa Capital data extraction (backend + frontend) | 2026-05-27 | 3b259c7 | [260527-otn-fix-indexa-data-extraction](./quick/260527-otn-fix-indexa-data-extraction/) |
 | 20260527-ie | Indexa Capital tab enhancements (KPIs, funds table, chart) | 2026-05-27 | 1523bd6 | [20260527-indexa-enhancements](./quick/20260527-indexa-enhancements/) |
