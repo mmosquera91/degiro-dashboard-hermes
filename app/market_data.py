@@ -1680,32 +1680,36 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         eu_symbols = [s for s in unique_yf_symbols if "." in s]
         us_symbols = [s for s in unique_yf_symbols if "." not in s]
 
+        _CHUNK_SIZE = 25
+
         def _fetch_and_unpack(symbols: list[str]) -> dict[str, float]:
             result: dict[str, float] = {}
             if not symbols:
                 return result
-            try:
-                b = yf.download(symbols, period="2d", auto_adjust=True, progress=False, threads=False)
-                if b is not None and not b.empty:
-                    close_df = b["Close"] if "Close" in b.columns.get_level_values(0) else None
-                    if close_df is None:
-                        close_df = b
-                    for sym in symbols:
-                        try:
-                            if isinstance(close_df, pd.DataFrame):
-                                if sym in close_df.columns:
-                                    price = float(close_df[sym].iloc[-1])
-                                    if price > 0:
-                                        result[sym] = price
-                            elif isinstance(close_df, pd.Series):
-                                if sym == close_df.name:
-                                    price = float(close_df.iloc[-1])
-                                    if price > 0:
-                                        result[sym] = price
-                        except (ValueError, TypeError, KeyError):
-                            pass
-            except Exception as e:
-                logger.warning("Batch price fetch failed for %s: %s", symbols, e)
+            chunks = [symbols[i:i + _CHUNK_SIZE] for i in range(0, len(symbols), _CHUNK_SIZE)]
+            for chunk in chunks:
+                try:
+                    b = yf.download(chunk, period="2d", auto_adjust=True, progress=False, threads=True)
+                    if b is not None and not b.empty:
+                        close_df = b["Close"] if "Close" in b.columns.get_level_values(0) else None
+                        if close_df is None:
+                            close_df = b
+                        for sym in chunk:
+                            try:
+                                if isinstance(close_df, pd.DataFrame):
+                                    if sym in close_df.columns:
+                                        price = float(close_df[sym].iloc[-1])
+                                        if price > 0:
+                                            result[sym] = price
+                                elif isinstance(close_df, pd.Series):
+                                    if sym == close_df.name:
+                                        price = float(close_df.iloc[-1])
+                                        if price > 0:
+                                            result[sym] = price
+                            except (ValueError, TypeError, KeyError):
+                                pass
+                except Exception as e:
+                    logger.warning("Batch price fetch failed for %s: %s", chunk, e)
             return result
 
         price_batch = {**_fetch_and_unpack(eu_symbols), **_fetch_and_unpack(us_symbols)}
