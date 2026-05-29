@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 Phase: 14
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-05-29 - Completed quick task 260529-eqt: revamp the lock screen to match the style and logo of the rest of the pages
+Last activity: 2026-05-29 - Completed quick task 260529-gwb: fix CI tests + mobile lock-screen login button + right-anchor header buttons
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -81,6 +81,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260529-gwb | Fix failing CI (update stale /api/session-token tests to assert secure 303), make lock-screen login button visible on mobile, right-anchor private-mode/lock buttons on mobile | 2026-05-29 | 31aca6f | [260529-gwb-fix-ci-tests-lock-screen-login-button-mo](./quick/260529-gwb-fix-ci-tests-lock-screen-login-button-mo/) |
 | 260529-eqt | Revamp the lock screen to match dashboard style & logo — canonical stylesheet/logo, btn/spinner reuse, ARIA + responsive | 2026-05-29 | 53c75ef | [260529-eqt-revamp-the-lock-screen-to-match-the-styl](./quick/260529-eqt-revamp-the-lock-screen-to-match-the-styl/) |
 | 260528-wtv | Comprehensive UI revamp — design tokens, responsive breakpoints, micro-interactions, a11y, dark-mode consistency, scroll-ux positions table | 2026-05-28 | fa8471f | [260528-wtv-do-a-comprehensive-ui-revamp-of-the-brok](./quick/260528-wtv-do-a-comprehensive-ui-revamp-of-the-brok/) |
 | 260527-x2v | Improve mobile responsiveness of dashboard header and Indexa tab | 2026-05-27 | 00ffc3f | [260527-x2v-improve-the-mobile-responsiveness-of-the](./quick/260527-x2v-improve-the-mobile-responsiveness-of-the/) |
