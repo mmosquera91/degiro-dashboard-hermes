@@ -1011,12 +1011,18 @@ body.view-degiro .indexa-only { display: none !important; }
 
 /* ─── RESPONSIVE — 480px small mobile ─── */
 @media (max-width: 480px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  /* Match DeGiro card sizing on mobile — previously the Indexa cards used a
-     tighter gap, reduced padding, and a smaller value font, which made them
-     look smaller and cluttered next to the DeGiro cards. Inherit the shared
-     .kpi-grid / .card sizing; keep only word-break so long sub-labels
-     (e.g. "worst peak-to-trough") don't overflow. */
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Match DeGiro card sizing on mobile: same 2-column layout, same .card
+     padding and .kpi-card value font (the Indexa grid used to override these
+     with 3 columns + reduced padding/font, which made the cards both smaller
+     than DeGiro's AND wide enough to overflow the screen). minmax(0, 1fr)
+     lets columns shrink below their content so long values never force
+     horizontal scrolling; word-break handles long sub-labels. */
+  /* #indexa-view prefix gives this ID-level specificity so it beats the plain
+     `.indexa-kpi-grid { repeat(3, …) }` rule in the max-width:768 block that is
+     declared LATER in this file (and would otherwise win the cascade at ≤480,
+     forcing 3 columns that overflow the screen). */
+  #indexa-view .indexa-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .indexa-kpi-grid .kpi-card .card-sub { word-break: break-word; }
   .chart-wrap { height: 190px; }
   /* scroll-ux: pin name column at small mobile too */
@@ -1483,7 +1489,7 @@ body.privacy-mode .private-value:active {
   .tab-nav { padding: 2px; }
   .tab-btn { padding: 5px 12px; font-size: 0.78rem; }
   .header-left { gap: 10px; }
-  .indexa-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .indexa-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .indexa-charts { grid-template-columns: 1fr; }
   #indexa-view .chart-wrap { height: 220px; }
 }
