@@ -982,7 +982,10 @@ body.view-degiro .indexa-only { display: none !important; }
   .header { padding: 10px 14px; flex-wrap: wrap; gap: var(--space-2); }
   .header-left { gap: 10px; flex: 1 1 auto; min-width: 0; }
   .header-logo { height: 46px; }
-  .header-right { gap: 6px; flex: 0 0 auto; }
+  .header-right { gap: 6px; flex: 0 0 auto; justify-content: flex-end; }
+  /* Anchor privacy toggle + lock button to far right regardless of which
+     other (DeGiro vs Indexa) header buttons are currently visible. */
+  #btn-privacy { margin-left: auto; }
   .main { padding: 14px; }
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .allocation-bar-row { flex-wrap: wrap; gap: var(--space-3); grid-template-columns: 1fr; }
@@ -1567,6 +1570,10 @@ body.privacy-mode .private-value:active {
 .login-submit .spinner {
   display: none;
 }
+
+/* Keep login label visible on mobile (global .btn-label { display: none } hides it otherwise;
+   the button has no icon so hiding the label would make it invisible/empty on small viewports). */
+.login-submit:not([aria-busy="true"]) .btn-label { display: inline !important; }
 
 .login-submit[aria-busy="true"] .btn-label {
   display: none;
