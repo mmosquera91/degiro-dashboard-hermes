@@ -5,7 +5,6 @@ import logging
 import math
 import os
 import pathlib
-import functools
 import re
 import threading
 import time
@@ -1145,7 +1144,7 @@ def _is_cache_warm(symbol: str, isin: str) -> bool:
     return True
 
 
-def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
+def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
     """Enrich a single position with yfinance data.
 
     Uses two-layer caching:
@@ -1155,8 +1154,9 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
     If yfinance fails for a position, affected fields are set to None.
     The position dict is updated in place and returned.
 
-    price_batch: optional dict of {yf_symbol: price} from a batch yf.download() prefetch.
-    If provided, prices are looked up here first before calling yfinance per-symbol.
+    history_batch: optional dict of {yf_symbol: {"close": Series, "high": Series, "low": Series}}
+    from a 1y batch yf.download(). When present, price/RSI/perf/52w are derived locally
+    without per-symbol history calls.
     """
     symbol = position.get("symbol", "")
     isin = position.get("isin", "")
@@ -1204,19 +1204,20 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         yf_currency = "EUR"
                     elif suffix in _GBP_EXCH:
                         yf_currency = "GBP"
-                # Use price from THIS run's batch fetch (price_batch) first,
-                # then fall back to yf_symbol key (handles suffix variants like IONQ.NQ → IONQ)
+                # Use price from 1y history batch first, then price cache
                 old_price = position.get("current_price")
                 fresh_price = None
-                if price_batch is not None:
-                    fresh_price = price_batch.get(yf_sym)
-                    if fresh_price is None:
-                        # Fallback: try broker_symbol key in batch (works for EUR ETFs where broker=yf without suffix)
-                        fresh_price = price_batch.get(symbol)
+                _hw_hist = None
+                if history_batch is not None:
+                    _hw_hist = history_batch.get(yf_sym) or history_batch.get(symbol)
+                    if _hw_hist and len(_hw_hist["close"]) > 0:
+                        fresh_price = float(_hw_hist["close"].iloc[-1])
+                        if fresh_price <= 0:
+                            fresh_price = None
                 if fresh_price is None:
                     fresh_price, _ = _get_cached_price(yf_sym)
                 # Always stamp price_source so it's set even if fresh_price is None
-                in_batch = price_batch is not None and yf_sym in price_batch
+                in_batch = _hw_hist is not None
                 position["price_source"] = "batch" if in_batch else "cache"
                 if fresh_price:
                     position["current_price"] = round(fresh_price, 4)
@@ -1247,6 +1248,27 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                     position["52w_low"] = None  # not cached
                 else:
                     logger.warning(f"[STAMP] {symbol}: no batch price found, using cached {position.get('current_price')}")
+                # Fill RSI/perf/52w from 1y batch history (eliminates post-batch stage)
+                if _hw_hist and len(_hw_hist["close"]) > 0:
+                    _hw_close = _hw_hist["close"]
+                    position["rsi"] = compute_rsi(_hw_close)
+                    _hw_perf = _compute_performance(_hw_close)
+                    position["perf_30d"] = _hw_perf["perf_30d"]
+                    position["perf_90d"] = _hw_perf["perf_90d"]
+                    position["perf_ytd"] = _hw_perf["perf_ytd"]
+                    position["perf_1y"] = _hw_perf["perf_1y"]
+                    _hw_high_s = _hw_hist.get("high", pd.Series(dtype=float))
+                    _hw_low_s = _hw_hist.get("low", pd.Series(dtype=float))
+                    if len(_hw_high_s) > 0:
+                        h52 = float(_hw_high_s.max())
+                        position["52w_high"] = round(h52, 4)
+                        cur_p = position.get("current_price", 0) or 0
+                        if cur_p > 0 and h52 > 0:
+                            position["distance_from_52w_high_pct"] = round(
+                                ((cur_p - h52) / h52) * 100, 2
+                            )
+                    if len(_hw_low_s) > 0:
+                        position["52w_low"] = round(float(_hw_low_s.min()), 4)
         logger.info("Cache hit for %s — returning enriched from cache", symbol)
         return position
 
@@ -1427,17 +1449,36 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                 symbol, resolved_suffix or "bare", yf_currency, pos_currency,
             )
 
-        # Get historical data for RSI and performance (always fresh — not cached)
-        hist = ticker.history(period="1y")
-        if hist is not None and not hist.empty:
-            close = hist["Close"]
+        # Get historical data for RSI, performance, price, 52w range.
+        # Use 1y batch data if available; fall back to per-ticker fetch only when missing.
+        _hist_entry = history_batch.get(yf_symbol) if history_batch is not None else None
+        if _hist_entry is not None and len(_hist_entry["close"]) > 0:
+            close = _hist_entry["close"]
+            _hist_high_s = _hist_entry.get("high", pd.Series(dtype=float))
+            _hist_low_s = _hist_entry.get("low", pd.Series(dtype=float))
+            _hist_available = True
+        else:
+            _yf_throttle()
+            _fallback = ticker.history(period="1y")
+            if _fallback is not None and not _fallback.empty:
+                close = _fallback["Close"]
+                _hist_high_s = _fallback["High"] if "High" in _fallback.columns else pd.Series(dtype=float)
+                _hist_low_s = _fallback["Low"] if "Low" in _fallback.columns else pd.Series(dtype=float)
+                _hist_available = True
+            else:
+                close = pd.Series(dtype=float)
+                _hist_high_s = pd.Series(dtype=float)
+                _hist_low_s = pd.Series(dtype=float)
+                _hist_available = False
 
-            # Override 52w high/low from historical if available
-            if len(close) > 0:
-                hist_high = float(close.max())
-                hist_low = float(close.min())
+        if _hist_available and len(close) > 0:
+            # Override 52w high/low from actual High/Low series
+            if len(_hist_high_s) > 0:
+                hist_high = float(_hist_high_s.max())
                 if wk52_high is None:
                     wk52_high = hist_high
+            if len(_hist_low_s) > 0:
+                hist_low = float(_hist_low_s.min())
                 if wk52_low is None:
                     wk52_low = hist_low
 
@@ -1456,8 +1497,8 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
                         rsi = float(100 - (100 / (1 + rs)))
                         rsi = round(rsi, 2)
                 if rsi is None:
-                    logger.warning("RSI unavailable for %s — insufficient history (1y=%d, 3mo=%d)",
-                        symbol, len(close), len(fallback_hist) if fallback_hist is not None else 0)
+                    logger.warning("RSI unavailable for %s — insufficient history (1y=%d)",
+                        symbol, len(close))
             position["rsi"] = rsi
 
             # Performance
@@ -1467,18 +1508,14 @@ def enrich_position(position: dict, price_batch: dict | None = None) -> dict:
             position["perf_ytd"] = perf["perf_ytd"]
             position["perf_1y"] = perf["perf_1y"]
 
-            # Price: use batch prefetch first, then price cache, then per-ticker history
+            # Price: batch history close first, then price cache, then history last row
             yf_price = 0.0
-            if price_batch is not None and yf_symbol in price_batch:
-                yf_price = price_batch[yf_symbol]
+            if _hist_entry is not None and _price_currency_safe and len(close) > 0:
+                yf_price = float(close.iloc[-1])
             elif cached_price is not None and cached_price_currency == yf_currency and _price_currency_safe:
-                # Fresh price cache hit — use cached price
                 yf_price = cached_price
-            else:
-                # Price cache miss or stale/wrong currency — fetch from history
-                _yf_throttle()
-                if len(close) > 0 and _price_currency_safe:
-                    yf_price = float(close.iloc[-1])
+            elif len(close) > 0 and _price_currency_safe:
+                yf_price = float(close.iloc[-1])
 
             if yf_price > 0:
                 # GBp (pence) safety net: yfinance returns LSE prices in GBp (pence),
@@ -1692,54 +1729,52 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             _save_symbol_cache()
         _save_defer.dirty = False
 
-    # Step 2: Batch fetch prices for all resolved symbols
+    # Step 2: Single 1y batch download per group (EU/US) — replaces 2d price batch +
+    # per-symbol post-batch history stage. Price, RSI, perf_*, 52w extracted locally.
     unique_yf_symbols = [s for s in dict.fromkeys(resolved_yf_symbols) if s]  # deduplicate, skip empty
-    price_batch: dict[str, float] = {}
+    history_batch: dict[str, dict] = {}
     _batch_start = time.time()
 
     if unique_yf_symbols:
-        # Split into EU (suffix, e.g. VUSA.AS) and US (plain, e.g. IONQ) —
-        # yf.download drops plain US tickers when the list also contains
-        # exchange-suffixed EU tickers, so we fetch each group separately.
+        # Split EU (exchange-suffix) and US (bare) — mixed lists drop US tickers in yf.download
         eu_symbols = [s for s in unique_yf_symbols if "." in s]
         us_symbols = [s for s in unique_yf_symbols if "." not in s]
 
         _CHUNK_SIZE = 25
 
-        def _fetch_and_unpack(symbols: list[str]) -> dict[str, float]:
-            result: dict[str, float] = {}
+        def _fetch_1y_group(symbols: list[str]) -> dict[str, dict]:
+            result: dict[str, dict] = {}
             if not symbols:
                 return result
             chunks = [symbols[i:i + _CHUNK_SIZE] for i in range(0, len(symbols), _CHUNK_SIZE)]
             for chunk in chunks:
                 try:
-                    b = yf.download(chunk, period="2d", auto_adjust=True, progress=False, threads=True)
-                    if b is not None and not b.empty:
-                        close_df = b["Close"] if "Close" in b.columns.get_level_values(0) else None
-                        if close_df is None:
-                            close_df = b
-                        for sym in chunk:
-                            try:
-                                if isinstance(close_df, pd.DataFrame):
-                                    if sym in close_df.columns:
-                                        price = float(close_df[sym].iloc[-1])
-                                        if price > 0:
-                                            result[sym] = price
-                                elif isinstance(close_df, pd.Series):
-                                    if sym == close_df.name:
-                                        price = float(close_df.iloc[-1])
-                                        if price > 0:
-                                            result[sym] = price
-                            except (ValueError, TypeError, KeyError):
-                                pass
+                    b = yf.download(chunk, period="1y", auto_adjust=True, progress=False, threads=True)
+                    if b is None or b.empty:
+                        continue
+                    has_mi = isinstance(b.columns, pd.MultiIndex)
+                    for sym in chunk:
+                        try:
+                            if has_mi:
+                                close = b["Close"][sym].dropna() if sym in b["Close"].columns else pd.Series(dtype=float)
+                                high = b["High"][sym].dropna() if sym in b["High"].columns else pd.Series(dtype=float)
+                                low = b["Low"][sym].dropna() if sym in b["Low"].columns else pd.Series(dtype=float)
+                            else:
+                                close = b["Close"].dropna() if "Close" in b.columns else pd.Series(dtype=float)
+                                high = b["High"].dropna() if "High" in b.columns else pd.Series(dtype=float)
+                                low = b["Low"].dropna() if "Low" in b.columns else pd.Series(dtype=float)
+                            if len(close) > 0:
+                                result[sym] = {"close": close, "high": high, "low": low}
+                        except (KeyError, TypeError):
+                            pass
                 except Exception as e:
-                    logger.warning("Batch price fetch failed for %s: %s", chunk, e)
+                    logger.warning("1y batch fetch failed for chunk %s: %s", chunk, e)
             return result
 
-        price_batch = {**_fetch_and_unpack(eu_symbols), **_fetch_and_unpack(us_symbols)}
+        history_batch = {**_fetch_1y_group(eu_symbols), **_fetch_1y_group(us_symbols)}
 
     _batch_elapsed = time.time() - _batch_start
-    logger.info("[INFO] Batch price fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
+    logger.info("[INFO] 1y batch fetch: %d symbols in %.1fs", len(unique_yf_symbols), _batch_elapsed)
 
     # Step 3: Enrich all positions in parallel using asyncio.gather
     import asyncio
@@ -1749,7 +1784,7 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         yf_sym = resolved_symbols[idx]
         pos["_resolved_yf_symbol"] = yf_sym
         loop = asyncio.get_running_loop()
-        enriched_pos = await loop.run_in_executor(None, enrich_position, pos, price_batch)
+        enriched_pos = await loop.run_in_executor(None, enrich_position, pos, history_batch)
         is_rl = enriched_pos.get("_enrichment_error") == "rate_limited"
         return _sanitize_floats(enriched_pos), is_rl
 
@@ -1784,93 +1819,6 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             enriched_pos["fx_rate"] = 1.0
             enriched_pos["current_value_eur"] = enriched_pos["current_value"]
             enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
-
-    # Post-batch enrichment pass: positions that hit the cache-warm fast path get
-    # current_price from the batch fetch but skip the history fetch (line 952→1009),
-    # leaving rsi/perf_30d/perf_90d/perf_ytd/52w_low all None. Fill those in now.
-    # TODO: persist enriched metrics to cache in v2
-    _post_batch_start = time.time()
-    post_batch_enriched_count = 0
-
-    # Collect positions needing enrichment
-    _needs_enrichment = [
-        (i, pos) for i, pos in enumerate(enriched)
-        if pos.get("_resolved_yf_symbol")
-        and pos.get("price_source") == "batch"
-        and pos.get("rsi") is None
-        and pos.get("perf_30d") is None
-    ]
-
-    if _needs_enrichment:
-        _batch_size = 20
-
-        async def _post_enrich_one(idx: int, pos: dict) -> dict:
-            yf_sym = pos.get("_resolved_yf_symbol", "")
-            try:
-                ticker = yf.Ticker(yf_sym)
-                loop = asyncio.get_running_loop()
-                hist = await loop.run_in_executor(None, functools.partial(ticker.history, period="1y", auto_adjust=True))
-                if hist is None or hist.empty:
-                    logger.warning("Post-batch enrichment: no 1y history for %s", yf_sym)
-                    return pos
-                if len(hist) < 14:
-                    _yf_throttle()
-                    hist = await loop.run_in_executor(None, functools.partial(ticker.history, period="3mo", interval="1d", auto_adjust=True))
-
-                close = hist["Close"]
-                if len(close) < 2:
-                    return pos
-
-                pos["rsi"] = compute_rsi(close, period=14)
-                perf = _compute_performance(close)
-                pos["perf_30d"] = perf["perf_30d"]
-                pos["perf_90d"] = perf["perf_90d"]
-                pos["perf_ytd"] = perf["perf_ytd"]
-                pos["perf_1y"] = perf["perf_1y"]
-
-                current_price = pos.get("current_price")
-                if current_price is not None and current_price > 0:
-                    hist_52w_high = float(hist["High"].max()) if len(hist) > 0 else None
-                    hist_52w_low = float(hist["Low"].min()) if len(hist) > 0 else None
-                    pos["52w_low"] = round(hist_52w_low, 4) if hist_52w_low is not None else None
-                    if hist_52w_high is not None and hist_52w_high > 0:
-                        pos["52w_high"] = round(hist_52w_high, 4)
-                        pos["distance_from_52w_high_pct"] = round(
-                            ((current_price - hist_52w_high) / hist_52w_high) * 100, 2
-                        )
-                return pos
-            except Exception as e:
-                err_str = str(e)
-                if "429" in err_str or "Too Many Requests" in err_str:
-                    logger.warning("Rate limited in post-batch enrichment for %s", yf_sym)
-                    return pos
-                logger.warning("Post-batch enrichment failed for %s: %s", yf_sym, str(e))
-                return pos
-
-        async def _run_post_batch() -> int:
-            count = 0
-            for batch_start in range(0, len(_needs_enrichment), _batch_size):
-                batch = _needs_enrichment[batch_start:batch_start + _batch_size]
-                tasks = [_post_enrich_one(i, pos) for i, pos in batch]
-                results = await asyncio.gather(*tasks)
-                for i, result in zip([idx for idx, _ in batch], results):
-                    enriched[i] = result
-                    count += 1
-                if batch_start + _batch_size < len(_needs_enrichment):
-                    _yf_throttle()
-            return count
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            post_batch_enriched_count = asyncio.run(_run_post_batch())
-        else:
-            post_batch_enriched_count = loop.run_until_complete(_run_post_batch())
-
-    _post_batch_elapsed = time.time() - _post_batch_start
-    if post_batch_enriched_count > 0:
-        logger.info("Post-batch enrichment: %d symbols enriched in %.1fs",
-                    post_batch_enriched_count, _post_batch_elapsed)
 
     elapsed = time.time() - _enrich_start
     logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)
