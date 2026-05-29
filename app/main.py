@@ -563,7 +563,6 @@ async def check_session_cookie(request: Request, call_next):
         or path == "/health"
         or path == "/logout"
         or path == "/api/hermes-context"
-        or path == "/api/session-token"
         or path.startswith("/api/indexa/")
     ):
         return await call_next(request)
@@ -1311,4 +1310,8 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/")
 async def root():
-    return FileResponse("app/static/index.html")
+    # Served from app/ (outside the public /static mount) so the dashboard
+    # shell is reachable ONLY through this authenticated route. A locked client
+    # hitting / is redirected to /login by check_session_cookie, instead of the
+    # shell loading and firing API calls that fail with JSON errors.
+    return FileResponse("app/index.html")

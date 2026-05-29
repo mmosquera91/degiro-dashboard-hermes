@@ -28,13 +28,25 @@
   // ─── Auth ───
   let _authToken = null;
 
+  // When the session is gone (never logged in, or expired while this tab was
+  // open), a protected endpoint answers with a 303 → /login that fetch follows
+  // automatically — surfacing as res.redirected to the login page — or a 401.
+  // Either way, send the user to the login screen rather than letting callers
+  // choke on an HTML body with .json(). Returns true if a redirect was issued.
+  function _bounceToLoginIfUnauthenticated(res) {
+    if (res.status === 401 || (res.redirected && /\/login(\?|$)/.test(res.url))) {
+      window.location.href = "/login";
+      return true;
+    }
+    return false;
+  }
+
   async function _ensureAuthToken() {
     if (_authToken !== null) return;
     try {
-      const res = await fetch("/api/session-token", {
-        headers: { "Authorization": `Bearer ${_authToken || ""}` },
-        credentials: "same-origin",
-      });
+      // Bootstrap endpoint — authenticated by the session cookie, not a bearer.
+      const res = await fetch("/api/session-token", { credentials: "same-origin" });
+      if (_bounceToLoginIfUnauthenticated(res)) return;
       if (res.ok) {
         const data = await res.json();
         _authToken = data.token;
@@ -44,11 +56,13 @@
 
   async function apiFetch(url, options = {}) {
     await _ensureAuthToken();
-    return fetch(url, {
+    const res = await fetch(url, {
       ...options,
       headers: { "Authorization": `Bearer ${_authToken}`, ...(options.headers || {}) },
       credentials: "same-origin",
     });
+    _bounceToLoginIfUnauthenticated(res);
+    return res;
   }
 
   // ─── DOM refs ───
