@@ -7,135 +7,36 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0f0f0f;
-      --surface: #1a1a1a;
-      --surface-hover: #222222;
-      --border: #2a2a2a;
-      --text: #e8e8e8;
-      --text-dim: #888888;
-      --teal: #01696f;
-      --teal-light: #028a92;
-      --red: #ef4444;
-      --red-dim: rgba(239,68,68,0.12);
-      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --radius: 8px;
-    }
-    html, body {
-      height: 100%;
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-    }
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 40px 36px;
-      width: 100%;
-      max-width: 360px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-    }
-    .logo-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 32px;
-      justify-content: center;
-    }
-    .logo { width: 32px; height: 32px; }
-    .app-name {
-      font-size: 1.4rem;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-    .form-group {
-      margin-bottom: 16px;
-    }
-    label {
-      display: block;
-      font-size: 0.8rem;
-      font-weight: 500;
-      color: var(--text-dim);
-      margin-bottom: 6px;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-    }
-    input[type="password"] {
-      width: 100%;
-      padding: 10px 12px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-size: 1rem;
-      font-family: var(--font);
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    input[type="password"]:focus {
-      border-color: var(--teal);
-    }
-    .btn {
-      width: 100%;
-      padding: 10px 16px;
-      background: var(--teal);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius);
-      font-size: 1rem;
-      font-weight: 600;
-      font-family: var(--font);
-      cursor: pointer;
-      transition: background 0.15s;
-      margin-top: 4px;
-    }
-    .btn:hover { background: var(--teal-light); }
-    .error-msg {
-      background: var(--red-dim);
-      color: var(--red);
-      border: 1px solid rgba(239,68,68,0.25);
-      border-radius: var(--radius);
-      padding: 8px 12px;
-      font-size: 0.875rem;
-      margin-bottom: 16px;
-      display: none;
-    }
-    .error-msg.visible { display: block; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 </head>
-<body>
-  <div class="card">
-    <div class="logo-row">
-      <svg class="logo" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="28" height="28" rx="6" fill="#01696f"/>
-        <path d="M7 19V9h3l3 6 3-6h3v10h-2.5v-6l-2.5 5h-2l-2.5-5v6H7z" fill="#fff"/>
-      </svg>
-      <span class="app-name">Brokr</span>
+<body class="login-body">
+  <div class="login-card">
+    <div class="login-logo-row">
+      <img src="/static/logo.svg" alt="Brokr" class="login-logo">
     </div>
 
-    <div id="error-msg" class="error-msg {% if error %}visible{% endif %}">{{ (error or "Incorrect password") | e }}</div>
+    <div id="error-msg" class="login-error {% if error %}visible{% endif %}"
+         role="alert" aria-live="assertive">{{ (error or "Incorrect password") | e }}</div>
 
     <form method="POST" action="/login">
-      <div class="form-group">
-        <label for="password">Password</label>
+      <div class="login-form-group">
+        <label class="login-label" for="password">Password</label>
         <input
+          class="login-input"
           type="password"
           id="password"
           name="password"
           placeholder="Enter password"
+          autocomplete="current-password"
           autofocus
           required
+          aria-describedby="error-msg"
         >
       </div>
-      <button type="submit" class="btn">Sign in</button>
+      <button type="submit" class="btn btn-primary btn-block login-submit">
+        <span class="spinner" aria-hidden="true"></span><span class="btn-label">Unlock</span>
+      </button>
     </form>
   </div>
 
@@ -146,6 +47,13 @@
       document.getElementById('error-msg').classList.add('visible');
       document.getElementById('password').focus();
     }
+
+    // Show spinner loading state on submit (POST proceeds normally)
+    document.querySelector('form').addEventListener('submit', function () {
+      const btn = document.querySelector('.login-submit');
+      btn.setAttribute('aria-busy', 'true');
+      btn.disabled = true;
+    });
   </script>
 </body>
 </html>
