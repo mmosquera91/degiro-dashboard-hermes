@@ -32,6 +32,13 @@ _resolution_cache: dict[str, dict] = {}
 _resolution_cache_lock = threading.RLock()
 _SYMBOL_CACHE_PATH = "/data/snapshots/symbol_cache.json"
 
+# Thread-local flag used to defer symbol-cache disk writes during stage 2
+# resolution in enrich_positions.  When _save_defer.active is True,
+# _save_symbol_cache() skips the disk write and sets _save_defer.dirty=True
+# instead; the caller flushes once after the loop.  All other threads (with
+# active unset / False) still write immediately.
+_save_defer = threading.local()
+
 # Price cache: keyed by resolved yf_symbol, 15-min TTL
 _price_cache: dict[str, dict] = {}
 _price_cache_lock = threading.RLock()
@@ -236,7 +243,15 @@ def _save_symbol_cache() -> None:
     Must be called with _resolution_cache_lock held, or from a context where
     no other thread may write to _resolution_cache (all resolution cache
     writers are serialized by this function).
+
+    When _save_defer.active is True on the calling thread (set by
+    enrich_positions stage 2 loop), the disk write is deferred: only the
+    in-memory flag _save_defer.dirty is set so the caller can flush once after
+    the loop ends.  All other threads write immediately as before.
     """
+    if getattr(_save_defer, "active", False):
+        _save_defer.dirty = True
+        return
     try:
         os.makedirs(os.path.dirname(_SYMBOL_CACHE_PATH), exist_ok=True)
         with _SYMBOL_CACHE_FILE_LOCK:
@@ -1617,56 +1632,65 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     resolved_yf_symbols: list[str] = []
     symbol_to_position_idx: dict[str, list[int]] = {}
 
-    for idx, pos in enumerate(positions):
-        sym = pos.get("symbol", "")
-        isin = pos.get("isin", "")
-        yf_sym = ""
-        cache_key = f"{sym}:{isin}"
+    # Defer symbol-cache disk writes during this loop so the O(n) per-symbol
+    # saves are collapsed into a single flush at the end (T3).
+    _save_defer.active = True
+    _save_defer.dirty = False
+    try:
+        for idx, pos in enumerate(positions):
+            sym = pos.get("symbol", "")
+            isin = pos.get("isin", "")
+            yf_sym = ""
+            cache_key = f"{sym}:{isin}"
 
-        with _resolution_cache_lock:
-            entry = _resolution_cache.get(cache_key)
-            if entry and isinstance(entry, dict):
-                cached_yf = entry.get("yf_symbol", "")
-                if cached_yf:
-                    cached_at = entry.get("cached_at", 0)
-                    if time.time() - cached_at < 86400:
-                        yf_sym = cached_yf
+            with _resolution_cache_lock:
+                entry = _resolution_cache.get(cache_key)
+                if entry and isinstance(entry, dict):
+                    cached_yf = entry.get("yf_symbol", "")
+                    if cached_yf:
+                        cached_at = entry.get("cached_at", 0)
+                        if time.time() - cached_at < 86400:
+                            yf_sym = cached_yf
 
-        if not yf_sym:
-            if sym.isdigit():
-                # Numeric broker symbol = DeGiro internal product ID, never a valid
-                # yfinance ticker. Fall through to ISIN-based resolution directly.
-                pos_isin = isin or pos.get("isin", "") or pos.get("ISIN", "")
-                if pos_isin:
-                    yf_sym = _resolve_by_isin(pos_isin, pos.get("currency", "EUR"))
-                    if yf_sym:
-                        logger.info(
-                            "Resolved numeric DeGiro symbol %s (ISIN %s) → %s",
-                            sym, pos_isin, yf_sym,
-                        )
-                        # Cache under both "724:ISIN" and "724:" keys so future runs
-                        # hit the cache without re-resolving.
-                        for ck in (f"{sym}:{pos_isin}", f"{sym}:"):
-                            with _resolution_cache_lock:
-                                _resolution_cache[ck] = {
-                                    "yf_symbol": yf_sym,
-                                    "exchange": "",
-                                    "currency": "",
-                                    "method": "numeric_isin",
-                                    "cached_at": time.time(),
-                                }
-                        _save_symbol_cache()
-            else:
-                yf_sym = _resolve_yf_symbol(
-                    sym, isin, pos.get("currency", "EUR"), pos.get("exchange_id", ""),
-                    evict_on_404=True,
-                )
+            if not yf_sym:
+                if sym.isdigit():
+                    # Numeric broker symbol = DeGiro internal product ID, never a valid
+                    # yfinance ticker. Fall through to ISIN-based resolution directly.
+                    pos_isin = isin or pos.get("isin", "") or pos.get("ISIN", "")
+                    if pos_isin:
+                        yf_sym = _resolve_by_isin(pos_isin, pos.get("currency", "EUR"))
+                        if yf_sym:
+                            logger.info(
+                                "Resolved numeric DeGiro symbol %s (ISIN %s) → %s",
+                                sym, pos_isin, yf_sym,
+                            )
+                            # Cache under both "724:ISIN" and "724:" keys so future runs
+                            # hit the cache without re-resolving.
+                            for ck in (f"{sym}:{pos_isin}", f"{sym}:"):
+                                with _resolution_cache_lock:
+                                    _resolution_cache[ck] = {
+                                        "yf_symbol": yf_sym,
+                                        "exchange": "",
+                                        "currency": "",
+                                        "method": "numeric_isin",
+                                        "cached_at": time.time(),
+                                    }
+                            _save_symbol_cache()
+                else:
+                    yf_sym = _resolve_yf_symbol(
+                        sym, isin, pos.get("currency", "EUR"), pos.get("exchange_id", ""),
+                        evict_on_404=True,
+                    )
 
-    
-        resolved_symbols.append(yf_sym)
-        resolved_yf_symbols.append(yf_sym)
-        if yf_sym:
-            symbol_to_position_idx.setdefault(yf_sym, []).append(idx)
+            resolved_symbols.append(yf_sym)
+            resolved_yf_symbols.append(yf_sym)
+            if yf_sym:
+                symbol_to_position_idx.setdefault(yf_sym, []).append(idx)
+    finally:
+        _save_defer.active = False
+        if getattr(_save_defer, "dirty", False):
+            _save_symbol_cache()
+        _save_defer.dirty = False
 
     # Step 2: Batch fetch prices for all resolved symbols
     unique_yf_symbols = [s for s in dict.fromkeys(resolved_yf_symbols) if s]  # deduplicate, skip empty
@@ -1680,32 +1704,36 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         eu_symbols = [s for s in unique_yf_symbols if "." in s]
         us_symbols = [s for s in unique_yf_symbols if "." not in s]
 
+        _CHUNK_SIZE = 25
+
         def _fetch_and_unpack(symbols: list[str]) -> dict[str, float]:
             result: dict[str, float] = {}
             if not symbols:
                 return result
-            try:
-                b = yf.download(symbols, period="2d", auto_adjust=True, progress=False, threads=False)
-                if b is not None and not b.empty:
-                    close_df = b["Close"] if "Close" in b.columns.get_level_values(0) else None
-                    if close_df is None:
-                        close_df = b
-                    for sym in symbols:
-                        try:
-                            if isinstance(close_df, pd.DataFrame):
-                                if sym in close_df.columns:
-                                    price = float(close_df[sym].iloc[-1])
-                                    if price > 0:
-                                        result[sym] = price
-                            elif isinstance(close_df, pd.Series):
-                                if sym == close_df.name:
-                                    price = float(close_df.iloc[-1])
-                                    if price > 0:
-                                        result[sym] = price
-                        except (ValueError, TypeError, KeyError):
-                            pass
-            except Exception as e:
-                logger.warning("Batch price fetch failed for %s: %s", symbols, e)
+            chunks = [symbols[i:i + _CHUNK_SIZE] for i in range(0, len(symbols), _CHUNK_SIZE)]
+            for chunk in chunks:
+                try:
+                    b = yf.download(chunk, period="2d", auto_adjust=True, progress=False, threads=True)
+                    if b is not None and not b.empty:
+                        close_df = b["Close"] if "Close" in b.columns.get_level_values(0) else None
+                        if close_df is None:
+                            close_df = b
+                        for sym in chunk:
+                            try:
+                                if isinstance(close_df, pd.DataFrame):
+                                    if sym in close_df.columns:
+                                        price = float(close_df[sym].iloc[-1])
+                                        if price > 0:
+                                            result[sym] = price
+                                elif isinstance(close_df, pd.Series):
+                                    if sym == close_df.name:
+                                        price = float(close_df.iloc[-1])
+                                        if price > 0:
+                                            result[sym] = price
+                            except (ValueError, TypeError, KeyError):
+                                pass
+                except Exception as e:
+                    logger.warning("Batch price fetch failed for %s: %s", chunk, e)
             return result
 
         price_batch = {**_fetch_and_unpack(eu_symbols), **_fetch_and_unpack(us_symbols)}

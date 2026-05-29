@@ -886,15 +886,26 @@ async def refresh_prices():
     """Re-enrich current portfolio positions with fresh yfinance data.
 
     Does not require a DeGiro session — works from snapshot-restored portfolio.
-    Runs enrichment in a background thread and returns immediately.
+    Schedules enrichment as a background asyncio task and returns immediately.
+    The task acquires _operation_lock via _do_enrich_session_async, serialising
+    against the daily loop.  409 lock-contention is caught and logged rather than
+    surfaced (the HTTP response has already been returned).
     """
     with _sync_lock:
         portfolio = _session.get("portfolio")
     if not portfolio or not portfolio.get("positions"):
         raise HTTPException(status_code=400, detail="No portfolio loaded")
 
-    thread = threading.Thread(target=_do_enrich_session, daemon=True)
-    thread.start()
+    async def _runner():
+        try:
+            await _do_enrich_session_async()
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                logger.warning("refresh-prices skipped: another operation already running")
+            else:
+                logger.warning("refresh-prices background task failed: %s", exc.detail)
+
+    asyncio.create_task(_runner())
     return {"status": "enrichment_started"}
 
 
