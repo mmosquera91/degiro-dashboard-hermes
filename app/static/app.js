@@ -2146,3 +2146,9 @@ function renderHealthAlerts() {
     return { show: show, dismiss: dismiss, showProgressToast: showProgressToast, updateToast: updateToast };
   })();
 })();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+  });
+}

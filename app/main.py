@@ -562,6 +562,8 @@ async def check_session_cookie(request: Request, call_next):
         or path.startswith("/static/")
         or path == "/health"
         or path == "/logout"
+        or path == "/sw.js"
+        or path == "/manifest.json"
         or path == "/api/hermes-context"
         or path.startswith("/api/indexa/")
     ):
@@ -1317,6 +1319,22 @@ async def logout():
 # ─── Static Files ───
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    """Serve service worker at root scope for PWA support."""
+    return FileResponse(
+        "app/static/sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
+
+
+@app.get("/manifest.json")
+async def web_manifest():
+    """Serve PWA web app manifest."""
+    return FileResponse("app/static/manifest.json", media_type="application/manifest+json")
 
 
 @app.get("/")
