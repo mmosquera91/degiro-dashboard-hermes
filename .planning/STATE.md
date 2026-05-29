@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 Phase: 14
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-05-29 - Completed quick task 260529-kef: fix fake parallelism in _post_enrich_one (wrap ticker.history in run_in_executor)
+Last activity: 2026-05-29 - Completed quick task 260529-lm1: enrichment pipeline optimizations T2-T4 (threaded+chunked yf.download, batched symbol-cache writes, refresh-prices lock)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -81,6 +81,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260529-lm1 | Enrichment pipeline optimizations T2-T4: threads=True+chunking in yf.download (T2), batch symbol-cache disk writes via thread-local defer in stage 2 (T3), acquire _operation_lock in /api/refresh-prices to fix daily-loop race (T4) | 2026-05-29 | 5718f9c | [260529-lm1-implement-enrichment-pipeline-optimizati](./quick/260529-lm1-implement-enrichment-pipeline-optimizati/) |
 | 260529-kef | Fix fake parallelism in _post_enrich_one — wrap both blocking ticker.history() calls in loop.run_in_executor so asyncio.gather batches run concurrently, mirroring _enrich_one | 2026-05-29 | cc35de8 | [260529-kef-fix-fake-parallelism-in-post-enrich-one-](./quick/260529-kef-fix-fake-parallelism-in-post-enrich-one-/) |
 | 260529-gwb | Fix failing CI (update stale /api/session-token tests to assert secure 303), make lock-screen login button visible on mobile, right-anchor private-mode/lock buttons on mobile | 2026-05-29 | 31aca6f | [260529-gwb-fix-ci-tests-lock-screen-login-button-mo](./quick/260529-gwb-fix-ci-tests-lock-screen-login-button-mo/) |
 | 260529-eqt | Revamp the lock screen to match dashboard style & logo — canonical stylesheet/logo, btn/spinner reuse, ARIA + responsive | 2026-05-29 | 53c75ef | [260529-eqt-revamp-the-lock-screen-to-match-the-styl](./quick/260529-eqt-revamp-the-lock-screen-to-match-the-styl/) |
