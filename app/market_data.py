@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import pathlib
+import functools
 import re
 import threading
 import time
@@ -1779,13 +1780,14 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
             yf_sym = pos.get("_resolved_yf_symbol", "")
             try:
                 ticker = yf.Ticker(yf_sym)
-                hist = ticker.history(period="1y", auto_adjust=True)
+                loop = asyncio.get_running_loop()
+                hist = await loop.run_in_executor(None, functools.partial(ticker.history, period="1y", auto_adjust=True))
                 if hist is None or hist.empty:
                     logger.warning("Post-batch enrichment: no 1y history for %s", yf_sym)
                     return pos
                 if len(hist) < 14:
                     _yf_throttle()
-                    hist = ticker.history(period="3mo", interval="1d", auto_adjust=True)
+                    hist = await loop.run_in_executor(None, functools.partial(ticker.history, period="3mo", interval="1d", auto_adjust=True))
 
                 close = hist["Close"]
                 if len(close) < 2:
