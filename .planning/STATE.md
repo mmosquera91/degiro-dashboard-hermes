@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-04)
 Phase: 14
 Plan: Not started
 Status: Milestone complete
-Last activity: 2026-05-29 - Completed quick task 260529-gwb: fix CI tests + mobile lock-screen login button + right-anchor header buttons
+Last activity: 2026-05-29 - Completed quick task 260529-kef: fix fake parallelism in _post_enrich_one (wrap ticker.history in run_in_executor)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -81,6 +81,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260529-kef | Fix fake parallelism in _post_enrich_one — wrap both blocking ticker.history() calls in loop.run_in_executor so asyncio.gather batches run concurrently, mirroring _enrich_one | 2026-05-29 | cc35de8 | [260529-kef-fix-fake-parallelism-in-post-enrich-one-](./quick/260529-kef-fix-fake-parallelism-in-post-enrich-one-/) |
 | 260529-gwb | Fix failing CI (update stale /api/session-token tests to assert secure 303), make lock-screen login button visible on mobile, right-anchor private-mode/lock buttons on mobile | 2026-05-29 | 31aca6f | [260529-gwb-fix-ci-tests-lock-screen-login-button-mo](./quick/260529-gwb-fix-ci-tests-lock-screen-login-button-mo/) |
 | 260529-eqt | Revamp the lock screen to match dashboard style & logo — canonical stylesheet/logo, btn/spinner reuse, ARIA + responsive | 2026-05-29 | 53c75ef | [260529-eqt-revamp-the-lock-screen-to-match-the-styl](./quick/260529-eqt-revamp-the-lock-screen-to-match-the-styl/) |
 | 260528-wtv | Comprehensive UI revamp — design tokens, responsive breakpoints, micro-interactions, a11y, dark-mode consistency, scroll-ux positions table | 2026-05-28 | fa8471f | [260528-wtv-do-a-comprehensive-ui-revamp-of-the-brok](./quick/260528-wtv-do-a-comprehensive-ui-revamp-of-the-brok/) |
