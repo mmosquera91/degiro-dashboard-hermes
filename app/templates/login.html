@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_v }}">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 </head>
 <body class="login-body">
@@ -40,20 +40,8 @@
     </form>
   </div>
 
-  <script>
-    // Show error if server returned failedattempt=yes or error is set in context
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('failedattempt') === 'yes') {
-      document.getElementById('error-msg').classList.add('visible');
-      document.getElementById('password').focus();
-    }
-
-    // Show spinner loading state on submit (POST proceeds normally)
-    document.querySelector('form').addEventListener('submit', function () {
-      const btn = document.querySelector('.login-submit');
-      btn.setAttribute('aria-busy', 'true');
-      btn.disabled = true;
-    });
-  </script>
+  <!-- External script: the page CSP (script-src 'self') blocks inline scripts,
+       so this lives in /static/login.js like the dashboard's app.js. -->
+  <script src="/static/login.js?v={{ asset_v }}"></script>
 </body>
 </html>

@@ -528,6 +528,30 @@ app = FastAPI(title="Brokr", lifespan=lifespan)
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _asset_version(*names: str) -> str:
+    """Short content hash of static asset(s) for cache-busting.
+
+    Browsers cache /static/* aggressively; appending ?v=<hash> guarantees a
+    fresh fetch whenever an asset changes (e.g. after a deploy/rebuild) without
+    forcing revalidation when it hasn't. Computed once at import time since the
+    static files are baked into the image. Falls back to a constant on error so
+    a missing file never breaks the login page.
+    """
+    import hashlib
+
+    h = hashlib.md5()
+    try:
+        for name in names:
+            h.update(Path("app/static", name).read_bytes())
+        return h.hexdigest()[:8]
+    except OSError:
+        return "0"
+
+
+# Computed once at startup — static assets are immutable within an image build.
+ASSET_VERSION = _asset_version("style.css", "login.js")
+
+
 # ─── Auth Middleware ───
 @app.middleware("http")
 async def check_session_cookie(request: Request, call_next):
@@ -1230,8 +1254,16 @@ async def save_snapshot_now():
 
 @app.get("/login")
 async def login_get(request: Request):
-    """Serve the login page."""
-    return templates.TemplateResponse("login.html", {"request": request})
+    """Serve the login page.
+
+    A failed POST redirects here with ?failedattempt=yes (303). The error is
+    rendered server-side so it shows without JavaScript — the page's CSP blocks
+    inline scripts, so a client-side reveal would silently never fire.
+    """
+    ctx: dict[str, Any] = {"request": request, "asset_v": ASSET_VERSION}
+    if request.query_params.get("failedattempt") == "yes":
+        ctx["error"] = "Incorrect password"
+    return templates.TemplateResponse("login.html", ctx)
 
 
 @app.post("/login", dependencies=[Depends(check_rate_limit)])
@@ -1246,7 +1278,11 @@ async def login_post(request: Request):
     if not app_password or not secret_key:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "Server misconfigured — APP_PASSWORD not set"},
+            {
+                "request": request,
+                "error": "Server misconfigured — APP_PASSWORD not set",
+                "asset_v": ASSET_VERSION,
+            },
         )
 
     if hmac.compare_digest(password, app_password):
