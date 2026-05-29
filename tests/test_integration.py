@@ -81,12 +81,13 @@ class TestCookieValidationChain:
 
 
 class TestUnauthorizedRedirect:
-    """INTEG-03: /api/session-token is exempt from auth middleware — returns 200 without a cookie."""
+    """INTEG-03: /api/session-token is NOT middleware-exempt — returns 303 -> /login without a cookie."""
 
-    def test_api_request_without_cookie_returns_200(self, client):
-        """GET /api/session-token with no cookie returns 200 — endpoint is middleware-exempt."""
+    def test_api_request_without_cookie_redirects_to_login(self, client):
+        """GET /api/session-token with no cookie returns 303 redirect to /login (secure behavior)."""
         response = client.get("/api/session-token", follow_redirects=False)
-        assert response.status_code == 200
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
 
     def test_api_request_without_bearer_returns_401(self, client, with_auth_env):
         """GET /api/portfolio with session cookie but no Authorization header returns 401."""
@@ -117,10 +118,10 @@ class TestUnauthorizedRedirect:
 
 
 class TestExpiredCookie:
-    """INTEG-04: Expired session cookie does not crash /api/session-token — returns 200."""
+    """INTEG-04: Expired session cookie triggers redirect — /api/session-token returns 303 -> /login."""
 
-    def test_expired_cookie_returns_200(self, client, with_auth_env):
-        """Expired cookie on /api/session-token returns 200 — endpoint is middleware-exempt."""
+    def test_expired_cookie_redirects_to_login(self, client, with_auth_env):
+        """Expired cookie on /api/session-token returns 303 redirect to /login (secure behavior)."""
         # Create an already-expired token
         expired_token = _make_token(
             "testpassword123",  # password used for signing
@@ -128,14 +129,15 @@ class TestExpiredCookie:
             time.time() - 3600,  # expired 1 hour ago
         )
 
-        # Attempt to use expired cookie
+        # Attempt to use expired cookie — middleware detects expiry and redirects
         client.cookies.set("brokr_session", expired_token)
         response = client.get("/api/session-token", follow_redirects=False)
 
-        assert response.status_code == 200, "Expired cookie should return 200 (no redirect)"
+        assert response.status_code == 303, "Expired cookie should redirect (not grant access)"
+        assert response.headers["location"] == "/login"
 
     def test_expired_cookie_does_not_grant_access(self, client, with_auth_env):
-        """Expired cookie cannot be used to access any protected endpoint."""
+        """Expired cookie cannot be used to access any protected endpoint — redirects to /login."""
         # Create an already-expired token
         expired_token = _make_token(
             "testpassword123",  # password used for signing
@@ -143,7 +145,8 @@ class TestExpiredCookie:
             time.time() - 3600,  # expired 1 hour ago
         )
 
-        # Attempt to access protected endpoint with expired cookie
+        # Attempt to access protected endpoint with expired cookie — middleware rejects with 303
         client.cookies.set("brokr_session", expired_token)
         response = client.get("/api/session-token", follow_redirects=False)
-        assert response.status_code == 200, "Expired cookie should return 200 (no redirect)"
+        assert response.status_code == 303, "Expired cookie must redirect, not grant access"
+        assert response.headers["location"] == "/login"
