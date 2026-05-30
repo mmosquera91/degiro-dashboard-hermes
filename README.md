@@ -53,7 +53,7 @@ All values are normalized to EUR.
 
 **Current price** — fetched via `yf.download()` in batch (all symbols at once), then per-symbol `ticker.history("1y")` as fallback. Results are cached for 15 minutes.
 
-**Position value (EUR)** — `current_price × quantity × fx_rate`. FX rates come from yfinance currency pairs (e.g. `EURUSD=X`) and are cached per session.
+**Position value (EUR)** — `current_price × quantity × fx_rate`. FX rates come from yfinance currency pairs (e.g. `EURUSD=X`) and are cached for 1 hour. If a rate can't be fetched, the position is flagged (`fx_missing`) and excluded from EUR totals rather than silently assuming a 1:1 rate.
 
 **P&L %** — `((current_price − avg_buy_in_local) / avg_buy_in_local) × 100`. The average buy price from DeGiro is in EUR, so for non-EUR positions it's converted to the position's currency before computing.
 
@@ -216,7 +216,7 @@ NVDA scores **0.67** — a solid candidate driven by good entry distance and mom
 | RSI, 52w range, performance | yfinance `ticker.history("1y")` | Per-request (fresh) |
 | P/E, P/B, sector, country | yfinance `ticker.info` | 24-hour TTL |
 | Symbol resolution (ISIN → Yahoo ticker) | yfinance Search + suffix scan | Persistent (disk) |
-| FX rates | yfinance currency pairs | Per-session |
+| FX rates | yfinance currency pairs | 1-hour TTL |
 | Historical snapshots | Local JSON files | N/A |
 
 ---
@@ -228,7 +228,7 @@ NVDA scores **0.67** — a solid candidate driven by good entry distance and mom
 ### Auth
 
 Dual-layer: **browser session cookie** (login page) → **API bearer token** (JS calls).  
-Credentials are never stored on disk — DeGiro session held in memory with 30-min TTL.
+Credentials are never stored on disk. The injected DeGiro session token is **single-use** — held in memory only long enough to pull your portfolio, then discarded. Each new **Sync from DeGiro** re-prompts for a fresh JSESSIONID.
 
 ### Data Flow
 
@@ -300,7 +300,7 @@ DeGiro blocks automated login. The recommended flow:
 2. DevTools → Application → Cookies → `trader.degiro.nl` → copy `JSESSIONID`
 3. In Brokr dashboard → **Browser Session** tab → paste JSESSIONID + intAccount
 
-No credentials are used or stored — only the session cookie is used.
+No credentials are used or stored — only the session cookie is used. The token is consumed once to pull your portfolio and then discarded, so each new **Sync from DeGiro** prompts for a fresh JSESSIONID. Your already-loaded portfolio stays visible — and prices can still be refreshed (yfinance only) — without re-injecting.
 
 ---
 
@@ -370,8 +370,8 @@ brokr/
 
 ## Security
 
-- No credential storage — JSESSIONID token discarded after session creation
-- Session in memory only, lost on container restart
+- No credential storage — injected JSESSIONID is single-use: discarded right after your portfolio is fetched (each new DeGiro sync re-prompts)
+- Session token in memory only, never written to disk
 - Stateless — no database, no persistent auth
 - Bearer token on all `/api/*` endpoints
 - Rate limiting: 5 attempts/IP/60s on login
