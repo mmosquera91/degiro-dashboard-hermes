@@ -197,6 +197,18 @@
         }
       });
     }
+
+    // Rebalance planner
+    const btnRebalanceCalc = document.getElementById("btn-rebalance-calc");
+    if (btnRebalanceCalc) {
+      btnRebalanceCalc.addEventListener("click", handleRebalanceCalc);
+    }
+    const rebalanceInput = document.getElementById("rebalance-amount");
+    if (rebalanceInput) {
+      rebalanceInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleRebalanceCalc();
+      });
+    }
   }
 
   // ─── Modal ───
@@ -371,6 +383,137 @@
 
   
   // ─── Update Prices (non-blocking) ───
+  async function handleRebalanceCalc() {
+    const amountInput = document.getElementById("rebalance-amount");
+    if (!amountInput) return;
+    const amount = parseFloat(amountInput.value);
+    if (!amount || amount <= 0) {
+      ToastManager.show("Enter a positive amount to deploy", "error");
+      return;
+    }
+
+    const resultsEl = document.getElementById("rebalance-results");
+    const emptyEl = document.getElementById("rebalance-empty");
+    const loadingEl = document.getElementById("rebalance-loading");
+    const errorEl = document.getElementById("rebalance-error");
+
+    if (!resultsEl || !emptyEl || !loadingEl || !errorEl) return;
+
+    // Show loading
+    emptyEl.classList.add("hidden");
+    errorEl.classList.add("hidden");
+    resultsEl.classList.add("hidden");
+    loadingEl.classList.remove("hidden");
+
+    try {
+      const res = await apiFetch("/api/rebalance-plan?amount=" + encodeURIComponent(amount));
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to calculate rebalance");
+      }
+      const plan = await res.json();
+      renderRebalanceResults(plan);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove("hidden");
+    } finally {
+      loadingEl.classList.add("hidden");
+    }
+  }
+
+  function renderRebalanceResults(plan) {
+    const resultsEl = document.getElementById("rebalance-results");
+    const emptyEl = document.getElementById("rebalance-empty");
+    const summaryEl = document.getElementById("rebalance-summary");
+    const holdReserveEl = document.getElementById("rebalance-hold-reserve");
+    const warningsEl = document.getElementById("rebalance-warnings");
+    const projectedEl = document.getElementById("rebalance-projected");
+    const buysEl = document.getElementById("rebalance-buys");
+    const buyListEl = document.getElementById("rebalance-buy-list");
+    const excludedEl = document.getElementById("rebalance-excluded");
+
+    if (!resultsEl || !emptyEl) return;
+
+    emptyEl.classList.add("hidden");
+    resultsEl.classList.remove("hidden");
+
+    // Summary line
+    if (summaryEl) {
+      const deployed = amount_requested => {
+        const total = plan.amount_requested || 0;
+        const hold = plan.hold_reserve_eur || 0;
+        return total - hold;
+      };
+      const totalDeployed = (plan.amount_requested || 0) - (plan.hold_reserve_eur || 0);
+      summaryEl.innerHTML = "&#8364;" + Math.round(totalDeployed) + " to deploy, &#8364;" + plan.hold_reserve_eur + " hold reserve";
+      summaryEl.classList.remove("hidden");
+    }
+
+    // Hold reserve
+    if (holdReserveEl) {
+      if (plan.hold_reasons && plan.hold_reasons.length > 0) {
+        const reasons = plan.hold_reasons.map(r => "&#8364;" + r.amount_eur + " — " + r.reason).join("<br>");
+        holdReserveEl.innerHTML = "<strong>Hold reserve:</strong><br>" + reasons;
+        holdReserveEl.classList.remove("hidden");
+      } else {
+        holdReserveEl.classList.add("hidden");
+      }
+    }
+
+    // Warnings
+    if (warningsEl) {
+      if (plan.warnings && plan.warnings.length > 0) {
+        warningsEl.innerHTML = plan.warnings.map(w => "&#9888; " + esc(w)).join("<br>");
+        warningsEl.classList.remove("hidden");
+      } else {
+        warningsEl.classList.add("hidden");
+      }
+    }
+
+    // Projected allocation
+    if (projectedEl && plan.projected) {
+      const p = plan.projected;
+      const lines = [];
+      if (p.etf_allocation_pct !== undefined) {
+        lines.push("ETF: " + Math.round(p.etf_allocation_pct) + "% (drift " + (p.etf_drift_before >= 0 ? "+" : "") + (p.etf_drift_before || 0).toFixed(1) + "% → " + (p.etf_drift_after >= 0 ? "+" : "") + (p.etf_drift_after || 0).toFixed(1) + "%)");
+      }
+      if (p.stock_allocation_pct !== undefined) {
+        lines.push("Stock: " + Math.round(p.stock_allocation_pct) + "% (drift " + (p.stock_drift_before >= 0 ? "+" : "") + (p.stock_drift_before || 0).toFixed(1) + "% → " + (p.stock_drift_after >= 0 ? "+" : "") + (p.stock_drift_after || 0).toFixed(1) + "%)");
+      }
+      projectedEl.innerHTML = "<strong>Projected allocation:</strong><br>" + lines.join("<br>");
+      projectedEl.classList.remove("hidden");
+    }
+
+    // Buy list
+    if (buyListEl && buysEl) {
+      if (plan.buys && plan.buys.length > 0) {
+        buyListEl.innerHTML = plan.buys.map(b => {
+          return "<li class=\"rebalance-buy-item\">" +
+            "<span class=\"rebalance-buy-item-name\">" + esc(b.name || b.symbol || "?") + "</span>" +
+            "<div class=\"rebalance-buy-item-details\">" +
+            "<span class=\"rebalance-buy-item-spend\">&#8364;" + Math.round(b.spend_eur) + "</span>" +
+            "<span class=\"rebalance-buy-item-reason\">" + esc(b.reason || "") + "</span>" +
+            (b.new_weight_pct !== undefined ? "<span class=\"rebalance-buy-item-weight\">Weight: " + b.new_weight_pct.toFixed(1) + "%</span>" : "") +
+            "</div>" +
+            "</li>";
+        }).join("");
+        buysEl.classList.remove("hidden");
+      } else {
+        buysEl.classList.add("hidden");
+      }
+    }
+
+    // Excluded
+    if (excludedEl) {
+      if (plan.excluded && plan.excluded.length > 0) {
+        excludedEl.innerHTML = "<strong>Excluded from buy list:</strong> " + plan.excluded.map(e => e.name || e.symbol || "?").join(", ");
+        excludedEl.classList.remove("hidden");
+      } else {
+        excludedEl.classList.add("hidden");
+      }
+    }
+  }
+
   async function handleUpdatePrices() {
     if (!portfolioData) return;
     if (operationActive) {

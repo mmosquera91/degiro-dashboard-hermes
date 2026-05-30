@@ -141,6 +141,55 @@ class IndexaPortfolioResponse(BaseModel):
     raw: dict[str, Any] = {}
 
 
+# ─── Rebalance Planner ────────────────────────────────────────────────────────
+
+
+class RebalanceBuyItem(BaseModel):
+    name: str
+    symbol: str
+    isin: str
+    asset_type: str
+    shares: int
+    price_eur: float
+    spend_eur: float
+    notional_target_eur: float
+    reason: str
+    new_weight_pct: float
+    buy_priority_score: float | None = None
+    sector: str = "Unknown"
+
+
+class RebalanceHoldReason(BaseModel):
+    amount_eur: float
+    reason: str
+
+
+class RebalanceProjected(BaseModel):
+    etf_allocation_pct: float
+    stock_allocation_pct: float
+    etf_drift_before: float
+    etf_drift_after: float
+    stock_drift_before: float
+    stock_drift_after: float
+
+
+class RebalanceExcluded(BaseModel):
+    name: str
+    symbol: str
+    reason: str
+
+
+class RebalancePlanResponse(BaseModel):
+    amount_requested: float
+    currency: str = "EUR"
+    buys: list[RebalanceBuyItem] = []
+    hold_reserve_eur: float = 0.0
+    hold_reasons: list[RebalanceHoldReason] = []
+    projected: RebalanceProjected
+    excluded: list[RebalanceExcluded] = []
+    warnings: list[str] = []
+
+
 class IndexaTransactionsResponse(BaseModel):
     transactions: list[dict[str, Any]] = []
     raw: dict[str, Any] = {}

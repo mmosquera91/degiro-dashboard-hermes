@@ -565,6 +565,7 @@ async def check_session_cookie(request: Request, call_next):
         or path == "/sw.js"
         or path == "/manifest.json"
         or path == "/api/hermes-context"
+        or path == "/api/rebalance-plan"
         or path.startswith("/api/indexa/")
     ):
         return await call_next(request)
@@ -1097,6 +1098,60 @@ async def get_indexa_user_info():
         "style": acc.get("style") or profile.get("style"),
         "funded_at": acc.get("funded_at"),
     }
+
+
+# ─── Rebalance Planner ───
+
+@app.get("/api/rebalance-plan", dependencies=[Depends(verify_brok_token)], response_model=schemas.RebalancePlanResponse)
+async def get_rebalance_plan(amount: float, total_portfolio_eur: float | None = None):
+    """Compute a buy-only allocation for `amount` EUR across owned positions.
+
+    Read-only — no session mutation, no upstream calls.
+
+    Optional `total_portfolio_eur` overrides the portfolio's total_value_eur.
+    Use this to include assets outside the DeGiro session (e.g. Indexa capital)
+    so that weight percentages and drift are computed against the *real* total.
+    """
+    from .rebalance import plan_contribution
+
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    with _sync_lock:
+        portfolio = _session["portfolio"]
+
+    if portfolio is None:
+        # Return empty plan rather than error — UI shows "load portfolio first"
+        return {
+            "amount_requested": amount,
+            "currency": "EUR",
+            "buys": [],
+            "hold_reserve_eur": amount,
+            "hold_reasons": [{"amount_eur": amount, "reason": "No portfolio loaded — fetch from dashboard first"}],
+            "projected": {
+                "etf_allocation_pct": 0, "stock_allocation_pct": 0,
+                "etf_drift_before": 0, "etf_drift_after": 0,
+                "stock_drift_before": 0, "stock_drift_after": 0,
+            },
+            "excluded": [],
+            "warnings": ["No portfolio loaded — fetch from dashboard first"],
+        }
+
+    # Override total_value_eur if caller provides a combined portfolio value
+    if total_portfolio_eur is not None and total_portfolio_eur > 0:
+        portfolio = {**portfolio, "total_value_eur": total_portfolio_eur}
+        # Recalculate allocation percentages against the new total
+        etf_val = sum(p.get("current_value_eur", 0) for p in portfolio["positions"] if p.get("asset_type") == "ETF")
+        stock_val = sum(p.get("current_value_eur", 0) for p in portfolio["positions"] if p.get("asset_type") != "ETF")
+        portfolio["etf_allocation_pct"] = round(etf_val / total_portfolio_eur * 100, 1) if total_portfolio_eur > 0 else 0
+        portfolio["stock_allocation_pct"] = round(stock_val / total_portfolio_eur * 100, 1) if total_portfolio_eur > 0 else 0
+        # Recalculate position weights against combined total
+        for p in portfolio["positions"]:
+            p["weight"] = round(p.get("current_value_eur", 0) / total_portfolio_eur * 100, 1) if total_portfolio_eur > 0 else 0
+
+    plan = plan_contribution(portfolio, amount)
+    plan = _sanitize_floats(plan)
+    return plan
 
 
 # ─── Session Token ───

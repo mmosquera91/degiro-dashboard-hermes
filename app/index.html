@@ -126,6 +126,63 @@
         </div>
       </section>
 
+      <!-- REBALANCE PLANNER -->
+      <details id="rebalance-panel" class="rebalance-panel">
+        <summary class="rebalance-summary">
+          <span class="rebalance-toggle-icon">
+            <i data-lucide="chevron-right" class="icon-sm"></i>
+          </span>
+          <i data-lucide="scale" class="icon-sm"></i>
+          Rebalance Planner
+        </summary>
+        <div class="rebalance-content">
+          <div class="rebalance-input-row">
+            <div class="rebalance-input-group">
+              <label for="rebalance-amount">Amount to deploy (EUR)</label>
+              <input type="number" id="rebalance-amount" min="1" step="50" placeholder="e.g. 1000" value="1000">
+            </div>
+            <button id="btn-rebalance-calc" class="btn btn-primary">
+              <i data-lucide="calculator" class="icon-sm"></i>
+              <span class="btn-label">Calculate</span>
+            </button>
+          </div>
+
+          <div id="rebalance-results" class="rebalance-results hidden">
+            <!-- Summary line -->
+            <div id="rebalance-summary" class="rebalance-summary-line"></div>
+
+            <!-- Hold reserve info -->
+            <div id="rebalance-hold-reserve" class="rebalance-hold-reserve hidden"></div>
+
+            <!-- Warnings -->
+            <div id="rebalance-warnings" class="rebalance-warnings hidden"></div>
+
+            <!-- Projected allocation -->
+            <div id="rebalance-projected" class="rebalance-projected hidden"></div>
+
+            <!-- Buy list -->
+            <div id="rebalance-buys" class="rebalance-buys hidden">
+              <h4 class="rebalance-buy-title">Proposed Buys</h4>
+              <ol id="rebalance-buy-list" class="rebalance-buy-list"></ol>
+            </div>
+
+            <!-- Excluded items -->
+            <div id="rebalance-excluded" class="rebalance-excluded hidden"></div>
+          </div>
+
+          <div id="rebalance-empty" class="rebalance-empty">
+            Enter an amount and click Calculate to simulate a rebalance.
+          </div>
+
+          <div id="rebalance-loading" class="rebalance-loading hidden">
+            <div class="spinner-sm"></div>
+            <span>Calculating rebalance…</span>
+          </div>
+
+          <div id="rebalance-error" class="rebalance-error hidden"></div>
+        </div>
+      </details>
+
       <!-- ALLOCATION BAR -->
       <section class="allocation-bar-row">
         <div class="allocation-bar-header">
