@@ -160,6 +160,58 @@ body.view-degiro .indexa-only { display: none !important; }
 .stale-badge i { color: var(--gold); }
 .stale-badge.hidden { display: none; }
 
+/* ─── FRESHNESS BAR ─── */
+.freshness-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 32px;
+}
+
+.freshness-timestamp {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.freshness-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  flex-wrap: wrap;
+}
+
+.freshness-delta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.freshness-delta-item.delta-positive {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.freshness-delta-item.delta-negative {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.freshness-delta-item.delta-neutral {
+  background: var(--surface-hover);
+  color: var(--text-dim);
+}
+
 /* ─── POSITIONS ERROR STATE ─── */
 .positions-error {
   display: flex;

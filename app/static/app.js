@@ -19,6 +19,11 @@
   let _lastPositionsHash = null;
   let _lastTableHash = null;
 
+  // ─── Freshness bar state ───
+  let _freshnessTimer = null;
+  let _snapshotDelta = null;       // cached delta; null = not yet fetched, false = fetch attempted (no prior)
+  let _snapshotDeltaFetching = false;
+
   function positionsHash(positions) {
     return positions.map(p =>
       `${p.product_id}:${p.current_price}:${p.weight}`
@@ -801,6 +806,14 @@
 
     // Summary cards
     renderSummary();
+
+    // Data freshness bar (timestamp + snapshot delta)
+    // Reset delta cache so a fresh fetch runs with the latest portfolio values.
+    _snapshotDelta = null;
+    _snapshotDeltaFetching = false;
+    renderFreshnessBar();                               // render timestamp immediately
+    fetchSnapshotDelta().then(renderFreshnessBar);      // async: fetch delta then re-render
+    startFreshnessTimer();                              // start 30s tick (idempotent)
 
     // Concentration metrics
     renderConcentration();
@@ -1983,6 +1996,131 @@ function renderHealthAlerts() {
       colors.push(base[i % base.length]);
     }
     return colors;
+  }
+
+  // ─── Freshness Bar ───
+
+  /** Format an ISO timestamp into a human-relative string ("just now", "5 min ago", etc.). */
+  function formatTimeAgo(isoString) {
+    if (!isoString) return null;
+    var ts;
+    try { ts = new Date(isoString).getTime(); } catch (e) { return null; }
+    if (isNaN(ts)) return null;
+    var secs = Math.floor((Date.now() - ts) / 1000);
+    if (secs < 0) secs = 0;
+    if (secs < 60) return "just now";
+    if (secs < 3600) return Math.floor(secs / 60) + " min ago";
+    if (secs < 86400) return Math.floor(secs / 3600) + " h ago";
+    return Math.floor(secs / 86400) + " d ago";
+  }
+
+  /** Fetch /api/snapshots, find the most recent prior snapshot (before today's),
+   *  and return a delta object {valueDiff, plDiff, priorDate} or null if unavailable. */
+  async function fetchSnapshotDelta() {
+    if (_snapshotDeltaFetching) return;
+    _snapshotDeltaFetching = true;
+    try {
+      var res = await apiFetch("/api/snapshots");
+      if (!res.ok) { _snapshotDelta = false; return; }
+      var snapshots = await res.json();
+      // snapshots is an array sorted ascending by date
+      if (!snapshots || snapshots.length < 2) { _snapshotDelta = false; return; }
+
+      // Current portfolio values
+      var currentValue = portfolioData && portfolioData.total_value_eur != null
+        ? portfolioData.total_value_eur
+        : null;
+      var currentPl = portfolioData && portfolioData.unrealized_pl_total != null
+        ? portfolioData.unrealized_pl_total
+        : null;
+
+      if (currentValue == null) { _snapshotDelta = false; return; }
+
+      // The most recent prior snapshot = second-to-last (last is today's or latest)
+      var prior = snapshots[snapshots.length - 2];
+      var priorValue = prior.total_value_eur != null ? prior.total_value_eur : null;
+      var priorPl    = prior.unrealized_pl_total != null ? prior.unrealized_pl_total : null;
+
+      if (priorValue == null) { _snapshotDelta = false; return; }
+
+      _snapshotDelta = {
+        priorDate: prior.date,
+        valueDiff: currentValue - priorValue,
+        valuePct:  priorValue !== 0 ? ((currentValue - priorValue) / Math.abs(priorValue)) * 100 : null,
+        plDiff:    (currentPl != null && priorPl != null) ? currentPl - priorPl : null,
+      };
+    } catch (e) {
+      _snapshotDelta = false;
+    } finally {
+      _snapshotDeltaFetching = false;
+    }
+  }
+
+  /** Build a single delta badge element.
+   *  Monetary values use .private-value so body.privacy-mode CSS handles blurring. */
+  function buildDeltaBadge(label, diff, pct) {
+    var sign     = diff >= 0 ? "▲" : "▼";
+    var cssClass = diff >= 0 ? "delta-positive" : (diff < 0 ? "delta-negative" : "delta-neutral");
+    var span     = document.createElement("span");
+    span.className = "freshness-delta-item " + cssClass;
+    var inner = sign + " " + label + ": ";
+    inner += '<span class="private-value">' + esc(fmtEur(diff)) + '</span>';
+    if (pct != null) {
+      inner += ' <span class="freshness-delta-pct">(' + fmtPct(pct) + ')</span>';
+    }
+    span.innerHTML = inner;
+    return span;
+  }
+
+  /** Re-render the freshness bar. Called on dashboard render and by interval. */
+  function renderFreshnessBar() {
+    var bar = document.getElementById("freshness-bar");
+    var tsEl = document.getElementById("freshness-timestamp");
+    var deltaEl = document.getElementById("freshness-delta");
+    if (!bar || !tsEl || !deltaEl) return;
+
+    // --- Timestamp ---
+    var enrichedAt = portfolioData && portfolioData.last_enriched_at;
+    if (enrichedAt) {
+      var ago = formatTimeAgo(enrichedAt);
+      tsEl.textContent = ago ? "Updated " + ago : "—";
+    } else {
+      tsEl.textContent = "";
+    }
+
+    // --- Delta (null = fetch not done yet; false = no prior snapshot) ---
+    deltaEl.innerHTML = "";
+    if (!_snapshotDelta) return;
+
+    // Value delta
+    if (_snapshotDelta.valueDiff != null) {
+      deltaEl.appendChild(
+        buildDeltaBadge("Portfolio", _snapshotDelta.valueDiff, _snapshotDelta.valuePct)
+      );
+    }
+
+    // P&L delta (no percentage — P&L can start from 0, ratio is not meaningful)
+    if (_snapshotDelta.plDiff != null) {
+      deltaEl.appendChild(
+        buildDeltaBadge("P&L", _snapshotDelta.plDiff, null)
+      );
+    }
+
+    // Prior date reference label
+    if (_snapshotDelta.priorDate) {
+      var lbl = document.createElement("span");
+      lbl.className = "freshness-timestamp";
+      lbl.textContent = "vs " + _snapshotDelta.priorDate;
+      deltaEl.appendChild(lbl);
+    }
+  }
+
+  /** Start the live-updating interval (idempotent — safe to call multiple times).
+   *  Only manages the tick; callers are responsible for the initial render + fetch. */
+  function startFreshnessTimer() {
+    if (_freshnessTimer !== null) return;   // already running
+    // Tick every 30 seconds to keep relative time current
+    _freshnessTimer = setInterval(renderFreshnessBar, 30000);
   }
 
   // ─── Stale Data Indicator ───

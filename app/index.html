@@ -85,6 +85,12 @@
     <!-- DASHBOARD -->
     <div id="dashboard" class="dashboard hidden">
 
+      <!-- DATA FRESHNESS BAR -->
+      <div id="freshness-bar" class="freshness-bar" aria-label="Data freshness">
+        <span id="freshness-timestamp" class="freshness-timestamp" aria-live="polite"></span>
+        <span id="freshness-delta" class="freshness-delta" aria-label="Change vs previous snapshot"></span>
+      </div>
+
       <!-- KPI CARDS ROW 1 -->
       <section class="kpi-grid">
         <div class="card kpi-card accent-teal">
