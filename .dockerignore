@@ -8,4 +8,5 @@ README.md
 scripts/
 app/debug_*.py
 app/test_*.py
+app/login_check.py
 tests/
