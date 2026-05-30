@@ -760,6 +760,14 @@ async def get_portfolio():
                 _session["portfolio_time"] = datetime.now(timezone.utc)
                 _session["last_enriched_at"] = datetime.now(timezone.utc)
                 portfolio["last_enriched_at"] = _session["last_enriched_at"].isoformat() if _session["last_enriched_at"] else None
+                # Single-use DeGiro token: discard it now that the connect cycle is
+                # complete (raw preview + enriched pull both done). The cached
+                # portfolio above keeps serving the dashboard and /api/refresh-prices
+                # (yfinance only) without DeGiro; any new DeGiro sync re-prompts for a
+                # fresh JSESSIONID. Discarded here — not in /api/portfolio-raw — so the
+                # raw->enrich handoff isn't broken mid-cycle.
+                _session["trading_api"] = None
+                _session["session_time"] = None
 
             pct, eur = _get_daily_change(portfolio.get("total_value_eur"))
             portfolio["daily_change_pct"] = pct
