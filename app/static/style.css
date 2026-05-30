@@ -263,6 +263,20 @@ body.view-degiro .indexa-only { display: none !important; }
 
 .icon-sm { width: 16px; height: 16px; }
 
+/* Data-quality warning icons (inline, positions table) */
+.icon-warn-enrichment {
+  color: var(--red);
+  vertical-align: middle;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.icon-warn-fx {
+  color: var(--gold);
+  vertical-align: middle;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
 .btn-label { }
 
 /* ─── MAIN ─── */

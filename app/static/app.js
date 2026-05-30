@@ -1133,8 +1133,8 @@
       const plClass = getPlClass(p.unrealized_pl_pct);
 
       tr.innerHTML = `
-        <td class="col-name">${esc(p.name)}</td>
-        <td class="private-value">${fmtEur(p.current_value_eur)}</td>
+        <td class="col-name">${esc(p.name)}${p.enrichment_failed ? ` <i data-lucide="alert-circle" class="icon-sm icon-warn-enrichment" aria-label="Market data unavailable" title="Market data unavailable — couldn't fetch price for this symbol."></i>` : ''}</td>
+        <td class="private-value">${fmtEur(p.current_value_eur)}${p.fx_missing ? ` <i data-lucide="alert-circle" class="icon-sm icon-warn-fx" aria-label="FX rate unavailable" title="FX rate unavailable — excluded from portfolio totals."></i>` : ''}</td>
         <td class="${plClass}">${p.unrealized_pl_pct != null ? p.unrealized_pl_pct.toFixed(2) + "%" : "—"}</td>
         <td>${p.current_price != null ? p.current_price.toFixed(2) : "—"}</td>
         <td><span class="private-value">${p.quantity ?? "—"}</span></td>
