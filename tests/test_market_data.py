@@ -20,21 +20,70 @@ class TestGetFxRate:
             mock_ticker.assert_not_called()  # no yfinance call for same currency
 
     def test_get_fx_rate_cache_hit(self, fx_rate_cache):
-        """Second call returns cached value."""
-        fx_rate_cache["USDEUR"] = 0.92  # seed cache
+        """Second call returns cached value when entry is still fresh."""
+        fx_rate_cache["USDEUR"] = (0.92, time.time())  # seed cache with tuple
         with patch("market_data.yf.Ticker") as mock_ticker:
             result = get_fx_rate("USD", "EUR")
             assert result == 0.92
             mock_ticker.assert_not_called()  # no yfinance call, cache hit
 
-    def test_get_fx_rate_yf_failure(self, fx_rate_cache):
-        """yfinance fails, returns 1.0 fallback."""
+    def test_get_fx_rate_cache_expired_refetches(self, fx_rate_cache):
+        """Entry older than 1 hour is treated as a miss and triggers a refetch."""
+        stale_ts = time.time() - 3700  # 3700s ago — past the 3600s TTL
+        fx_rate_cache["USDEUR"] = (0.85, stale_ts)  # stale entry
+
+        with patch("market_data.yf.Ticker") as mock_ticker:
+            mock_instance = MagicMock()
+            mock_hist = MagicMock()
+            mock_hist.empty = False
+            mock_close_series = pd.Series([1.08])  # EURUSD → invert → ~0.926
+            mock_hist.__getitem__ = MagicMock(return_value=mock_close_series)
+            mock_instance.history.return_value = mock_hist
+            mock_ticker.return_value = mock_instance
+
+            result = get_fx_rate("USD", "EUR")
+            mock_ticker.assert_called()  # yfinance WAS called (stale entry evicted)
+            # Result should be freshly fetched (1/1.08), not the stale 0.85
+            assert abs(result - (1.0 / 1.08)) < 0.001
+            # New entry stored in cache as tuple
+            assert "USDEUR" in fx_rate_cache
+            cached_rate, cached_ts = fx_rate_cache["USDEUR"]
+            assert abs(cached_rate - (1.0 / 1.08)) < 0.001
+            assert time.time() - cached_ts < 5  # freshly stamped
+
+    def test_get_fx_rate_yf_failure_returns_none(self, fx_rate_cache):
+        """yfinance fails — returns None and does NOT cache the failure."""
         with patch("market_data.yf.Ticker") as mock_ticker:
             mock_instance = MagicMock()
             mock_instance.history.return_value.empty = True  # no data
             mock_ticker.return_value = mock_instance
             result = get_fx_rate("USD", "EUR")
-            assert result == 1.0  # fallback
+            assert result is None  # failure → None, not 1.0
+            assert "USDEUR" not in fx_rate_cache  # failure must NOT be cached
+
+    def test_get_fx_rate_failure_not_cached_retries(self, fx_rate_cache):
+        """After a failure (None), the next call retries yfinance rather than returning cached None."""
+        with patch("market_data.yf.Ticker") as mock_ticker:
+            # First call: yfinance returns empty → failure
+            mock_empty = MagicMock()
+            mock_empty.history.return_value.empty = True
+            mock_ticker.return_value = mock_empty
+            first_result = get_fx_rate("USD", "EUR")
+            assert first_result is None
+            assert "USDEUR" not in fx_rate_cache
+
+            # Second call: yfinance now succeeds
+            mock_success = MagicMock()
+            mock_hist = MagicMock()
+            mock_hist.empty = False
+            mock_hist.__getitem__ = MagicMock(return_value=pd.Series([1.08]))
+            mock_success.history.return_value = mock_hist
+            mock_ticker.return_value = mock_success
+            second_result = get_fx_rate("USD", "EUR")
+            assert second_result is not None
+            assert abs(second_result - (1.0 / 1.08)) < 0.001
+            # Now cached as tuple
+            assert "USDEUR" in fx_rate_cache
 
     def test_get_fx_rate_direct_lookup(self, fx_rate_cache):
         """yfinance returns valid rate."""

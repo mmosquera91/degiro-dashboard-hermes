@@ -19,9 +19,11 @@ from yfinance.exceptions import YFTickerMissingError, YFRateLimitError
 
 logger = logging.getLogger(__name__)
 
-# Cache for FX rates to avoid repeated lookups
-_fx_cache: dict[str, float] = {}
+# Cache for FX rates to avoid repeated lookups.
+# Values are (rate: float, timestamp: float) tuples; entries expire after _FX_CACHE_TTL seconds.
+_fx_cache: dict[str, tuple[float, float]] = {}
 _fx_lock = threading.RLock()
+_FX_CACHE_TTL = 3600  # 1 hour
 
 # Cache for resolved yfinance symbols (symbol:isin -> ResolutionEntry)
 # Split into two layers:
@@ -372,17 +374,27 @@ def _yf_throttle():
         _last_yf_request = time.time()
 
 
-def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
-    """Get FX rate to convert from_currency to to_currency."""
+def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> Optional[float]:
+    """Get FX rate to convert from_currency to to_currency.
+
+    Returns the rate as a float, or None if the lookup fails (caller must handle
+    the missing-rate case).  EUR→EUR (same currency) always returns 1.0.
+    Successful results are cached for _FX_CACHE_TTL seconds; failures are not
+    cached so the next call retries immediately.
+    """
     if from_currency == to_currency:
         return 1.0
 
     key = f"{from_currency}{to_currency}"
 
-    # Read from cache under lock
+    # Read from cache under lock — evict stale entries on read
     with _fx_lock:
         if key in _fx_cache:
-            return _fx_cache[key]
+            cached_rate, cached_at = _fx_cache[key]
+            if time.time() - cached_at < _FX_CACHE_TTL:
+                return cached_rate
+            # Entry expired — remove so we refetch below
+            del _fx_cache[key]
 
     # Fetch outside lock (rate limiting happens inside yfinance calls)
     try:
@@ -408,7 +420,7 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         except (Exception, OSError) as e:
             logger.warning("yfinance history fetch failed for %s: %s", yf_symbol, e)
             hist = None
-        if not hist.empty:
+        if hist is not None and not hist.empty:
             rate_raw = float(hist["Close"].iloc[-1])
             # Keys where EUR is numerator (must invert the fetched rate)
             inverted_pairs = {
@@ -418,7 +430,7 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
             }
             rate = (1.0 / rate_raw) if key in inverted_pairs else rate_raw
             with _fx_lock:
-                _fx_cache[key] = rate
+                _fx_cache[key] = (rate, time.time())
             return rate
 
         # Fallback: try inverse pair
@@ -435,15 +447,15 @@ def get_fx_rate(from_currency: str, to_currency: str = "EUR") -> float:
         if hist_inv is not None and not hist_inv.empty:
             rate = 1.0 / float(hist_inv["Close"].iloc[-1])
             with _fx_lock:
-                _fx_cache[key] = rate
+                _fx_cache[key] = (rate, time.time())
             return rate
 
     except Exception as e:
         logger.warning("FX rate lookup failed for %s->%s: %s", from_currency, to_currency, str(e))
 
-    logger.warning("FX rate lookup failed for %s->%s — using 1.0 fallback",
-                   from_currency, to_currency)
-    return 1.0
+    logger.warning("FX rate lookup failed for %s->%s — rate unavailable", from_currency, to_currency)
+    # Do NOT cache failures — next call should retry
+    return None
 
 
 def _get_suffix_order(isin: str, symbol: str) -> list[str]:
@@ -1810,12 +1822,20 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         if pos_currency != base_currency:
             fx_rate = get_fx_rate(pos_currency, base_currency)
             if fx_rate is None:
-                logger.warning("fx_rate is None for %s — falling back to 1.0", pos_currency)
-                fx_rate = 1.0
-            enriched_pos["fx_rate"] = fx_rate
-            enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
-            enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
+                logger.warning(
+                    "FX rate unavailable for %s->%s on %s — EUR fields set to None",
+                    pos_currency, base_currency, enriched_pos.get("symbol", "?"),
+                )
+                enriched_pos["fx_rate"] = None
+                enriched_pos["fx_missing"] = True
+                enriched_pos["current_value_eur"] = None
+                enriched_pos["unrealized_pl_eur"] = None
+            else:
+                enriched_pos["fx_rate"] = fx_rate
+                enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
+                enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
         else:
+            # Currency IS the base currency — rate is legitimately 1.0, not a fallback
             enriched_pos["fx_rate"] = 1.0
             enriched_pos["current_value_eur"] = enriched_pos["current_value"]
             enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
