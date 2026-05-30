@@ -25,6 +25,8 @@ build/
 venv/
 target/
 vendor/
+# Keep vendored frontend libs (Chart.js, Lucide) — they must ship with the app
+!/app/static/vendor/
 *.log
 coverage/
 .cache/
