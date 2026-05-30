@@ -1173,6 +1173,11 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
     symbol = position.get("symbol", "")
     isin = position.get("isin", "")
 
+    # Tracks whether this enrichment run successfully obtained a current price
+    # from yfinance.  Set True at the two points where current_price is stamped;
+    # used to derive enrichment_failed before every return.
+    _price_obtained = False
+
     # Initialize all yfinance-dependent fields as None
     position["52w_high"] = None
     position["52w_low"] = None
@@ -1191,6 +1196,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
 
     if not symbol:
         logger.warning("No symbol for position: %s (ISIN: %s)", position.get("name"), isin)
+        position["enrichment_failed"] = True
         return position
 
     # Fast path: if both resolution and fundamentals are cached, skip all yfinance calls
@@ -1232,6 +1238,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
                 in_batch = _hw_hist is not None
                 position["price_source"] = "batch" if in_batch else "cache"
                 if fresh_price:
+                    _price_obtained = True
                     position["current_price"] = round(fresh_price, 4)
                     position["current_value"] = round(fresh_price * position.get("quantity", 0), 2)
                     # US batch symbols (no exchange suffix) are always USD
@@ -1282,6 +1289,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
                     if len(_hw_low_s) > 0:
                         position["52w_low"] = round(float(_hw_low_s.min()), 4)
         logger.info("Cache hit for %s — returning enriched from cache", symbol)
+        position["enrichment_failed"] = not _price_obtained
         return position
 
     cache_key = f"{symbol}:{isin}"
@@ -1311,6 +1319,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
         if not yf_symbol:
             logger.debug("No yfinance symbol resolved for %s (ISIN: %s) — skipping enrichment", symbol, isin)
             position["_enrichment_error"] = f"Symbol resolution failed: {symbol}"
+            position["enrichment_failed"] = True
             return position
 
     # Step 3: Check price cache for current price
@@ -1341,6 +1350,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
                 if "429" in err_str or "Too Many Requests" in err_str \
                         or "Rate limited" in err_str:
                     position["_enrichment_error"] = "rate_limited"
+                    position["enrichment_failed"] = True
                     logger.warning("Rate limited fetching info for %s", symbol)
                     return position
                 # Check for 404 — evict resolution cache entry
@@ -1350,6 +1360,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
                     _save_symbol_cache()
                     logger.warning("yfinance 404 for %s (%s) — evicted resolution cache", symbol, yf_symbol)
                     position["_enrichment_error"] = "yfinance_error"
+                    position["enrichment_failed"] = True
                     return position
                 logger.warning("ticker.info failed for %s: %s", symbol, e)
                 info = {}
@@ -1543,6 +1554,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
                 if ticker_currency == "GBp":
                     yf_price = yf_price / 100.0
                     yf_currency = "GBP"
+                _price_obtained = True
                 position["current_price"] = round(yf_price, 4)
                 position["current_value"] = round(yf_price * position["quantity"], 2)
                 position["price_source"] = "batch"
@@ -1594,6 +1606,7 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
         position["_enrichment_error"] = "unknown_error"
         logger.error("Unexpected error enriching %s: %s", symbol, str(e))
 
+    position["enrichment_failed"] = not _price_obtained
     return position
 
 def _sanitize_floats(obj):

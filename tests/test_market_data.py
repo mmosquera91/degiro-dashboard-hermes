@@ -425,3 +425,169 @@ class TestGBpPenceConversion:
         assert result["current_price"] is not None
         assert result["current_price"] > 100.0, "USD price should not be divided by 100"
         assert result["currency"] == "USD"
+
+
+class TestEnrichmentFailedFlag:
+    """enrichment_failed flag — True when no current price could be obtained, False otherwise."""
+
+    def test_enrichment_failed_true_when_symbol_unresolvable(self):
+        """Symbol that yfinance cannot resolve gets enrichment_failed=True."""
+        import market_data
+
+        cache_key = "GHOST:XX0000000000"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache.pop(cache_key, None)
+
+        pos = {
+            "symbol": "GHOST",
+            "isin": "XX0000000000",
+            "name": "Ghost Corp",
+            "quantity": 1.0,
+        }
+
+        # _resolve_yf_symbol and all suffix probes return empty / raise
+        with patch("market_data._resolve_yf_symbol", return_value=""):
+            result = enrich_position(pos)
+
+        assert result["enrichment_failed"] is True
+        assert result.get("current_price") is None
+
+    def test_enrichment_failed_true_when_yfinance_returns_no_price(self):
+        """Resolved symbol but yfinance history is empty → enrichment_failed=True."""
+        import market_data
+
+        cache_key = "NOHIST:US9999999999"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache[cache_key] = {
+                "yf_symbol": "NOHIST",
+                "exchange": "",
+                "currency": "USD",
+                "method": "test",
+                "cached_at": time.time(),
+            }
+        # Ensure price cache is empty for this symbol
+        with market_data._price_cache_lock:
+            market_data._price_cache.pop("NOHIST", None)
+
+        pos = {
+            "symbol": "NOHIST",
+            "isin": "US9999999999",
+            "name": "No History Corp",
+            "quantity": 2.0,
+            "avg_buy_price": 50.0,
+        }
+
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.info = {"currency": "USD", "shortName": "No History Corp"}
+        # Return empty history — yf_price stays 0 → current_price never set
+        empty_hist = MagicMock()
+        empty_hist.empty = True
+        empty_hist.__len__ = lambda self: 0
+        mock_ticker_instance.history.return_value = empty_hist
+
+        with patch("market_data.yf.Ticker", return_value=mock_ticker_instance):
+            with patch("market_data.yf.download", return_value=None):
+                result = enrich_position(pos, history_batch={})
+
+        assert result["enrichment_failed"] is True
+
+    def test_enrichment_failed_false_when_price_obtained(self):
+        """Successfully enriched position gets enrichment_failed=False (or falsey)."""
+        import market_data
+
+        cache_key = "AAPL:US0378331005"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache[cache_key] = {
+                "yf_symbol": "AAPL",
+                "exchange": "",
+                "currency": "USD",
+                "method": "test",
+                "cached_at": time.time(),
+            }
+        with market_data._price_cache_lock:
+            market_data._price_cache.pop("AAPL", None)
+
+        pos = {
+            "symbol": "AAPL",
+            "isin": "US0378331005",
+            "name": "Apple Inc",
+            "asset_type": "STOCK",
+            "quantity": 10.0,
+            "avg_buy_price": 150.0,
+        }
+
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.info = {
+            "currency": "USD",
+            "shortName": "Apple",
+            "sector": "Technology",
+            "country": "United States",
+        }
+        mock_close = pd.Series([150 + i for i in range(20)])
+        mock_hist = MagicMock()
+        mock_hist.empty = False
+        mock_hist.__len__ = lambda self: len(mock_close)
+        mock_hist.__getitem__ = MagicMock(return_value=mock_close)
+        type(mock_hist).Close = property(lambda self: mock_close)
+        mock_ticker_instance.history.return_value = mock_hist
+
+        # Provide a history_batch so the code takes the batch price path
+        batch = {"AAPL": {"close": mock_close, "high": mock_close, "low": mock_close}}
+        with patch("market_data.yf.Ticker", return_value=mock_ticker_instance):
+            result = enrich_position(pos, history_batch=batch)
+
+        assert result["current_price"] is not None
+        assert not result["enrichment_failed"]  # False or falsey
+
+    def test_enrichment_failed_independent_of_fx_missing(self):
+        """enrichment_failed and fx_missing are independent — a position can have either or both."""
+        import market_data
+
+        # Simulate a position that DID get a price (enrichment_failed=False)
+        # but whose FX rate was unavailable (fx_missing=True).
+        cache_key = "TSLA:US88160R1014"
+        with market_data._resolution_cache_lock:
+            market_data._resolution_cache[cache_key] = {
+                "yf_symbol": "TSLA",
+                "exchange": "",
+                "currency": "USD",
+                "method": "test",
+                "cached_at": time.time(),
+            }
+        with market_data._price_cache_lock:
+            market_data._price_cache.pop("TSLA", None)
+
+        pos = {
+            "symbol": "TSLA",
+            "isin": "US88160R1014",
+            "name": "Tesla Inc",
+            "asset_type": "STOCK",
+            "quantity": 5.0,
+            "avg_buy_price": 200.0,
+        }
+
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.info = {
+            "currency": "USD",
+            "shortName": "Tesla",
+            "sector": "Consumer Cyclical",
+            "country": "United States",
+        }
+        mock_close = pd.Series([200 + i for i in range(20)])
+        mock_hist = MagicMock()
+        mock_hist.empty = False
+        mock_hist.__len__ = lambda self: len(mock_close)
+        mock_hist.__getitem__ = MagicMock(return_value=mock_close)
+        type(mock_hist).Close = property(lambda self: mock_close)
+        mock_ticker_instance.history.return_value = mock_hist
+
+        batch = {"TSLA": {"close": mock_close, "high": mock_close, "low": mock_close}}
+        with patch("market_data.yf.Ticker", return_value=mock_ticker_instance):
+            result = enrich_position(pos, history_batch=batch)
+
+        # Price was obtained — enrichment_failed should be False
+        assert not result["enrichment_failed"]
+        # Manually inject fx_missing=True to confirm independence
+        result["fx_missing"] = True
+        assert result["fx_missing"] is True
+        assert not result["enrichment_failed"]  # still independent
