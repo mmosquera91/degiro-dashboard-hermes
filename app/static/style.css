@@ -1289,6 +1289,7 @@ body.view-degiro .indexa-only { display: none !important; }
 }
 .alert-card.warn     { border-top-color: var(--gold); background: rgba(217,119,6,0.06); border-color: var(--border); }
 .alert-card.critical { border-top-color: var(--red);  background: rgba(239,68,68,0.06); border-color: var(--border); }
+.alert-card.info     { border-top-color: var(--teal); background: rgba(1,105,111,0.06); border-color: var(--border); }
 
 .alert-header {
   display: flex;
@@ -1321,6 +1322,11 @@ body.view-degiro .indexa-only { display: none !important; }
 .alert-card.critical .alert-severity-badge {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+}
+
+.alert-card.info .alert-severity-badge {
+  background: var(--teal-dim);
+  color: var(--teal-light);
 }
 
 .alert-message {

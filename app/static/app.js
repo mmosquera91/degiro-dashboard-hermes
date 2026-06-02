@@ -1502,12 +1502,13 @@ function renderHealthAlerts() {
     container.innerHTML = alerts
         .map((alert) => {
             const severity = (alert.severity || "warn").toLowerCase();
-            const typeLabel = (alert.type || "unknown").toUpperCase().replace("_", " ");
+            const typeLabel = (alert.type || "unknown").toUpperCase().replace(/_/g, " ");
+            const badgeLabel = severity === "critical" ? "Critical" : severity === "info" ? "Info" : "Warning";
             return `
                 <div class="alert-card ${esc(severity)}">
                     <div class="alert-header">
                         <span class="alert-type-label">${esc(typeLabel)}</span>
-                        <span class="alert-severity-badge">${severity === "critical" ? "Critical" : "Warning"}</span>
+                        <span class="alert-severity-badge">${esc(badgeLabel)}</span>
                     </div>
                     <div class="alert-message">${esc(alert.message)}</div>
                     ${alert.current_value != null && alert.threshold != null ?

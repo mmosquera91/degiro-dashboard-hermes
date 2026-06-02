@@ -8,6 +8,9 @@ HEALTH_DRAWDOWN_THRESHOLD = int(os.getenv("HEALTH_DRAWDOWN_THRESHOLD", "-10"))
 HEALTH_REBALANCE_THRESHOLD = int(os.getenv("HEALTH_REBALANCE_THRESHOLD", "5"))
 TARGET_ETF_PCT   = int(os.getenv("TARGET_ETF_PCT", "70"))
 TARGET_STOCK_PCT = int(os.getenv("TARGET_STOCK_PCT", "30"))
+# Trim-candidate lens: inverse of the buy gate (too hot to buy → worth a look).
+HEALTH_OVERBOUGHT_RSI = int(os.getenv("HEALTH_OVERBOUGHT_RSI", "70"))
+HEALTH_NEAR_HIGH_PCT  = int(os.getenv("HEALTH_NEAR_HIGH_PCT", "-3"))
 
 
 def compute_health_alerts(portfolio: dict) -> list[dict]:
@@ -32,6 +35,9 @@ def compute_health_alerts(portfolio: dict) -> list[dict]:
 
     # HEALTH-04: Rebalancing
     alerts.append(_check_rebalancing(etf_pct, stock_pct))
+
+    # HEALTH-05: Trim candidates (informational — buy-and-hold, alert don't act)
+    alerts.extend(_check_trim_candidates(positions))
 
     return [a for a in alerts if a is not None]
 
@@ -107,6 +113,53 @@ def _check_drawdown(positions: list) -> dict | None:
             "triggering_positions": None,
         }
     return None
+
+
+def _check_trim_candidates(positions: list) -> list[dict]:
+    """HEALTH-05: Surface positions that look extended, as informational
+    "consider trimming" notes. NOT a sell recommendation and NOT a ranked engine —
+    the strategy stays buy-and-hold. This is the exact inverse of the buy gate: a
+    position too hot to *buy* (overbought AND at/near its 52-week high) is worth a
+    glance for risk management. Over-concentration (HEALTH-01) is folded into the
+    message when it also applies, rather than firing a duplicate alert.
+    """
+    alerts = []
+    for pos in positions:
+        rsi = pos.get("rsi")
+        dist = pos.get("distance_from_52w_high_pct")
+        # Need both signals to judge "extended" — skip if either is missing.
+        if rsi is None or dist is None:
+            continue
+
+        overbought = rsi >= HEALTH_OVERBOUGHT_RSI
+        extended = dist >= HEALTH_NEAR_HIGH_PCT
+        if not (overbought and extended):
+            continue
+
+        name = pos.get("name", "Unknown")
+        weight = pos.get("weight") or 0
+        reasons = [f"RSI {rsi:.0f}", "at/near 52w high"]
+        if weight > HEALTH_POSITION_THRESHOLD:
+            reasons.append(f"{weight:.0f}% of portfolio")
+
+        alerts.append({
+            "type": "trim_candidate",
+            "severity": "info",
+            "message": (
+                f"{name} looks extended ({', '.join(reasons)}). "
+                f"Buy-and-hold holds through this — consider trimming only to manage risk."
+            ),
+            # Left None: the RSI/52w detail lives in the message; the generic
+            # "Current: N% | Threshold: N%" renderer would mislabel RSI as a percent.
+            "current_value": None,
+            "threshold": None,
+            "triggering_positions": [{
+                "name": name,
+                "symbol": pos.get("symbol", ""),
+                "value": weight,
+            }],
+        })
+    return alerts
 
 
 def _check_rebalancing(etf_pct: float, stock_pct: float) -> dict | None:
