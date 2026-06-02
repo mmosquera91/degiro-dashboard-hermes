@@ -190,11 +190,6 @@ def _allocate_budget(
         if weight >= POSITION_THRESHOLD:
             continue
 
-        # Skip positions that are already well-represented (>5% of portfolio)
-        # They'll only get shares via greedy top-up if budget remains
-        if weight > 5.0:
-            continue
-
         # Compute allocation weight: inverse of current weight (underweight = more allocation)
         # Quadratic headroom: positions far below cap get disproportionately more
         headroom = max(0.01, POSITION_THRESHOLD - weight)

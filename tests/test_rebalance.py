@@ -361,3 +361,111 @@ class TestOutputShape:
             assert "reason" in buy
             assert "new_weight_pct" in buy
             assert "asset_type" in buy
+
+
+# ─── Regression: core ETFs above 5% weight must still be buyable ──────────────
+
+
+class TestCoreETFBuyable:
+    def test_concentrated_core_etfs_receive_budget(self):
+        """
+        Regression test for the >5% hard-skip bug.
+
+        A realistic index-investor portfolio: 4 core ETFs each at ~15% weight
+        (total ETF ~60%), 1 stock at ~40% weight.  The 70% ETF target means
+        the portfolio is significantly underweight ETFs.
+
+        Crucially, all 4 ETFs sit in the 5-20% weight band — above the old
+        >5% hard-skip threshold that excluded them from `weights`, but below
+        the legitimate 20% concentration cap that correctly skips over-weight
+        positions.  With a €2 000 contribution:
+
+        Before the fix: ALL ETFs excluded by `if weight > 5.0: continue` →
+        `weights` is empty after Phase 1 → `_allocate_budget` returns ([], 0)
+        for the ETF side → full budget falls through to hold_reserve.
+
+        After the fix: quadratic headroom + concentration-cap logic handles
+        these positions correctly; buys are made and cash is deployed.
+        """
+        # 4 ETFs × €1 500 = €6 000 ETF total out of €10 000 → 60% vs 70% target
+        # 1 stock  × €4 000 = €4 000 stock total → 40%
+        # Each ETF weight = 15%  (>5% triggers old bug, <20% bypasses cap guard)
+        total = 10_000.0
+        etf_value_each = 1_500.0   # 15% weight each
+        stock_value = 4_000.0      # 40% weight
+
+        positions = [
+            _make_position(
+                "World ETF", "VWCE", isin="IE00B3RBWM25",
+                asset_type="ETF",
+                quantity=15, current_value_eur=etf_value_each,
+                current_price=etf_value_each / 15,
+                currency="EUR",
+                weight=15.0,
+                sector="Diversified",
+                buy_priority_score=0.8,
+            ),
+            _make_position(
+                "Europe ETF", "MEUD", isin="LU0908500753",
+                asset_type="ETF",
+                quantity=20, current_value_eur=etf_value_each,
+                current_price=etf_value_each / 20,
+                currency="EUR",
+                weight=15.0,
+                sector="Diversified",
+                buy_priority_score=0.7,
+            ),
+            _make_position(
+                "EM ETF", "VFEM", isin="IE00B3CNHF17",
+                asset_type="ETF",
+                quantity=30, current_value_eur=etf_value_each,
+                current_price=etf_value_each / 30,
+                currency="EUR",
+                weight=15.0,
+                sector="Diversified",
+                buy_priority_score=0.6,
+            ),
+            _make_position(
+                "Small Cap ETF", "WSML", isin="IE00BF4RFH31",
+                asset_type="ETF",
+                quantity=25, current_value_eur=etf_value_each,
+                current_price=etf_value_each / 25,
+                currency="EUR",
+                weight=15.0,
+                sector="Diversified",
+                buy_priority_score=0.65,
+            ),
+            _make_position(
+                "Tech Stock", "ASML", isin="NL0010273215",
+                asset_type="STOCK",
+                quantity=4, current_value_eur=stock_value,
+                current_price=stock_value / 4,
+                currency="EUR",
+                weight=40.0,
+                sector="Technology",
+                buy_priority_score=0.5,
+            ),
+        ]
+
+        pf = {
+            "positions": positions,
+            "total_value_eur": total,
+            "etf_allocation_pct": 60.0,   # 60% actual vs 70% target → clear ETF gap
+            "stock_allocation_pct": 40.0,
+            "sector_breakdown": {},
+        }
+
+        result = plan_contribution(pf, 2000)
+
+        total_spent = sum(b["spend_eur"] for b in result["buys"])
+        etf_spent = sum(b["spend_eur"] for b in result["buys"] if b["asset_type"] == "ETF")
+
+        # Core ETFs must receive meaningful cash — at least half the contribution.
+        # Before the fix this is 0 (all ETFs excluded by the >5% skip).
+        assert total_spent > 1000, (
+            f"Expected >€1000 deployed but total_spent={total_spent}, "
+            f"hold_reserve={result['hold_reserve_eur']}, buys={result['buys']}"
+        )
+        assert etf_spent > 500, (
+            f"Expected >€500 to ETFs but etf_spent={etf_spent}, buys={result['buys']}"
+        )
