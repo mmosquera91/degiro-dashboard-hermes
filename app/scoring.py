@@ -15,7 +15,7 @@ def _zscore_normalize(values: list[float]) -> list[float]:
     """Z-score normalize a list of values to [0, 1] via standard scoring.
 
     Maps to [0, 1] using max(0, min(1, 0.5 + (v - mean) / (3 * std))).
-    If N < 3, returns [0.5] * N (insufficient data for z-score).
+    If N < 4, returns [0.5] * N (insufficient data for z-score).
     None values are treated as the median of non-None values.
     """
     clean = [v for v in values if v is not None]
@@ -39,6 +39,29 @@ def _zscore_normalize(values: list[float]) -> list[float]:
         return [0.5] * n
 
     return [max(0.0, min(1.0, 0.5 + (v - mean_val) / (3 * std_val))) for v in filled]
+
+
+def _normalize_lower_better(values: list[Optional[float]]) -> list[Optional[float]]:
+    """Z-score normalize a factor where LOWER raw values are better (e.g. P/E, P/B).
+
+    Negates before z-scoring so cheaper → higher normalized score. None inputs map
+    to None outputs (the caller decides the fallback) so a missing metric does not
+    pollute the pool or get silently treated as cheap/expensive.
+    """
+    clean = [v for v in values if v is not None]
+    if not clean:
+        return [None] * len(values)
+
+    normed = _zscore_normalize([-v for v in clean])
+    out: list[Optional[float]] = []
+    ci = 0
+    for v in values:
+        if v is None:
+            out.append(None)
+        else:
+            out.append(normed[ci])
+            ci += 1
+    return out
 
 
 def compute_momentum_score(position: dict) -> Optional[float]:
@@ -87,9 +110,23 @@ def compute_value_score(position: dict) -> Optional[float]:
 def is_buyable(position: dict) -> tuple[bool, str | None]:
     """Absolute quality gates before buy eligibility.
 
-    Gates: RSI < 70 (if exists), distance_from_52w_high_pct < -3%, momentum_score > -25.
-    Returns (bool, reason) where reason is None if buyable, or a string describing the blocking gate.
+    ETFs are ALWAYS buyable — they are exempt from all three entry gates.
+    Rationale: this is a 70% ETF / 30% STOCK buy-and-hold DCA portfolio. The ETF
+    core is bought on a schedule regardless of market conditions; market-timing the
+    index (RSI, distance from 52w high) is counterproductive and causes the dashboard
+    to disagree with the rebalancer when markets are near highs.
+
+    For STOCKs only — three entry gates apply:
+      RSI < 70 (not overbought), distance_from_52w_high_pct < -3% (sufficiently below
+      the 52w high), momentum_score > -25 (not in freefall).
+
+    Returns (bool, reason) where reason is None if buyable, or a string describing
+    the blocking gate.
     """
+    # ETFs skip all entry gates — timing the index core fights buy-and-hold DCA.
+    if position.get("asset_type") == "ETF":
+        return True, None
+
     rsi = position.get("rsi")
     if rsi is not None and rsi >= 70:
         return False, f"RSI {rsi:.0f}>=70"
@@ -131,6 +168,22 @@ def compute_scores(positions: list[dict]) -> list[dict]:
 
         n = len(pool)
 
+        # Pool-size guard: fewer than 4 positions cannot be z-score ranked meaningfully.
+        # A fabricated 0.5 is not a real ranking — mark every position in the pool as
+        # unrankable instead. momentum_score and value_score are still computed above
+        # (per-position, not pool-relative), so those remain useful.
+        if n < 4:
+            for pos in pool:
+                buyable, blocked_reason = is_buyable(pos)
+                pos["buy_priority_score"] = None
+                if not buyable:
+                    pos["buy_priority_blocked_reason"] = blocked_reason
+                else:
+                    pos["buy_priority_note"] = (
+                        "insufficient pool to rank (need 4+ holdings in pool)"
+                    )
+            continue
+
         # Pre-compute mask: which positions pass is_buyable
         buyable_results = [is_buyable(p) for p in pool]
         buyable_mask = [r[0] for r in buyable_results]
@@ -147,17 +200,19 @@ def compute_scores(positions: list[dict]) -> list[dict]:
             if not has_none:
                 ni += 1
 
-        # value_score
-        value_scores = [p.get("value_score") for p in pool]
-        value_none_mask = [v is None for v in value_scores]
-        value_clean = [v for v in value_scores if v is not None]
-        norm_value = _zscore_normalize(value_clean) if value_clean else [0.5]
+        # value — normalize P/E and P/B SEPARATELY (they live on different scales),
+        # then average the available normalized metrics. Lower is better for both,
+        # so _normalize_lower_better negates before z-scoring. Averaging the *raw*
+        # ratios would let whichever number is larger (usually P/E) dominate.
+        def _clean_ratio(v):
+            return v if (v is not None and v > 0) else None
+
+        pe_norm = _normalize_lower_better([_clean_ratio(p.get("pe_ratio")) for p in pool])
+        pb_norm = _normalize_lower_better([_clean_ratio(p.get("price_to_book")) for p in pool])
         norm_value_full = []
-        ni = 0
-        for has_none in value_none_mask:
-            norm_value_full.append(0.5 if has_none else norm_value[ni])
-            if not has_none:
-                ni += 1
+        for pe_n, pb_n in zip(pe_norm, pb_norm):
+            present = [x for x in (pe_n, pb_n) if x is not None]
+            norm_value_full.append(sum(present) / len(present) if present else 0.5)
 
         # distance_from_52w_high_pct
         distances = [p.get("distance_from_52w_high_pct") for p in pool]

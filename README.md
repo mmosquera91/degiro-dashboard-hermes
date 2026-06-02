@@ -93,17 +93,17 @@ Scoring happens in three stages. Positions are scored independently within two p
 
 #### 2. Value Score
 
-Average of `trailingPE` and `priceToBook` from yfinance `ticker.info`. Lower = cheaper. Only available for stocks — ETFs get `None` (treated as neutral in scoring).
+Built from `trailingPE` and `priceToBook` (yfinance `ticker.info`). Lower = cheaper. The two ratios are **normalized separately within the pool** (they live on very different scales) and then averaged — averaging the raw ratios would let whichever number is larger dominate. A position cheaper on P/E and P/B ranks higher. Only meaningful for stocks — ETFs usually lack both and are treated as neutral. The displayed `value_score` field is the raw average of the two ratios; the buy-priority factor uses the separately-normalized version.
 
 #### 3. Buy Priority Score
 
-**Quality gates** — applied first. A position that fails any gate gets `buy_priority_score = None` and is excluded from ranking:
+**Quality gates** — applied first to STOCKs only. A stock that fails any gate gets `buy_priority_score = None` and is excluded from ranking. **ETFs are exempt from all three gates** — this is a 70% ETF / 30% STOCK buy-and-hold DCA portfolio; timing the index core (RSI, distance from high) is counterproductive and would cause the dashboard to disagree with the rebalancer when markets are near highs.
 
-| Gate | Rule | Reason |
-|------|------|--------|
-| RSI | < 70 | Not overbought |
-| Distance from 52w high | < −3% | Sufficiently below the high |
-| Momentum | > −25 | Not in freefall |
+| Gate | Applies to | Rule | Reason |
+|------|-----------|------|--------|
+| RSI | STOCK only | < 70 | Not overbought |
+| Distance from 52w high | STOCK only | < −3% | Sufficiently below the high |
+| Momentum | STOCK only | > −25 | Not in freefall |
 
 **Composite score** — for positions that pass all gates:
 
@@ -122,7 +122,7 @@ Average of `trailingPE` and `priceToBook` from yfinance `ticker.info`. Lower = c
 
 `normalized = max(0, min(1, 0.5 + (value − mean) / (3 × std)))`
 
-If a pool has fewer than 3 positions, all factors default to 0.5 (neutral). Missing data (e.g. no P/E) also gets 0.5.
+If a pool has fewer than 4 positions, the ranking is not meaningful — all positions in that pool get `buy_priority_score = None` with `buy_priority_note = "insufficient pool to rank (need 4+ holdings in pool)"`. A fabricated 0.5 is not a real ranking; `get_top_candidates` will return no ranked candidates for that pool rather than surface a misleading score. Missing data within a rankable pool (e.g. no P/E) falls back to 0.5 for that factor only.
 
 **Important**: the buy priority score is **relative, not absolute**. A score of 0.72 means "best candidate relative to the current pool" — not a buy signal on its own.
 
