@@ -1165,6 +1165,9 @@ async def get_rebalance_plan(amount: float, total_portfolio_eur: float | None = 
             p["weight"] = round(p.get("current_value_eur", 0) / total_portfolio_eur * 100, 1) if total_portfolio_eur > 0 else 0
 
     plan = plan_contribution(portfolio, amount)
+    plan["watchlist_candidates"] = await asyncio.to_thread(
+        build_watchlist_candidate_display, _current_owned_positions(), None, 5
+    )
     plan = _sanitize_floats(plan)
     return plan
 
@@ -1196,6 +1199,31 @@ def merge_watchlist_candidates(owned_positions: list[dict], top_candidates: dict
         combined.sort(key=lambda c: c["buy_priority_score"], reverse=True)
         merged[pool] = combined[:n]
     return merged
+
+
+def build_watchlist_candidate_display(owned_positions: list[dict], scored: list[dict] | None = None, n: int = 5) -> list[dict]:
+    """Top-n scored watchlist names for display in the rebalancer (allocation untouched)."""
+    if scored is None:
+        entries = watchlist_store.list_entries()
+        if not entries:
+            return []
+        try:
+            scored = score_universe(owned_positions, entries)
+        except Exception as e:
+            logger.warning("Watchlist display scoring failed: %s", e)
+            return []
+    ranked = [s for s in scored if s.get("buy_priority_score") is not None]
+    ranked.sort(key=lambda s: s["buy_priority_score"], reverse=True)
+    out = []
+    for s in ranked[:n]:
+        out.append({
+            "isin": s.get("isin", ""), "symbol": s.get("symbol", ""),
+            "name": s.get("name", ""), "asset_type": s.get("asset_type", ""),
+            "buy_priority_score": s.get("buy_priority_score"),
+            "rsi": s.get("rsi"), "distance_from_52w_high_pct": s.get("distance_from_52w_high_pct"),
+            "owned": False,
+        })
+    return out
 
 
 def _current_owned_positions() -> list[dict]:

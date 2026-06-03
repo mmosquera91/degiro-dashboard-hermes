@@ -164,3 +164,39 @@ class TestPortfolioCandidateMerge:
         # No entries in the store → merge returns top_candidates unchanged.
         out = m.merge_watchlist_candidates([], original, n=3)
         assert out == original
+
+
+class TestRebalanceWatchlistDisplay:
+    def test_build_display_ranks_and_tags(self):
+        import app.main as m
+        fake_scored = [
+            {"isin": "US67066G1040", "symbol": "NVDA", "name": "NVIDIA",
+             "asset_type": "STOCK", "owned": False, "buy_priority_score": 0.8,
+             "rsi": 40, "distance_from_52w_high_pct": -10, "momentum_score": 5, "weight": 0},
+            {"isin": "LOW", "symbol": "LOW", "name": "Low", "asset_type": "ETF",
+             "owned": False, "buy_priority_score": 0.3, "rsi": 50,
+             "distance_from_52w_high_pct": -5, "momentum_score": 1, "weight": 0},
+            {"isin": "NOSCORE", "symbol": "NS", "name": "NS", "asset_type": "STOCK",
+             "owned": False, "buy_priority_score": None},
+        ]
+        out = m.build_watchlist_candidate_display(
+            [{"isin": "X", "asset_type": "STOCK", "owned": True}], scored=fake_scored, n=5)
+        # Ranked by buy_priority desc, None scores excluded, tagged owned=False
+        assert [c["isin"] for c in out] == ["US67066G1040", "LOW"]
+        assert all(c["owned"] is False for c in out)
+
+    def test_build_display_trims_to_n(self):
+        import app.main as m
+        scored = [{"isin": f"S{i}", "symbol": f"S{i}", "name": f"S{i}", "asset_type": "STOCK",
+                   "owned": False, "buy_priority_score": i / 10.0,
+                   "rsi": None, "distance_from_52w_high_pct": None} for i in range(10)]
+        out = m.build_watchlist_candidate_display([], scored=scored, n=3)
+        assert len(out) == 3
+        assert out[0]["buy_priority_score"] == 0.9  # highest first
+
+    def test_rebalance_plan_includes_watchlist_field(self, client):
+        _set_cookie(client)
+        # No portfolio loaded → early-return path; field must still default to [].
+        r = client.get("/api/rebalance-plan?amount=1000", headers=_bearer())
+        assert r.status_code == 200
+        assert "watchlist_candidates" in r.json()
