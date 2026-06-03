@@ -71,8 +71,8 @@ def add_entry(entry: dict) -> dict:
             "symbol": entry.get("symbol", ""),
             "name": entry.get("name", ""),
             "asset_type": entry.get("asset_type", "STOCK"),
-            "asset_type_source": entry.get("asset_type_source", "auto"),
-            "note": entry.get("note", ""),
+            "asset_type_source": "auto",
+            "note": "",
             "added_at": date.today().isoformat(),
         }
         items.append(record)
