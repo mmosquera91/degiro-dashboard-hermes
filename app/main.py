@@ -1182,7 +1182,11 @@ async def get_watchlist():
     if not entries:
         return WatchlistResponse(items=[])
     owned = _current_owned_positions()
-    scored = await asyncio.to_thread(score_universe, owned, entries)
+    try:
+        scored = await asyncio.to_thread(score_universe, owned, entries)
+    except Exception as e:
+        logger.warning("Watchlist scoring failed, returning unscored entries: %s", e)
+        scored = []
     by_isin = {p["isin"]: p for p in scored}
     items = []
     for e in entries:

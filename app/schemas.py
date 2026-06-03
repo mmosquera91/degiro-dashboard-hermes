@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, RootModel, ConfigDict
+from pydantic import BaseModel, Field, RootModel, ConfigDict
 
 
 # ─── Request Models ────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ class RebalancePlanResponse(BaseModel):
 
 
 class WatchlistAddRequest(BaseModel):
-    isin: str
+    isin: str = Field(min_length=1, max_length=20)
 
 
 class WatchlistTypeOverrideRequest(BaseModel):

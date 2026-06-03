@@ -95,3 +95,45 @@ class TestWatchlistAuthExemption:
         r = client.post("/api/watchlist", json={"isin": "US0378331005"},
                         headers=_bearer(), follow_redirects=False)
         assert r.status_code == 303
+
+    def test_get_watchlist_without_bearer_returns_401(self, client):
+        """Cookie exemption must NOT open an unauthenticated path — bearer still required."""
+        client.cookies.clear()
+        with patch("app.main.score_universe", return_value=[]):
+            r = client.get("/api/watchlist", follow_redirects=False)
+        assert r.status_code == 401
+
+    def test_delete_without_cookie_redirects(self, client):
+        """DELETE is UI-only: no cookie → 303."""
+        client.cookies.clear()
+        r = client.delete("/api/watchlist/US0378331005", headers=_bearer(), follow_redirects=False)
+        assert r.status_code == 303
+
+
+class TestWatchlistResolve:
+    def test_resolve_updates_entry(self, client):
+        _set_cookie(client)
+        with patch("app.main.resolve_and_classify",
+                   return_value={"symbol": "AAPL", "name": "Apple", "asset_type": "STOCK"}):
+            client.post("/api/watchlist", json={"isin": "US0378331005"}, headers=_bearer())
+        with patch("app.main.resolve_and_classify",
+                   return_value={"symbol": "AAPL2", "name": "Apple Renamed", "asset_type": "STOCK"}):
+            r = client.post("/api/watchlist/US0378331005/resolve", headers=_bearer())
+        assert r.status_code == 200
+        assert r.json()["item"]["symbol"] == "AAPL2"
+
+    def test_resolve_unknown_isin_returns_404(self, client):
+        _set_cookie(client)
+        with patch("app.main.resolve_and_classify",
+                   return_value={"symbol": "X", "name": "X", "asset_type": "STOCK"}):
+            r = client.post("/api/watchlist/NOTONLIST00/resolve", headers=_bearer())
+        assert r.status_code == 404
+
+    def test_resolve_unresolvable_returns_400(self, client):
+        _set_cookie(client)
+        with patch("app.main.resolve_and_classify",
+                   return_value={"symbol": "AAPL", "name": "Apple", "asset_type": "STOCK"}):
+            client.post("/api/watchlist", json={"isin": "US0378331005"}, headers=_bearer())
+        with patch("app.main.resolve_and_classify", side_effect=ValueError("Could not resolve")):
+            r = client.post("/api/watchlist/US0378331005/resolve", headers=_bearer())
+        assert r.status_code == 400
