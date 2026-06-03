@@ -46,3 +46,37 @@ def test_candidates_tagged_with_owned_flag():
     by_isin = {c["isin"]: c for c in cands["etfs"]}
     assert by_isin["WATCH"]["owned"] is False
     assert by_isin["OWN1"]["owned"] is True
+
+
+import app.universe as universe
+
+
+def test_score_universe_returns_only_watchlist_scored(monkeypatch):
+    owned = [
+        {"isin": f"OWN{i}", "symbol": f"OWN{i}", "name": f"O{i}", "asset_type": "ETF",
+         "weight": float(i), "owned": True,
+         "perf_1y": None, "pe_ratio": None, "rsi": None,
+         "distance_from_52w_high_pct": None, "last_buy_date": None}
+        for i in range(1, 5)
+    ]
+    watch_entries = [{"isin": "WATCH", "symbol": "WATCH", "name": "W", "asset_type": "ETF"}]
+
+    def fake_enrich_watchlist(entries):
+        return [
+            {"isin": "WATCH", "symbol": "WATCH", "name": "W", "asset_type": "ETF",
+             "quantity": 0, "weight": 0, "owned": False, "source": "watchlist",
+             "perf_1y": None, "pe_ratio": None, "rsi": None,
+             "distance_from_52w_high_pct": None, "last_buy_date": None}
+        ]
+
+    monkeypatch.setattr(universe, "enrich_watchlist", fake_enrich_watchlist)
+    result = universe.score_universe(owned, watch_entries)
+    assert len(result) == 1
+    assert result[0]["isin"] == "WATCH"
+    assert result[0]["owned"] is False
+    assert result[0]["buy_priority_score"] == 0.5  # neutral weight factor (from Task B1)
+
+
+def test_score_universe_empty_watchlist_returns_empty():
+    import app.universe as u
+    assert u.score_universe([{"isin": "X", "asset_type": "ETF", "owned": True}], []) == []
