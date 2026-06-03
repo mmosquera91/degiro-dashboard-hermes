@@ -364,6 +364,27 @@ def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
     return ""
 
 
+def resolve_and_classify(isin: str, position_currency: str = "EUR") -> dict:
+    """Resolve an ISIN to a yfinance ticker and classify it ETF vs STOCK.
+
+    Used by the watchlist add/resolve flow. Returns {symbol, name, asset_type}.
+    Raises ValueError if the ISIN cannot be resolved.
+    """
+    symbol = _resolve_by_isin(isin, position_currency=position_currency)
+    if not symbol:
+        raise ValueError(f"Could not resolve ISIN {isin} to a ticker")
+    name = ""
+    asset_type = "STOCK"
+    try:
+        info = yf.Ticker(symbol).info or {}
+        quote_type = str(info.get("quoteType", "")).upper()
+        asset_type = "ETF" if quote_type == "ETF" else "STOCK"
+        name = info.get("longName") or info.get("shortName") or ""
+    except Exception as e:
+        logger.warning("Classification of %s (%s) failed, defaulting STOCK: %s", isin, symbol, e)
+    return {"symbol": symbol, "name": name, "asset_type": asset_type}
+
+
 def _yf_throttle():
     """Sleep if needed to respect rate limits between yfinance calls."""
     global _last_yf_request

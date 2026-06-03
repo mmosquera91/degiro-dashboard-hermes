@@ -591,3 +591,36 @@ class TestEnrichmentFailedFlag:
         result["fx_missing"] = True
         assert result["fx_missing"] is True
         assert not result["enrichment_failed"]  # still independent
+
+
+class TestResolveAndClassify:
+    def test_returns_symbol_name_and_etf_type(self, monkeypatch):
+        import app.market_data as md
+
+        monkeypatch.setattr(md, "_resolve_by_isin", lambda isin, position_currency="EUR": "SXRU.AS")
+
+        class FakeTicker:
+            info = {"quoteType": "ETF", "shortName": "iShares S&P 500", "longName": "iShares Core S&P 500 UCITS ETF"}
+
+        monkeypatch.setattr(md.yf, "Ticker", lambda s: FakeTicker())
+        out = md.resolve_and_classify("IE00B5BMR087")
+        assert out == {"symbol": "SXRU.AS", "name": "iShares Core S&P 500 UCITS ETF", "asset_type": "ETF"}
+
+    def test_equity_maps_to_stock(self, monkeypatch):
+        import app.market_data as md
+        monkeypatch.setattr(md, "_resolve_by_isin", lambda isin, position_currency="EUR": "AAPL")
+
+        class FakeTicker:
+            info = {"quoteType": "EQUITY", "shortName": "Apple Inc."}
+
+        monkeypatch.setattr(md.yf, "Ticker", lambda s: FakeTicker())
+        out = md.resolve_and_classify("US0378331005")
+        assert out["asset_type"] == "STOCK"
+        assert out["symbol"] == "AAPL"
+        assert out["name"] == "Apple Inc."
+
+    def test_unresolvable_isin_raises(self, monkeypatch):
+        import app.market_data as md
+        monkeypatch.setattr(md, "_resolve_by_isin", lambda isin, position_currency="EUR": "")
+        with pytest.raises(ValueError, match="Could not resolve"):
+            md.resolve_and_classify("XX0000000000")
