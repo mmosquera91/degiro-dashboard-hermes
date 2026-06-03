@@ -434,6 +434,7 @@
     const buysEl = document.getElementById("rebalance-buys");
     const buyListEl = document.getElementById("rebalance-buy-list");
     const excludedEl = document.getElementById("rebalance-excluded");
+    const watchlistEl = document.getElementById("rebalance-watchlist");
 
     if (!resultsEl || !emptyEl) return;
 
@@ -513,6 +514,19 @@
         excludedEl.classList.remove("hidden");
       } else {
         excludedEl.classList.add("hidden");
+      }
+    }
+
+    // Watchlist candidates (display-only, not owned — does not affect allocation)
+    if (watchlistEl) {
+      const wl = plan.watchlist_candidates || [];
+      if (wl.length > 0) {
+        watchlistEl.innerHTML = "<strong>Watchlist candidates (not owned):</strong> " +
+          wl.map(c => esc(c.name || c.symbol || "?") +
+            (c.buy_priority_score != null ? " (" + c.buy_priority_score.toFixed(2) + ")" : "")).join(", ");
+        watchlistEl.classList.remove("hidden");
+      } else {
+        watchlistEl.classList.add("hidden");
       }
     }
   }
@@ -1346,7 +1360,7 @@
         (c) => `
       <div class="radar-item">
         <div class="radar-item-info">
-          <div class="radar-item-name">${esc(c.name)} <span style="color:var(--text-muted);font-weight:400;font-size:0.75rem">${esc(c.symbol || "")}</span></div>
+          <div class="radar-item-name">${esc(c.name)} <span style="color:var(--text-muted);font-weight:400;font-size:0.75rem">${esc(c.symbol || "")}</span>${c.owned === false ? ' <span class="radar-watchlist-badge">Watchlist</span>' : ''}</div>
           <div class="radar-item-reason">${esc(c.reason)}</div>
         </div>
         <div class="radar-item-score">${c.buy_priority_score != null ? c.buy_priority_score.toFixed(2) : "—"}</div>

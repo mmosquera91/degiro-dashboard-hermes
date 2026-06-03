@@ -202,19 +202,6 @@ class WatchlistTypeOverrideRequest(BaseModel):
     asset_type: str  # "ETF" | "STOCK"
 
 
-class WatchlistItem(BaseModel):
-    model_config = ConfigDict(extra="allow")  # enriched signal fields ride along
-
-    isin: str
-    symbol: str
-    name: str
-    asset_type: str
-    asset_type_source: str
-    note: str = ""
-    added_at: str
-    buy_priority_score: float | None = None
-
-
 class WatchlistResponse(BaseModel):
     items: list[dict[str, Any]] = []
 

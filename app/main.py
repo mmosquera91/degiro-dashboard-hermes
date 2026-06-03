@@ -44,15 +44,15 @@ from .schemas import (
     IndexaPortfolioResponse,
     IndexaPerformanceResponse,
     IndexaTransactionsResponse,
+    WatchlistAddRequest,
+    WatchlistTypeOverrideRequest,
+    WatchlistResponse,
+    WatchlistMutationResponse,
 )
 from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache, _infer_stock_sector_from_name, _infer_stock_country_from_name, resolve_and_classify
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
 from .universe import score_universe
 from . import watchlist_store
-from .schemas import (
-    WatchlistAddRequest, WatchlistTypeOverrideRequest,
-    WatchlistResponse, WatchlistMutationResponse,
-)
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
 from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, SNAPSHOT_DIR
