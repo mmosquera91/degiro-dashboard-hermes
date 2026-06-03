@@ -1892,6 +1892,7 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         )
         total_computed += value or 0
     logger.info(f"[DIAG] TOTAL COMPUTED: {total_computed:.2f} {base_currency}")
+    return enriched
 
 
 def enrich_watchlist(entries: list[dict]) -> list[dict]:
@@ -1918,5 +1919,3 @@ def enrich_watchlist(entries: list[dict]) -> list[dict]:
         for e in entries
     ]
     return enrich_positions({"positions": positions})
-
-    return enriched

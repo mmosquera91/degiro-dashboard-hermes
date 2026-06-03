@@ -650,6 +650,19 @@ class TestEnrichWatchlist:
         assert built["owned"] is False
         assert built["source"] == "watchlist"
         assert out[0]["rsi"] == 55.0
+        assert built["weight"] == 0
+        assert built["isin"] == "US0378331005"
+        assert built["name"] == "Apple"
+
+    def test_asset_type_defaults_to_stock(self, monkeypatch):
+        import app.market_data as md
+        captured = {}
+        def fake_enrich_positions(raw):
+            captured["positions"] = raw["positions"]
+            return raw["positions"]
+        monkeypatch.setattr(md, "enrich_positions", fake_enrich_positions)
+        md.enrich_watchlist([{"isin": "X", "symbol": "X", "name": "X"}])  # no asset_type
+        assert captured["positions"][0]["asset_type"] == "STOCK"
 
     def test_empty_list_returns_empty(self, monkeypatch):
         import app.market_data as md
