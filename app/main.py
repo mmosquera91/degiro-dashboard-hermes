@@ -959,7 +959,13 @@ async def hermes_context():
     with _sync_lock:
         portfolio = _session["portfolio"]
 
-    return build_hermes_context(portfolio if portfolio is not None else {})
+    ctx_portfolio = dict(portfolio) if portfolio is not None else {}
+    entries = watchlist_store.list_entries()
+    if entries:
+        ctx_portfolio["watchlist"] = await asyncio.to_thread(
+            score_universe, ctx_portfolio.get("positions", []), entries
+        )
+    return build_hermes_context(ctx_portfolio)
 
 
 # ─── Indexa Capital (read-only) ───

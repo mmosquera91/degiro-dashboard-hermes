@@ -26,6 +26,7 @@ def build_hermes_context(portfolio: dict) -> dict:
 
     positions = portfolio.get("positions", [])
     top_candidates = portfolio.get("top_candidates", {"etfs": [], "stocks": []})
+    watchlist = portfolio.get("watchlist", [])
 
     # Build JSON structure
     json_context = {
@@ -48,6 +49,7 @@ def build_hermes_context(portfolio: dict) -> dict:
         },
         "positions": sorted(positions, key=lambda p: p.get("momentum_score") or 0),
         "top_candidates": top_candidates,
+        "watchlist": watchlist,
         "health_alerts": portfolio.get("health_alerts", []),
     }
 
@@ -184,6 +186,24 @@ def _build_plaintext(context: dict, date_str: str) -> str:
     if not candidates.get("stocks"):
         lines.append("    No stock candidates available.")
 
+    lines.append("")
+
+    # Watchlist (candidate new buys, not owned)
+    watchlist = context.get("watchlist", [])
+    lines.append("═══ WATCHLIST (candidate new buys — not owned) ═══")
+    lines.append("")
+    if watchlist:
+        for w in watchlist:
+            score = w.get("buy_priority_score")
+            score_s = f"{score:.2f}" if score is not None else "N/A"
+            rsi = w.get("rsi")
+            rsi_s = f"{rsi:.0f}" if rsi is not None else "N/A"
+            dist = w.get("distance_from_52w_high_pct")
+            dist_s = f"{dist:+.1f}%" if dist is not None else "N/A"
+            lines.append(f"  {w.get('name','N/A')} ({w.get('symbol','N/A')}) [{w.get('asset_type','?')}]")
+            lines.append(f"     Buy Priority: {score_s}  RSI: {rsi_s}  Dist from 52w high: {dist_s}")
+    else:
+        lines.append("  No watchlist entries.")
     lines.append("")
 
     # Benchmark section
