@@ -68,6 +68,9 @@
     return res;
   }
 
+  window.Brokr = window.Brokr || {};
+  window.Brokr.apiFetch = apiFetch;
+
   // ─── DOM refs ───
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
