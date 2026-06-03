@@ -45,8 +45,14 @@ from .schemas import (
     IndexaPerformanceResponse,
     IndexaTransactionsResponse,
 )
-from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache, _infer_stock_sector_from_name, _infer_stock_country_from_name
+from .market_data import enrich_positions, get_fx_rate, _sanitize_floats, clear_symbol_cache, audit_symbol_cache, _infer_stock_sector_from_name, _infer_stock_country_from_name, resolve_and_classify
 from .scoring import compute_scores, compute_portfolio_weights, get_top_candidates
+from .universe import score_universe
+from . import watchlist_store
+from .schemas import (
+    WatchlistAddRequest, WatchlistTypeOverrideRequest,
+    WatchlistResponse, WatchlistMutationResponse,
+)
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
 from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, SNAPSHOT_DIR
@@ -557,6 +563,9 @@ ASSET_VERSION = _asset_version("style.css", "login.js")
 async def check_session_cookie(request: Request, call_next):
     """Redirect unauthenticated requests to /login. Exempts /login, /static/*, and /health."""
     path = request.url.path
+    # GET /api/watchlist is agent-accessible (bearer only); its mutations stay UI-only.
+    if path == "/api/watchlist" and request.method == "GET":
+        return await call_next(request)
     if (
         path == "/login"
         or path.startswith("/static/")
@@ -1152,6 +1161,87 @@ async def get_rebalance_plan(amount: float, total_portfolio_eur: float | None = 
     plan = plan_contribution(portfolio, amount)
     plan = _sanitize_floats(plan)
     return plan
+
+
+# ─── Watchlist ───
+
+
+def _current_owned_positions() -> list[dict]:
+    """Owned, enriched positions from the live session (empty if none loaded)."""
+    with _sync_lock:
+        portfolio = _session["portfolio"]
+    if not portfolio:
+        return []
+    return list(portfolio.get("positions", []))
+
+
+@app.get("/api/watchlist", dependencies=[Depends(verify_brok_token)], response_model=WatchlistResponse)
+async def get_watchlist():
+    """List watchlist entries enriched + scored against the owned pool. Agent-accessible."""
+    entries = watchlist_store.list_entries()
+    if not entries:
+        return WatchlistResponse(items=[])
+    owned = _current_owned_positions()
+    scored = await asyncio.to_thread(score_universe, owned, entries)
+    by_isin = {p["isin"]: p for p in scored}
+    items = []
+    for e in entries:
+        merged = {**e, **by_isin.get(e["isin"], {})}
+        items.append(_sanitize_floats(merged))
+    return WatchlistResponse(items=items)
+
+
+@app.post("/api/watchlist", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)], response_model=WatchlistMutationResponse)
+async def add_watchlist(req: WatchlistAddRequest):
+    """Add an ISIN to the watchlist (resolve + classify once)."""
+    isin = req.isin.strip().upper()
+    if any((p.get("isin") or "").upper() == isin for p in _current_owned_positions()):
+        raise HTTPException(status_code=400, detail="You already own this position")
+    try:
+        resolved = await asyncio.to_thread(resolve_and_classify, isin)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        record = watchlist_store.add_entry({"isin": isin, **resolved})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return WatchlistMutationResponse(status="added", item=record)
+
+
+@app.delete("/api/watchlist/{isin}", dependencies=[Depends(verify_brok_token)], response_model=WatchlistMutationResponse)
+async def delete_watchlist(isin: str):
+    try:
+        watchlist_store.remove_entry(isin)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Not on the watchlist")
+    return WatchlistMutationResponse(status="removed")
+
+
+@app.patch("/api/watchlist/{isin}", dependencies=[Depends(verify_brok_token)], response_model=WatchlistMutationResponse)
+async def patch_watchlist(isin: str, req: WatchlistTypeOverrideRequest):
+    try:
+        record = watchlist_store.set_asset_type(isin, req.asset_type)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Not on the watchlist")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return WatchlistMutationResponse(status="updated", item=record)
+
+
+@app.post("/api/watchlist/{isin}/resolve", dependencies=[Depends(verify_brok_token), Depends(check_rate_limit)], response_model=WatchlistMutationResponse)
+async def resolve_watchlist(isin: str):
+    """Re-run resolution + classification for an existing entry (preserves manual type)."""
+    try:
+        resolved = await asyncio.to_thread(resolve_and_classify, isin.strip().upper())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        record = watchlist_store.update_resolution(
+            isin.strip().upper(), resolved["symbol"], resolved["name"], resolved["asset_type"]
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Not on the watchlist")
+    return WatchlistMutationResponse(status="resolved", item=record)
 
 
 # ─── Session Token ───
