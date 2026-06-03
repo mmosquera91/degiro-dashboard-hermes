@@ -3,7 +3,8 @@
 Mirrors the symbol_overrides persistence pattern (module-level threading.Lock,
 env-configurable path) but adds an atomic write path: every mutation re-reads the
 file, mutates, and writes back inside the lock so concurrent add/remove calls do
-not lose updates.
+not lose updates (lock-atomic), and each write goes through a temp-file + rename
+so a mid-write crash never leaves a partially-written file (crash-safe).
 """
 import json
 import logging
@@ -39,9 +40,11 @@ def _read_unlocked() -> dict:
 
 
 def _write_unlocked(data: dict) -> None:
-    """Write the watchlist file. Caller holds _lock."""
+    """Write the watchlist file atomically (temp + rename). Caller holds _lock."""
     WATCHLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
-    WATCHLIST_PATH.write_text(json.dumps(data, indent=2))
+    tmp = WATCHLIST_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.replace(WATCHLIST_PATH)  # atomic on POSIX
 
 
 def list_entries() -> list[dict]:
@@ -59,6 +62,9 @@ def add_entry(entry: dict) -> dict:
     isin = (entry.get("isin") or "").strip().upper()
     if not isin:
         raise ValueError("ISIN is required")
+    asset_type = (entry.get("asset_type") or "STOCK").strip().upper()
+    if asset_type not in _VALID_TYPES:
+        raise ValueError("asset_type must be ETF or STOCK")
     with _lock:
         data = _read_unlocked()
         items = data["items"]
@@ -70,7 +76,7 @@ def add_entry(entry: dict) -> dict:
             "isin": isin,
             "symbol": entry.get("symbol", ""),
             "name": entry.get("name", ""),
-            "asset_type": entry.get("asset_type", "STOCK"),
+            "asset_type": asset_type,
             "asset_type_source": "auto",
             "note": "",
             "added_at": date.today().isoformat(),
@@ -121,7 +127,7 @@ def update_resolution(isin: str, symbol: str, name: str, asset_type: str,
         data = _read_unlocked()
         for it in data["items"]:
             if it["isin"] == isin:
-                it["symbol"] = symbol
+                it["symbol"] = symbol or it.get("symbol", "")
                 it["name"] = name or it.get("name", "")
                 if not (keep_manual_type and it.get("asset_type_source") == "manual"):
                     it["asset_type"] = asset_type
