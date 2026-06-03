@@ -364,13 +364,32 @@ def _resolve_by_isin(isin: str, position_currency: str = "EUR") -> str:
     return ""
 
 
-def resolve_and_classify(isin: str, position_currency: str = "EUR") -> dict:
+def _currency_from_isin(isin: str) -> str:
+    """Guess the listing currency from an ISIN's two-letter country prefix.
+
+    The watchlist has no position to borrow a currency from, so a US-listed
+    security would otherwise be filtered out by the competing-exchange guard
+    in _resolve_by_isin. Map the obvious non-EUR domiciles; everything else
+    falls back to EUR (the dominant case for this portfolio).
+    """
+    prefix = (isin or "")[:2].upper()
+    if prefix == "US":
+        return "USD"
+    if prefix == "GB":
+        return "GBP"
+    return "EUR"
+
+
+def resolve_and_classify(isin: str, position_currency: Optional[str] = None) -> dict:
     """Resolve an ISIN to a yfinance ticker and classify it ETF vs STOCK.
 
     Used by the watchlist add/resolve flow. Returns {symbol, name, asset_type}.
-    Raises ValueError if the ISIN cannot be resolved.
+    Raises ValueError if the ISIN cannot be resolved. When position_currency is
+    not supplied it is derived from the ISIN country prefix so US/GB-listed
+    securities are not discarded by the EUR-default competing-exchange guard.
     """
-    symbol = _resolve_by_isin(isin, position_currency=position_currency)
+    currency = position_currency or _currency_from_isin(isin)
+    symbol = _resolve_by_isin(isin, position_currency=currency)
     if not symbol:
         raise ValueError(f"Could not resolve ISIN {isin} to a ticker")
     name = ""

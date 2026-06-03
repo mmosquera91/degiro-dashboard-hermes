@@ -625,6 +625,53 @@ class TestResolveAndClassify:
         with pytest.raises(ValueError, match="Could not resolve"):
             md.resolve_and_classify("XX0000000000")
 
+    def test_us_isin_resolves_via_usd_exchange(self, monkeypatch):
+        """A US-listed-only security (e.g. MRVL, US5738741041) must resolve.
+
+        Regression: the watchlist add flow defaulted to EUR, so the only
+        listing (NMS, a USD exchange) was discarded by the competing-exchange
+        filter and the ISIN never resolved. The currency must be derived from
+        the ISIN country prefix.
+        """
+        import app.market_data as md
+        seen = {}
+
+        def fake_resolve(isin, position_currency="EUR"):
+            seen["currency"] = position_currency
+            return "MRVL"
+
+        monkeypatch.setattr(md, "_resolve_by_isin", fake_resolve)
+
+        class FakeTicker:
+            info = {"quoteType": "EQUITY", "shortName": "Marvell Technology, Inc."}
+
+        monkeypatch.setattr(md.yf, "Ticker", lambda s: FakeTicker())
+        out = md.resolve_and_classify("US5738741041")
+        assert seen["currency"] == "USD"
+        assert out["symbol"] == "MRVL"
+
+    def test_gb_isin_uses_gbp_currency(self, monkeypatch):
+        import app.market_data as md
+        seen = {}
+        monkeypatch.setattr(
+            md, "_resolve_by_isin",
+            lambda isin, position_currency="EUR": seen.update(currency=position_currency) or "ULVR.L",
+        )
+        monkeypatch.setattr(md.yf, "Ticker", lambda s: type("T", (), {"info": {}})())
+        md.resolve_and_classify("GB00B10RZP78")
+        assert seen["currency"] == "GBP"
+
+    def test_eu_isin_defaults_to_eur(self, monkeypatch):
+        import app.market_data as md
+        seen = {}
+        monkeypatch.setattr(
+            md, "_resolve_by_isin",
+            lambda isin, position_currency="EUR": seen.update(currency=position_currency) or "SXRU.AS",
+        )
+        monkeypatch.setattr(md.yf, "Ticker", lambda s: type("T", (), {"info": {}})())
+        md.resolve_and_classify("IE00B5BMR087")
+        assert seen["currency"] == "EUR"
+
 
 class TestEnrichWatchlist:
     def test_builds_position_dicts_and_enriches(self, monkeypatch):
