@@ -25,6 +25,9 @@ def score_universe(owned_positions: list[dict], watchlist_entries: list[dict]) -
     if not watchlist_entries:
         return []
     enriched_watch = enrich_watchlist(watchlist_entries)
-    merged = list(owned_positions) + enriched_watch
+    # Shallow-copy owned dicts: compute_scores mutates in place, and we must not
+    # overwrite the live session positions' real (owned-pool) scores with scores
+    # computed in this watchlist-augmented pool.
+    merged = [dict(p) for p in owned_positions] + enriched_watch
     compute_scores(merged)
     return [p for p in merged if p.get("source") == "watchlist"]

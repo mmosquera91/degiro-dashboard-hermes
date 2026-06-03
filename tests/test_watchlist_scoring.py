@@ -75,8 +75,10 @@ def test_score_universe_returns_only_watchlist_scored(monkeypatch):
     assert result[0]["isin"] == "WATCH"
     assert result[0]["owned"] is False
     assert result[0]["buy_priority_score"] == 0.5  # neutral weight factor (from Task B1)
+    # score_universe must NOT mutate the caller's owned position dicts
+    assert "buy_priority_score" not in owned[0]
+    assert "momentum_score" not in owned[0]
 
 
 def test_score_universe_empty_watchlist_returns_empty():
-    import app.universe as u
-    assert u.score_universe([{"isin": "X", "asset_type": "ETF", "owned": True}], []) == []
+    assert universe.score_universe([{"isin": "X", "asset_type": "ETF", "owned": True}], []) == []
