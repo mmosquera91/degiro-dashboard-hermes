@@ -238,17 +238,21 @@ def compute_scores(positions: list[dict]) -> list[dict]:
             if not has_none:
                 ni += 1
 
-        # weight
-        weights = [p.get("weight", 0) or 0 for p in pool]
-        weight_none_mask = [w is None for w in weights]
-        weight_clean = [w for w in weights if w is not None]
-        norm_weight_inv = _zscore_normalize([-w for w in weight_clean]) if weight_clean else [0.5]
+        # weight — reward being underweight. Watchlist (owned == False) entries have no
+        # portfolio weight; give them the neutral 0.5 directly and EXCLUDE them from the
+        # z-score so a weight of 0 (maximally underweight) neither auto-boosts the candidate
+        # nor distorts owned positions' normalization. owned defaults True for back-compat.
+        owned_flags = [p.get("owned", True) for p in pool]
+        owned_weights = [(p.get("weight", 0) or 0) for p, o in zip(pool, owned_flags) if o]
+        norm_owned_weight = _zscore_normalize([-w for w in owned_weights]) if owned_weights else [0.5]
         norm_weight_full = []
-        ni = 0
-        for has_none in weight_none_mask:
-            norm_weight_full.append(0.5 if has_none else norm_weight_inv[ni])
-            if not has_none:
-                ni += 1
+        oi = 0
+        for o in owned_flags:
+            if o:
+                norm_weight_full.append(norm_owned_weight[oi])
+                oi += 1
+            else:
+                norm_weight_full.append(0.5)
 
         # recency — days since last buy (cooldown penalty)
         today = date_type.today()
@@ -368,6 +372,7 @@ def get_top_candidates(positions: list[dict], n: int = 3) -> dict:
             "distance_from_52w_high_pct": p.get("distance_from_52w_high_pct"),
             "momentum_score": p.get("momentum_score"),
             "weight": p.get("weight"),
+            "owned": p.get("owned", True),
         })
 
     top_stocks = []
@@ -383,6 +388,7 @@ def get_top_candidates(positions: list[dict], n: int = 3) -> dict:
             "distance_from_52w_high_pct": p.get("distance_from_52w_high_pct"),
             "momentum_score": p.get("momentum_score"),
             "weight": p.get("weight"),
+            "owned": p.get("owned", True),
         })
 
     return {"etfs": top_etfs, "stocks": top_stocks}
