@@ -36,6 +36,7 @@ To update: `docker compose pull && docker compose up -d`
 - **Portfolio** — fetches your DeGiro positions via browser session injection
 - **Enrichment** — live prices, RSI, 52w range, P/E, multi-period performance (yfinance)
 - **Scoring** — momentum, value, and buy-priority scores with quality gates
+- **Watchlist** — track tickers you don't own yet (added by ISIN); they're enriched and scored in the same ETF/STOCK pool as your holdings so new buys rank beside top-ups
 - **Benchmark** — portfolio vs S&P 500 with historical snapshots
 - **AI Export** — structured JSON + plaintext context block for AI agents
 
@@ -123,6 +124,8 @@ Built from `trailingPE` and `priceToBook` (yfinance `ticker.info`). Lower = chea
 `normalized = max(0, min(1, 0.5 + (value − mean) / (3 × std)))`
 
 If a pool has fewer than 4 positions, the ranking is not meaningful — all positions in that pool get `buy_priority_score = None` with `buy_priority_note = "insufficient pool to rank (need 4+ holdings in pool)"`. A fabricated 0.5 is not a real ranking; `get_top_candidates` will return no ranked candidates for that pool rather than surface a misleading score. Missing data within a rankable pool (e.g. no P/E) falls back to 0.5 for that factor only.
+
+**Watchlist candidates** — unowned tickers from the watchlist are scored in the same ETF or STOCK pool as owned holdings. Because they have no portfolio weight, the `weight_inv` factor is neutralized to 0.5 for unowned names, so they rank on merit (value, momentum, distance from high, RSI) rather than on simply being absent from the portfolio.
 
 **Important**: the buy priority score is **relative, not absolute**. A score of 0.72 means "best candidate relative to the current pool" — not a buy signal on its own.
 
@@ -266,6 +269,16 @@ DeGiro → positions → yfinance enrichment → scoring engine → AI context
 | `POST` | `/api/snapshots/save` | Save current state |
 | `DELETE` | `/api/snapshots/{date}` | Delete snapshot |
 
+### Watchlist
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/watchlist` | List watchlist entries with enriched signals + buy-priority scores (agent-accessible: bearer token, no browser session required) |
+| `POST` | `/api/watchlist` | Add a ticker by ISIN (resolves + classifies ETF/STOCK on add; 30-entry cap) |
+| `DELETE` | `/api/watchlist/{isin}` | Remove an entry |
+| `PATCH` | `/api/watchlist/{isin}` | Override the ETF/STOCK type |
+| `POST` | `/api/watchlist/{isin}/resolve` | Re-run ticker resolution + classification |
+
 ### Admin & System
 
 | Method | Path | Description |
@@ -314,6 +327,7 @@ No credentials are used or stored — only the session cookie is used. The token
 | `COOKIE_SECURE` | `false` | No — set `true` for HTTPS |
 | `TARGET_ETF_PCT` | `70` | No |
 | `TARGET_STOCK_PCT` | `30` | No |
+| `WATCHLIST_PATH` | `/data/watchlist.json` | No — path to watchlist store (max 30 entries) |
 
 ---
 
