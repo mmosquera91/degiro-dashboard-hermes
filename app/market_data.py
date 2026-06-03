@@ -1869,9 +1869,14 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
     else:
         enriched, _session_rate_limited = loop.run_until_complete(_run_all())
 
-    # FX conversion to EUR — exactly once per position, after all async enrichment
+    # FX conversion to EUR — exactly once per position, after all async enrichment.
+    # current_value / unrealized_pl are owned-position concepts: watchlist entries
+    # (quantity 0, no avg_buy_price) never get unrealized_pl set, so read both
+    # defensively and propagate None rather than KeyError.
     for enriched_pos in enriched:
         pos_currency = enriched_pos.get("currency", "EUR")
+        current_value = enriched_pos.get("current_value")
+        unrealized_pl = enriched_pos.get("unrealized_pl")
         if pos_currency != base_currency:
             fx_rate = get_fx_rate(pos_currency, base_currency)
             if fx_rate is None:
@@ -1885,13 +1890,17 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
                 enriched_pos["unrealized_pl_eur"] = None
             else:
                 enriched_pos["fx_rate"] = fx_rate
-                enriched_pos["current_value_eur"] = round(enriched_pos["current_value"] * fx_rate, 2)
-                enriched_pos["unrealized_pl_eur"] = round(enriched_pos["unrealized_pl"] * fx_rate, 2)
+                enriched_pos["current_value_eur"] = (
+                    round(current_value * fx_rate, 2) if current_value is not None else None
+                )
+                enriched_pos["unrealized_pl_eur"] = (
+                    round(unrealized_pl * fx_rate, 2) if unrealized_pl is not None else None
+                )
         else:
             # Currency IS the base currency — rate is legitimately 1.0, not a fallback
             enriched_pos["fx_rate"] = 1.0
-            enriched_pos["current_value_eur"] = enriched_pos["current_value"]
-            enriched_pos["unrealized_pl_eur"] = enriched_pos["unrealized_pl"]
+            enriched_pos["current_value_eur"] = current_value
+            enriched_pos["unrealized_pl_eur"] = unrealized_pl
 
     elapsed = time.time() - _enrich_start
     logger.info("[INFO] Enrichment completed %d positions in %.1fs", len(positions), elapsed)

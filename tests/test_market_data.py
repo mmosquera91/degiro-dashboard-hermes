@@ -714,3 +714,45 @@ class TestEnrichWatchlist:
     def test_empty_list_returns_empty(self, monkeypatch):
         import app.market_data as md
         assert md.enrich_watchlist([]) == []
+
+
+class TestEnrichPositionsWatchlistFx:
+    """Regression: watchlist entries have quantity 0 and no avg_buy_price, so the
+    real enrich_position never sets unrealized_pl. The FX conversion loop in
+    enrich_positions must not assume current_value / unrealized_pl exist — it
+    used to KeyError, and get_watchlist swallowed it, so every row showed "—"."""
+
+    def test_zero_quantity_usd_entry_without_pl_does_not_crash(self, monkeypatch):
+        import app.market_data as md
+
+        # Pre-warm resolution cache so Step-1 resolution makes no network call
+        with md._resolution_cache_lock:
+            md._resolution_cache["MRVL:US5738741041"] = {
+                "yf_symbol": "MRVL", "exchange": "", "currency": "",
+                "method": "test", "cached_at": time.time(),
+            }
+
+        # Mirror real enrich_position for a non-owned position: price/value are
+        # stamped, but unrealized_pl is skipped because avg_buy_price == 0.
+        def fake_enrich_position(pos, history_batch=None):
+            pos["current_price"] = 80.0
+            pos["current_value"] = 0.0
+            pos["currency"] = "USD"
+            pos["rsi"] = 60.0
+            pos["distance_from_52w_high_pct"] = -12.0
+            return pos  # deliberately NO unrealized_pl key
+
+        monkeypatch.setattr(md, "enrich_position", fake_enrich_position)
+        monkeypatch.setattr(md.yf, "download", lambda *a, **k: pd.DataFrame())
+        monkeypatch.setattr(md, "get_fx_rate", lambda *a, **k: 0.92)
+
+        positions = [{
+            "isin": "US5738741041", "symbol": "MRVL", "name": "Marvell Technology, Inc.",
+            "asset_type": "STOCK", "quantity": 0, "weight": 0, "owned": False, "source": "watchlist",
+        }]
+        out = md.enrich_positions({"positions": positions})
+
+        assert out[0]["rsi"] == 60.0
+        assert out[0]["distance_from_52w_high_pct"] == -12.0
+        assert out[0]["unrealized_pl_eur"] is None
+        assert out[0]["current_value_eur"] == 0.0
