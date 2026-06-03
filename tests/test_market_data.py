@@ -624,3 +624,33 @@ class TestResolveAndClassify:
         monkeypatch.setattr(md, "_resolve_by_isin", lambda isin, position_currency="EUR": "")
         with pytest.raises(ValueError, match="Could not resolve"):
             md.resolve_and_classify("XX0000000000")
+
+
+class TestEnrichWatchlist:
+    def test_builds_position_dicts_and_enriches(self, monkeypatch):
+        import app.market_data as md
+
+        captured = {}
+
+        def fake_enrich_positions(raw):
+            captured["positions"] = raw["positions"]
+            for p in raw["positions"]:
+                p["current_price"] = 100.0
+                p["rsi"] = 55.0
+            return raw["positions"]
+
+        monkeypatch.setattr(md, "enrich_positions", fake_enrich_positions)
+
+        entries = [{"isin": "US0378331005", "symbol": "AAPL", "name": "Apple", "asset_type": "STOCK"}]
+        out = md.enrich_watchlist(entries)
+
+        built = captured["positions"][0]
+        assert built["symbol"] == "AAPL"
+        assert built["quantity"] == 0
+        assert built["owned"] is False
+        assert built["source"] == "watchlist"
+        assert out[0]["rsi"] == 55.0
+
+    def test_empty_list_returns_empty(self, monkeypatch):
+        import app.market_data as md
+        assert md.enrich_watchlist([]) == []

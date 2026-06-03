@@ -1893,4 +1893,30 @@ def enrich_positions(raw_portfolio: dict) -> list[dict]:
         total_computed += value or 0
     logger.info(f"[DIAG] TOTAL COMPUTED: {total_computed:.2f} {base_currency}")
 
+
+def enrich_watchlist(entries: list[dict]) -> list[dict]:
+    """Enrich watchlist entries through the same path as owned positions.
+
+    Each entry (isin, symbol, name, asset_type) becomes a position-like dict with
+    quantity 0, weight 0, owned=False, source='watchlist', then runs through
+    enrich_positions (batch yfinance history + fundamentals). Returns the enriched
+    dicts (RSI / perf / 52w / P-E / sector / current_price populated).
+    """
+    if not entries:
+        return []
+    positions = [
+        {
+            "isin": e.get("isin", ""),
+            "symbol": e.get("symbol", ""),
+            "name": e.get("name", ""),
+            "asset_type": e.get("asset_type", "STOCK"),
+            "quantity": 0,
+            "weight": 0,
+            "owned": False,
+            "source": "watchlist",
+        }
+        for e in entries
+    ]
+    return enrich_positions({"positions": positions})
+
     return enriched
