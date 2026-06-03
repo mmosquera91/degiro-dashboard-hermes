@@ -134,13 +134,17 @@ so the UI can mark them.
 
 New Pydantic request/response schemas in `schemas.py`.
 
-**Auth — deliberately UI-only.** These endpoints carry `verify_brok_token` + rate-limit like
-the other `/api/*` routes, and are reached only from the dashboard (browser carries both the
-`brokr_session` cookie and the bearer token), exactly like `/api/portfolio`. They are
-**intentionally NOT added** to the `check_session_cookie` exemption list (`main.py:560`).
-That whitelist is only for surfaces external agents call *without a browser session*
-(`hermes-context`, `rebalance-plan`, `indexa/*`); the watchlist reaches the agent via the
-Hermes *export*, not a direct API call, so exempting it would needlessly weaken auth.
+**Auth — read is agent-accessible, writes are UI-only.** All five endpoints carry
+`verify_brok_token` + rate-limit like the other `/api/*` routes.
+
+- `GET /api/watchlist` is **added to the `check_session_cookie` exemption list**
+  (`main.py:560`), alongside `hermes-context` / `rebalance-plan` / `indexa/*`. The agent
+  normally queries live data via API (bearer token, no browser session), so it can read
+  watchlist scores on demand — not only via the Hermes export.
+- The four mutating endpoints (`POST`, `DELETE`, `PATCH`, `POST .../resolve`) are
+  **NOT exempted** and stay UI-only (browser carries both the `brokr_session` cookie and the
+  bearer token, like `/api/portfolio`). The user curates the watchlist; the agent observes it
+  but does not mutate it. This keeps the bearer-token-accessible write surface minimal.
 
 ## UI (CSP-compliant — external `/static` JS only, no inline)
 
@@ -155,9 +159,10 @@ no Google Fonts).
 
 ## Hermes export
 
-Per the cross-cutting rule (the export is the product's AI reasoning surface),
-`context_builder.py` gains a watchlist section listing candidate new buys with their
-signals/scores, so the agent reasons about new positions alongside owned ones.
+Per the cross-cutting rule, `context_builder.py` gains a watchlist section listing candidate
+new buys with their signals/scores, so the agent reasons about them alongside owned positions
+in the static export. This complements the live `GET /api/watchlist` read (see Auth): the
+export gives baseline context, the API gives on-demand current scores.
 
 ## README
 
