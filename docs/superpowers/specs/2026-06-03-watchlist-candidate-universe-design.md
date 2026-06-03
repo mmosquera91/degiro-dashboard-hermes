@@ -24,6 +24,18 @@ top-candidates list and rebalancer panel, Hermes export, and README documentatio
   focused follow-up.
 - Any asset type other than ETF / STOCK.
 
+**Watchlist size cap:** the watchlist is bounded to **30 entries**. Enrichment downloads a
+batched 1y history per EU/US group; an unbounded watchlist would grow those batches and
+regress the steady-state refresh time. The `POST /api/watchlist` add flow rejects additions
+beyond the cap with a clear error. The cap also bounds the z-score distortion noted below.
+
+**Known limitation — shared-pool z-score distortion:** because watchlist candidates join the
+same ETF/STOCK z-score pool as owned holdings, adding names with a directional bias (e.g.
+several cheap value stocks) shifts the pool mean/σ and therefore nudges owned positions'
+normalized factor scores. This is inherent to the shared-pool choice (the price of
+apples-to-apples comparison) and is bounded by the 30-entry cap. Accepted, not mitigated
+further this phase.
+
 ## Decisions (resolved during brainstorming)
 
 | Decision | Choice | Rationale |
@@ -40,6 +52,16 @@ top-candidates list and rebalancer panel, Hermes export, and README documentatio
 
 Mirrors the `symbol_overrides.json` pattern: env-configurable path `WATCHLIST_PATH`
 (default `/data/watchlist.json`), loaded and saved under a lock.
+
+**Concurrency (sharper than `symbol_overrides`):** `symbol_overrides.json` is read-often and
+hand-edited — it has a load function but *no* save path. This feature *adds* a write path
+(add / remove / patch / resolve via the API), so writes must be safe against concurrent
+requests. Use a module-level `threading.Lock` (same primitive as `_symbol_overrides_lock`),
+and perform the **entire load-modify-write as one synchronous critical section inside the
+lock** — re-read the file, mutate, write back, all while holding the lock. The critical
+section is synchronous so it is atomic against the event loop; an `asyncio.Lock` is *not*
+needed and would not protect the sync file I/O. This prevents lost updates between
+simultaneous add/remove calls.
 
 ```json
 {
@@ -65,13 +87,18 @@ ongoing refreshes do not re-run ISIN resolution.
 
 On add of an ISIN:
 
-1. Reject if the ISIN is already owned (check current portfolio) or already on the watchlist.
-2. `_resolve_by_isin(isin)` (`market_data.py:274`) → yf ticker. If it returns empty
+1. Reject if the watchlist is already at the 30-entry cap.
+2. Reject if the ISIN is already owned (check current portfolio) or already on the watchlist.
+3. `_resolve_by_isin(isin)` (`market_data.py:274`) → yf ticker. If it returns empty
    (not found / rate-limited), reject with a clear, user-facing error.
-3. Fetch yfinance `quoteType` → `ETF` for `"ETF"`, else `STOCK`. Store as `asset_type`
+4. Fetch yfinance `quoteType` → `ETF` for `"ETF"`, else `STOCK`. Store as `asset_type`
    with `asset_type_source: "auto"`.
-4. Persist the entry. The UI shows the detected type with an override toggle, which sets
+5. Persist the entry. The UI shows the detected type with an override toggle, which sets
    `asset_type` and `asset_type_source: "manual"`.
+
+**Re-resolution:** because resolution is cached once at add-time, a later yfinance ticker
+remap would silently stale the entry. `POST /api/watchlist/{isin}/resolve` re-runs steps 3-4
+on demand, preserving a `manual` `asset_type` override. Manual fallback is delete + re-add.
 
 ## Enrichment
 
@@ -100,11 +127,20 @@ so the UI can mark them.
 ## API (mirrors existing `/api/*` auth + rate-limit pattern)
 
 - `GET /api/watchlist` → list of entries with enriched signals + scores.
-- `POST /api/watchlist` → add by ISIN (runs the add flow).
+- `POST /api/watchlist` → add by ISIN (runs the add flow; enforces the 30-entry cap).
 - `DELETE /api/watchlist/{isin}` → remove an entry.
 - `PATCH /api/watchlist/{isin}` → override `asset_type`.
+- `POST /api/watchlist/{isin}/resolve` → re-run resolution + classification.
 
 New Pydantic request/response schemas in `schemas.py`.
+
+**Auth — deliberately UI-only.** These endpoints carry `verify_brok_token` + rate-limit like
+the other `/api/*` routes, and are reached only from the dashboard (browser carries both the
+`brokr_session` cookie and the bearer token), exactly like `/api/portfolio`. They are
+**intentionally NOT added** to the `check_session_cookie` exemption list (`main.py:560`).
+That whitelist is only for surfaces external agents call *without a browser session*
+(`hermes-context`, `rebalance-plan`, `indexa/*`); the watchlist reaches the agent via the
+Hermes *export*, not a direct API call, so exempting it would needlessly weaken auth.
 
 ## UI (CSP-compliant — external `/static` JS only, no inline)
 
@@ -138,9 +174,10 @@ signals/scores, so the agent reasons about new positions alongside owned ones.
   weight normalization is unchanged when watchlist items are present in the pool;
   `is_buyable` gates apply to watchlist stocks (overbought stock blocked, ETF exempt).
 - **Store:** add / remove / dedup-vs-owned / dedup-vs-watchlist; manual `asset_type`
-  override persists across reload.
+  override persists across reload; concurrent add/remove under the lock does not lose
+  updates (load-modify-write is atomic); cap rejects the 31st add.
 - **Add flow:** unresolvable ISIN rejected cleanly; `quoteType` → `asset_type` mapping
-  (`"ETF"` → ETF, otherwise STOCK).
+  (`"ETF"` → ETF, otherwise STOCK); re-resolve preserves a manual override.
 
 ## Key code anchors
 
