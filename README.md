@@ -408,6 +408,8 @@ brokr/
 
 **Bloque O (2026-05-25)** — Benchmark TWR chain: portfolio vs S&P 500 now uses Time-Weighted Return instead of raw total_value indexing. Deposits/withdrawals no longer inflate returns. Snapshots store `total_invested` + `unrealized_pl_total`. `wrapt<2` pinned for degiro-connector compat.
 
+**Bloque P (2026-06-03)** — Watchlist / candidate universe: track non-owned ISINs scored in the same pool as holdings. Bug fixes: US/GB ISINs now resolve (listing currency derived from the ISIN country prefix instead of always EUR); enrichment no longer crashes on non-owned, zero-quantity entries (FX loop tolerates missing `unrealized_pl`/`current_value`); numeric watchlist columns aligned. Compose now bind-mounts the whole `./data` dir so `watchlist.json` and `symbol_overrides.json` survive container recreation — not just snapshots.
+
 ---
 
 *Built for long-term buy-and-hold investors. Not financial advice.*
