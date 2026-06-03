@@ -183,6 +183,31 @@
         </div>
       </details>
 
+      <details id="watchlist-panel" class="rebalance-panel">
+        <summary class="rebalance-summary">
+          <span class="rebalance-toggle-icon"><i data-lucide="chevron-right"></i></span>
+          <span>Watchlist — candidate new buys</span>
+        </summary>
+        <div class="rebalance-content">
+          <div class="rebalance-input-row">
+            <div class="rebalance-input-group">
+              <label for="watchlist-isin">Add by ISIN</label>
+              <input type="text" id="watchlist-isin" placeholder="e.g. US0378331005" autocomplete="off">
+            </div>
+            <button id="btn-watchlist-add" class="btn btn-primary">Add</button>
+          </div>
+          <div id="watchlist-error" class="rebalance-error hidden"></div>
+          <div id="watchlist-loading" class="rebalance-loading hidden">Loading…</div>
+          <div id="watchlist-empty" class="rebalance-empty">No watchlist entries yet.</div>
+          <table id="watchlist-table" class="watchlist-table hidden">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>BuyPr</th><th>RSI</th><th>52w</th><th></th></tr>
+            </thead>
+            <tbody id="watchlist-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+
       <!-- ALLOCATION BAR -->
       <section class="allocation-bar-row">
         <div class="allocation-bar-header">
@@ -540,5 +565,6 @@
   <div id="toast-container" aria-live="polite"></div>
 
   <script src="/static/app.js"></script>
+  <script src="/static/watchlist.js" defer></script>
 </body>
 </html>
