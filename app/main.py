@@ -745,6 +745,9 @@ async def get_portfolio():
 
             # Build summary
             portfolio = _build_portfolio_summary(positions, raw.get("cash_available", 0), raw)
+            portfolio["top_candidates"] = await asyncio.to_thread(
+                merge_watchlist_candidates, portfolio["positions"], portfolio["top_candidates"], 3
+            )
 
             # Compute health alerts from the portfolio summary data (defensive)
             try:
@@ -866,6 +869,9 @@ def _do_enrich_session():
         enriched = compute_portfolio_weights(enriched)
         enriched = compute_scores(enriched)
         summary = _build_portfolio_summary(enriched, cash, raw_portfolio)
+        summary["top_candidates"] = merge_watchlist_candidates(
+            summary["positions"], summary["top_candidates"], 3
+        )
         summary = _sanitize_floats(summary)
         _record_daily_valuation(summary["total_value_eur"])
         logger.info(f"[DIAG] DEGIRO REPORTED TOTAL: {summary.get('total_value_eur', 0):.2f} EUR")
@@ -1164,6 +1170,32 @@ async def get_rebalance_plan(amount: float, total_portfolio_eur: float | None = 
 
 
 # ─── Watchlist ───
+
+
+def merge_watchlist_candidates(owned_positions: list[dict], top_candidates: dict, n: int = 3) -> dict:
+    """Score the watchlist against the owned pool and merge its names into top_candidates.
+
+    Watchlist candidates are tagged owned=False and re-sorted with owned candidates by
+    buy_priority_score; each pool (etfs/stocks) is trimmed to top n. Returns a new dict.
+    Falls back to the original top_candidates if the watchlist is empty or scoring fails.
+    """
+    entries = watchlist_store.list_entries()
+    if not entries:
+        return top_candidates
+    try:
+        scored = score_universe(owned_positions, entries)
+    except Exception as e:
+        logger.warning("Watchlist candidate scoring failed, leaving owned candidates: %s", e)
+        return top_candidates
+    watch_cands = get_top_candidates(scored, n=len(scored))  # all watchlist, tagged owned=False
+    merged = {"etfs": list(top_candidates.get("etfs", [])),
+              "stocks": list(top_candidates.get("stocks", []))}
+    for pool in ("etfs", "stocks"):
+        combined = merged[pool] + watch_cands.get(pool, [])
+        combined = [c for c in combined if c.get("buy_priority_score") is not None]
+        combined.sort(key=lambda c: c["buy_priority_score"], reverse=True)
+        merged[pool] = combined[:n]
+    return merged
 
 
 def _current_owned_positions() -> list[dict]:

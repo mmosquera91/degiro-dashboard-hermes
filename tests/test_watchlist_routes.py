@@ -137,3 +137,30 @@ class TestWatchlistResolve:
         with patch("app.main.resolve_and_classify", side_effect=ValueError("Could not resolve")):
             r = client.post("/api/watchlist/US0378331005/resolve", headers=_bearer())
         assert r.status_code == 400
+
+
+class TestPortfolioCandidateMerge:
+    def test_watchlist_candidates_tagged_in_portfolio(self, client):
+        _set_cookie(client)
+        # Add a watchlist name to the store so merge has something to merge.
+        with patch("app.main.resolve_and_classify",
+                   return_value={"symbol": "NVDA", "name": "NVIDIA", "asset_type": "STOCK"}):
+            client.post("/api/watchlist", json={"isin": "US67066G1040"}, headers=_bearer())
+
+        import app.main as m
+        fake_scored = [{"isin": "US67066G1040", "symbol": "NVDA", "name": "NVIDIA",
+                        "asset_type": "STOCK", "owned": False, "buy_priority_score": 0.8,
+                        "rsi": 40, "distance_from_52w_high_pct": -10, "momentum_score": 5, "weight": 0}]
+        with patch("app.main.score_universe", return_value=fake_scored):
+            owned = [{"isin": "X", "asset_type": "STOCK", "buy_priority_score": 0.5,
+                      "name": "X", "symbol": "X", "owned": True, "weight": 5}]
+            cands = m.merge_watchlist_candidates(owned, {"etfs": [], "stocks": []}, n=3)
+        nvda = [c for c in cands["stocks"] if c["isin"] == "US67066G1040"]
+        assert nvda and nvda[0]["owned"] is False
+
+    def test_merge_with_empty_watchlist_is_noop(self, client):
+        import app.main as m
+        original = {"etfs": [{"isin": "E1"}], "stocks": [{"isin": "S1"}]}
+        # No entries in the store → merge returns top_candidates unchanged.
+        out = m.merge_watchlist_candidates([], original, n=3)
+        assert out == original
