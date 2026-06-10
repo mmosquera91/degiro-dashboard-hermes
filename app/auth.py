@@ -19,12 +19,13 @@ def _is_cookie_secure() -> bool:
     """
     debug = os.getenv("DEBUG", "").lower()
     cookie_secure = os.getenv("COOKIE_SECURE", "").lower()
-    # Enable secure by default (production), disable if DEBUG=1/true or COOKIE_SECURE=false
+    # Default: OFF — Docker deployments typically run over plain HTTP.
+    # Enable explicitly with COOKIE_SECURE=true when behind HTTPS.
+    if cookie_secure in ("1", "true", "yes"):
+        return True
     if debug in ("1", "true", "yes"):
         return False
-    if cookie_secure == "false":
-        return False
-    return True
+    return False
 
 
 def _get_secret() -> tuple[str, str]:
