@@ -90,9 +90,20 @@ class TestMakeSessionCookie:
         _, kwargs = auth_module.make_session_cookie()
         assert kwargs.get("path") == "/"
 
-    def test_kwargs_contains_secure_when_not_debug(self, auth_module, monkeypatch):
+    def test_kwargs_no_secure_by_default(self, auth_module, monkeypatch):
+        """Default is Secure=False — HTTP deployments must work out of the box."""
         monkeypatch.setenv("DEBUG", "")
         monkeypatch.setenv("COOKIE_SECURE", "")
+        import importlib
+        import app.auth as auth
+        importlib.reload(auth)
+        _, kwargs = auth.make_session_cookie()
+        assert "secure" not in kwargs
+
+    def test_kwargs_contains_secure_when_opt_in(self, auth_module, monkeypatch):
+        """COOKIE_SECURE=true explicitly enables the Secure flag (HTTPS)."""
+        monkeypatch.setenv("DEBUG", "")
+        monkeypatch.setenv("COOKIE_SECURE", "true")
         import importlib
         import app.auth as auth
         importlib.reload(auth)
@@ -132,9 +143,20 @@ class TestClearSessionCookie:
         kwargs = auth_module.clear_session_cookie()
         assert kwargs.get("samesite") == "Lax"
 
-    def test_returns_secure_true_in_production(self, auth_module, monkeypatch):
+    def test_no_secure_by_default(self, auth_module, monkeypatch):
+        """Default is Secure=False — HTTP deployments must work out of the box."""
         monkeypatch.setenv("DEBUG", "")
         monkeypatch.setenv("COOKIE_SECURE", "")
+        import importlib
+        import app.auth as auth
+        importlib.reload(auth)
+        kwargs = auth.clear_session_cookie()
+        assert "secure" not in kwargs
+
+    def test_secure_true_when_opt_in(self, auth_module, monkeypatch):
+        """COOKIE_SECURE=true explicitly enables the Secure flag (HTTPS)."""
+        monkeypatch.setenv("DEBUG", "")
+        monkeypatch.setenv("COOKIE_SECURE", "true")
         import importlib
         import app.auth as auth
         importlib.reload(auth)
