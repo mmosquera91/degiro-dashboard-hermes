@@ -643,11 +643,30 @@ def _resolve_yf_symbol(
                 t = yf.Ticker(candidate)
                 hist = t.history(period="5d")
                 if not hist.empty:
-                    logger.debug(
-                        "Resolved %s via exchangeId %s → %s",
-                        symbol, exchange_id, candidate,
-                    )
-                    return _cache_resolution(candidate, "exchange_id", suffix, "")
+                    # Guard: verify ISIN matches when available. Different
+                    # securities can share the same exchange suffix (e.g.
+                    # H4ZY.DE is HSBC MSCI World, not HSBC MSCI China).
+                    if isin:
+                        info_isin = (t.info or {}).get("isin", "")
+                        if info_isin and info_isin.strip().upper() != isin.strip().upper():
+                            logger.debug(
+                                "exchangeId candidate %s ISIN mismatch: "
+                                "expected %s, got %s — skipping",
+                                candidate, isin, info_isin,
+                            )
+                            # Don't cache; fall through to ISIN search
+                        else:
+                            logger.debug(
+                                "Resolved %s via exchangeId %s → %s",
+                                symbol, exchange_id, candidate,
+                            )
+                            return _cache_resolution(candidate, "exchange_id", suffix, "")
+                    else:
+                        logger.debug(
+                            "Resolved %s via exchangeId %s → %s",
+                            symbol, exchange_id, candidate,
+                        )
+                        return _cache_resolution(candidate, "exchange_id", suffix, "")
             except YFTickerMissingError as e:
                 if "404" in str(e) or "Not Found" in str(e):
                     return _evict_and_return("")
