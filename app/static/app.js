@@ -64,7 +64,13 @@
       headers: { "Authorization": `Bearer ${_authToken}`, ...(options.headers || {}) },
       credentials: "same-origin",
     });
-    _bounceToLoginIfUnauthenticated(res);
+    // Only redirect on an actual session-expired middleware redirect (HTTP 303 → /login).
+    // Do NOT redirect on bare 401s — those come from API endpoints (e.g. "no DeGiro
+    // session yet") and must be handled by the individual callers.
+    if (res.redirected && /\/login(\?|$)/.test(res.url)) {
+      window.location.href = "/login";
+      return res;
+    }
     return res;
   }
 
