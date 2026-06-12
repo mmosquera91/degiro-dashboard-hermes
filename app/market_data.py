@@ -1613,6 +1613,11 @@ def enrich_position(position: dict, history_batch: dict | None = None) -> dict:
                 if ticker_currency == "GBp":
                     yf_price = yf_price / 100.0
                     yf_currency = "GBP"
+                    # 52w high/low come from the same history batch (pence) — convert too
+                    if wk52_high is not None:
+                        wk52_high = wk52_high / 100.0
+                    if wk52_low is not None:
+                        wk52_low = wk52_low / 100.0
                 _price_obtained = True
                 position["current_price"] = round(yf_price, 4)
                 position["current_value"] = round(yf_price * position["quantity"], 2)

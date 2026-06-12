@@ -9,8 +9,8 @@
   let portfolioData = null;
   let benchmarkData = null;
   let currentFilter = "all";
-  let sortKey = "current_value_eur";
-  let sortDir = -1; // -1 = descending
+  let sortKey = "name";
+  let sortDir = 1; // 1 = ascending
   let charts = {};
   let lastSuccessfulRefresh = null;
   let privacyMode = false;
@@ -1298,8 +1298,8 @@
         <td>${p.asset_type || "—"}</td>
         <td>${p.avg_buy_price != null ? p.avg_buy_price.toFixed(2) : "—"}</td>
         <td>${p.rsi != null ? p.rsi.toFixed(0) : "—"}</td>
-        <td>${p.momentum_score != null ? p.momentum_score.toFixed(2) : "—"}</td>
-        <td>${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
+        <td class="${getMomClass(p.momentum_score)}">${p.momentum_score != null ? p.momentum_score.toFixed(2) : "—"}</td>
+        <td class="${getBpClass(p.buy_priority_score)}">${p.buy_priority_score != null ? p.buy_priority_score.toFixed(2) : "—"}</td>
       `;
 
       tr.addEventListener("click", () => toggleDetail(p));
@@ -2128,6 +2128,21 @@ function renderHealthAlerts() {
   function getPlClass(val) {
     if (val == null) return "";
     return val >= 0 ? "pl-positive" : "pl-negative";
+  }
+
+  function getMomClass(val) {
+    if (val == null) return "";
+    if (val > 30)  return "mom-strong-pos";
+    if (val > 0)   return "mom-pos";
+    if (val > -25) return "mom-neg";
+    return "mom-strong-neg";
+  }
+
+  function getBpClass(val) {
+    if (val == null) return "";
+    if (val >= 0.6) return "bp-high";
+    if (val >= 0.4) return "bp-mid";
+    return "bp-low";
   }
 
   function esc(str) {

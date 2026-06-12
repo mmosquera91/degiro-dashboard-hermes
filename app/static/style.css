@@ -670,9 +670,20 @@ body.view-degiro .indexa-only { display: none !important; }
 .detail-item label { display: block; font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; }
 .detail-item span { color: var(--text); font-weight: 500; }
 
-/* P&L coloring — td.pl-* needs same specificity as .positions-table td to win */
+/* P&L coloring — td.* needs same specificity as .positions-table td to win */
 .pl-positive, td.pl-positive { color: var(--green); }
 .pl-negative, td.pl-negative { color: var(--red); }
+
+/* Momentum: 4-tier intensity scale anchored to the quality-gate boundary (−25) */
+.mom-strong-pos, td.mom-strong-pos { color: var(--green); font-weight: 600; }
+.mom-pos,        td.mom-pos        { color: var(--green); opacity: 0.65; }
+.mom-neg,        td.mom-neg        { color: var(--red);   opacity: 0.65; }
+.mom-strong-neg, td.mom-strong-neg { color: var(--red);   font-weight: 600; }
+
+/* Buy Priority: 0–1 scale — green ≥0.6, amber 0.4–0.6, red <0.4 */
+.bp-high, td.bp-high { color: var(--green); }
+.bp-mid,  td.bp-mid  { color: var(--gold); }
+.bp-low,  td.bp-low  { color: var(--red); }
 .pl-bg-positive { background: var(--green-dim); }
 .pl-bg-negative { background: var(--red-dim); }
 
