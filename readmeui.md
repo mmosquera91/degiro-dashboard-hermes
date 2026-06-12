@@ -45,7 +45,7 @@ Pantalla que se muestra cuando no hay portfolio cargado aún (primera vez o sesi
 ## Vista DeGiro (`#degiro-view`)
 
 ### KPI Cards — Resumen financiero
-Seis tarjetas en la parte superior que dan un vistazo rápido del estado de la cartera:
+Cinco tarjetas en la parte superior que dan un vistazo rápido del estado de la cartera:
 
 | Tarjeta | Qué muestra |
 |---------|-------------|
@@ -53,7 +53,6 @@ Seis tarjetas en la parte superior que dan un vistazo rápido del estado de la c
 | **Invested** | Valor de las posiciones abiertas (sin cash). Subtexto: número de posiciones. |
 | **Cash** | Efectivo disponible en cuenta. Si el cash cae por debajo del 1% del portfolio, la tarjeta se resalta en dorado como aviso. |
 | **Unrealized P&L** | Ganancia/pérdida no realizada total vs coste de adquisición. Badge con porcentaje. |
-| **Realized P&L** | Ganancia/pérdida realizada (derivada: P&L total − no realizado). Representa trades cerrados. |
 | **Positions** | Número total de posiciones. Subtexto: desglose `N ETFs · M stocks`. |
 
 ### Barra de asignación ETF / Stock
@@ -80,13 +79,15 @@ Tres gráficos que describen la estructura de la cartera. Solo se re-renderizan 
 ### Tabla de posiciones
 Tabla central del dashboard. Encima tiene tres **filter tabs**: `All`, `ETF`, `STOCK`. Las cabeceras de columna son clicables para ordenar (toggle asc/desc).
 
+La tabla tiene **scroll vertical interno** con altura máxima (~520px escritorio / 420px móvil) — los encabezados quedan siempre visibles aunque la lista sea larga.
+
 Columnas visibles:
 
 | Columna | Descripción |
 |---------|-------------|
 | Name | Nombre del producto. Icono de alerta si el enriquecimiento falló o si falta el tipo de cambio FX. |
 | Value (EUR) | Valor actual de la posición en EUR. |
-| P&L % | Rentabilidad no realizada vs precio medio de compra. |
+| P&L % | Rentabilidad no realizada vs precio medio de compra. **Verde** si positivo, **rojo** si negativo. |
 | Price | Precio actual en la moneda original. |
 | Qty | Cantidad de títulos. |
 | Weight | Peso de la posición en el portfolio (%). |
@@ -108,11 +109,20 @@ Dos listas de 5 posiciones: las de **mayor rentabilidad** y las de **peor rentab
 Gráfico de líneas que compara la evolución del portfolio frente al S&P 500, ambos indexados a 100 desde el primer snapshot. El portfolio usa **Time-Weighted Return (TWR)** para neutralizar el efecto de depósitos y retiradas. Si solo hay un snapshot, muestra una tabla de comparación en lugar del gráfico. Si no hay snapshots, muestra un estado vacío.
 
 ### Attribution Table
-Tabla que desglosa cuánto ha contribuido cada posición al retorno total del portfolio:
-- **Absolute contribution**: `position_return × weight`
-- **Relative contribution**: `(position_return − benchmark_return) × weight`
+Tabla que desglosa cuánto ha contribuido cada posición al retorno total del portfolio. Aparece bajo el título "Attribution Analysis (click to expand)".
 
-Requiere al menos dos snapshots y datos de benchmark para calcularse.
+Al expandir muestra una **leyenda fija** que explica cada métrica antes de la tabla:
+
+| Columna | Fórmula | Interpretación |
+|---------|---------|----------------|
+| **Absolute** | `retorno × peso` | Cuánto sumó o restó al rendimiento total de la cartera. Positivo = aportó, negativo = drenó. |
+| **Relative vs S&P 500** | `(retorno − retorno_S&P500) × peso` | Cuánto aportó en exceso del benchmark. Puede ser negativo aunque la posición haya ganado, si rindió menos que el índice. |
+
+Los encabezados de columna tienen tooltip con la fórmula exacta al hacer hover.
+
+Si los valores de Absolute y Relative son muy parecidos, indica que el benchmark rindió cerca de 0% en ese período (diferencia = `benchmark × peso`).
+
+Requiere snapshots guardados con datos de benchmark para calcularse. Si no hay datos, muestra "No attribution data yet".
 
 ### Health Alerts
 Lista de alertas automáticas calculadas en cada enriquecimiento (por `health_checks.py`). Cada alerta tiene tipo, mensaje y severidad (`info` / `warn` / `critical`). Si no hay alertas, muestra "All systems healthy".

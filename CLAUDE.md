@@ -149,6 +149,14 @@ yfinance returns LSE prices in pence. `market_data.py` detects `currency=GBp` an
 
 ISIN → Yahoo ticker resolution uses yfinance Search + suffix scanning. Results are cached to disk (`symbol_overrides.json`). US/GB ISINs derive listing currency from the ISIN country prefix (not always EUR). Overrides can be force-reloaded via `POST /api/admin/reload-overrides`.
 
+### CSS specificity — P&L coloring
+
+`.positions-table td { color: var(--text) }` has specificity `0,1,1`. Plain `.pl-positive` / `.pl-negative` have `0,1,0` and lose. The rules in `style.css` are written as `.pl-positive, td.pl-positive` so the `td.` variant wins on the tie. If you add new colored-cell classes inside a table, follow the same pattern.
+
+### Sticky table headers
+
+`position: sticky; top: 0` on `<th>` only works if the scroll container is the element with `overflow-y: auto` **and** a constrained height. `.table-wrap` uses `max-height` + `overflow-y: auto` for this reason. Removing `max-height` or adding `overflow: visible` to any ancestor between `<th>` and `.table-wrap` will silently break the sticky behavior.
+
 ---
 
 ## Environment variables
