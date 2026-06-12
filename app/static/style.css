@@ -375,7 +375,7 @@ body.view-degiro .indexa-only { display: none !important; }
 /* ─── KPI GRID (Row 1) ─── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--space-3, 12px);
   margin-bottom: var(--space-3, 12px);
 }
@@ -1027,7 +1027,7 @@ body.view-degiro .indexa-only { display: none !important; }
 
 /* ─── RESPONSIVE — 1024px wide tablet ─── */
 @media (max-width: 1024px) {
-  .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
   .indexa-kpi-grid { grid-template-columns: repeat(4, 1fr); }
 }
 
