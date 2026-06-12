@@ -898,7 +898,7 @@
         </div>
         <div class="attribution-legend-item">
           <span class="attribution-legend-label">Relative</span>
-          <span class="attribution-legend-desc">Cuánto aportó <em>en exceso</em> del benchmark (S&amp;P 500), ponderado por peso. Negativo aunque la posición gane si rindió menos que el índice.</span>
+          <span class="attribution-legend-desc">Cuánto aportó <em>en exceso</em> del benchmark, ponderado por peso. Benchmark = retorno mensual promedio del S&amp;P 500 (6 años) × meses transcurridos en el año. Negativo si la posición rindió menos que ese promedio histórico.</span>
         </div>
       </div>
       <table class="attribution-table">
@@ -907,7 +907,7 @@
             <th class="col-name">Position</th>
             <th>Symbol</th>
             <th title="retorno_posición × peso — cuánto sumó o restó al rendimiento total">Absolute ↕</th>
-            <th title="(retorno_posición − retorno_S&P500) × peso — exceso sobre benchmark">Relative vs S&P 500 ↕</th>
+            <th title="(perf_ytd_posición − ref_ytd_sp500) × peso — ref_ytd = promedio mensual S&P500 (6 años) × meses transcurridos">Relative vs S&P 500 ↕</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>

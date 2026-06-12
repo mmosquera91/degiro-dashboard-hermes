@@ -149,9 +149,13 @@ yfinance returns LSE prices in pence. `market_data.py` detects `currency=GBp` an
 
 ISIN → Yahoo ticker resolution uses yfinance Search + suffix scanning. Results are cached to disk (`symbol_overrides.json`). US/GB ISINs derive listing currency from the ISIN country prefix (not always EUR). Overrides can be force-reloaded via `POST /api/admin/reload-overrides`.
 
-### CSS specificity — P&L coloring
+### CSS specificity — colored table cells
 
-`.positions-table td { color: var(--text) }` has specificity `0,1,1`. Plain `.pl-positive` / `.pl-negative` have `0,1,0` and lose. The rules in `style.css` are written as `.pl-positive, td.pl-positive` so the `td.` variant wins on the tie. If you add new colored-cell classes inside a table, follow the same pattern.
+`.positions-table td { color: var(--text) }` has specificity `0,1,1`. Plain `.pl-positive` / `.pl-negative` / `.mom-*` / `.bp-*` have `0,1,0` and lose. All colored-cell rules in `style.css` are written as `.classname, td.classname` so the `td.` variant wins the tie. Follow this pattern when adding new colored-cell classes inside any table.
+
+### Attribution benchmark reference
+
+`relative_contribution = (perf_ytd − ref_ytd) × weight`. The `ref_ytd` comes from `fetch_sp500_ytd_reference()` in `snapshots.py`, **not** from snapshot data. It computes `avg_monthly_return(^GSPC, 6y) × months_elapsed`. Cached 24h in `_sp500_avg_cache`. Do not replace it with snapshot-derived `benchmark_return_pct` — that value is near-zero when there is only one snapshot.
 
 ### Sticky table headers
 

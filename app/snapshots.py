@@ -266,6 +266,63 @@ def fetch_benchmark_series(start_date: str, end_date: str) -> list[dict]:
     return result
 
 
+_sp500_avg_cache: dict = {"value": None, "ts": 0.0}
+_SP500_AVG_TTL = 86400  # 24 hours
+
+
+def fetch_sp500_ytd_reference(years: int = 6) -> float:
+    """Return an S&P 500 YTD reference return derived from 6-year monthly history.
+
+    Calculates the average monthly return over `years` years of real data,
+    then scales it to the number of months elapsed in the current year.
+    This gives a historically-grounded expected YTD figure, comparable to
+    each position's perf_ytd when used in attribution.
+
+    Returns 0.0 on failure (safe fallback — attribution still runs, Relative
+    will equal Absolute rather than being wrong).
+    """
+    import time as _time
+
+    global _sp500_avg_cache
+    if _sp500_avg_cache["value"] is not None and \
+            _time.time() - _sp500_avg_cache["ts"] < _SP500_AVG_TTL:
+        return _sp500_avg_cache["value"]
+
+    try:
+        from_date = (datetime.now() - timedelta(days=years * 365)).strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
+        _yf_throttle()
+        data = yf.download(
+            BENCHMARK_TICKER, start=from_date, end=today,
+            interval="1mo", progress=False, timeout=10,
+        )
+        if data.empty:
+            logger.warning("fetch_sp500_ytd_reference: no data returned")
+            return 0.0
+
+        closes = data["Close"].squeeze().dropna()
+        if len(closes) < 2:
+            return 0.0
+
+        monthly_returns = closes.pct_change().dropna() * 100  # percent
+        avg_monthly = float(monthly_returns.mean())
+
+        months_elapsed = datetime.now().month  # 1–12
+        ytd_reference = round(avg_monthly * months_elapsed, 4)
+
+        _sp500_avg_cache["value"] = ytd_reference
+        _sp500_avg_cache["ts"] = _time.time()
+        logger.info(
+            "S&P 500 avg monthly return (%.0fy): %.4f%% → YTD reference (%d months): %.4f%%",
+            years, avg_monthly, months_elapsed, ytd_reference,
+        )
+        return ytd_reference
+
+    except Exception as e:
+        logger.warning("fetch_sp500_ytd_reference failed: %s", e)
+        return 0.0
+
+
 def compute_attribution(positions: list[dict], benchmark_return: float) -> list[dict]:
     """Compute attribution for each position relative to benchmark.
 

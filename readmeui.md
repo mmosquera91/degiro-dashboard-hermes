@@ -79,23 +79,23 @@ Tres gráficos que describen la estructura de la cartera. Solo se re-renderizan 
 ### Tabla de posiciones
 Tabla central del dashboard. Encima tiene tres **filter tabs**: `All`, `ETF`, `STOCK`. Las cabeceras de columna son clicables para ordenar (toggle asc/desc).
 
-La tabla tiene **scroll vertical interno** con altura máxima (~520px escritorio / 420px móvil) — los encabezados quedan siempre visibles aunque la lista sea larga.
+La tabla tiene **scroll vertical interno** con altura máxima (~520px escritorio / 420px móvil) — los encabezados quedan siempre visibles aunque la lista sea larga. Ordenada por nombre A→Z por defecto; clic en encabezado alterna asc/desc.
 
 Columnas visibles:
 
-| Columna | Descripción |
-|---------|-------------|
-| Name | Nombre del producto. Icono de alerta si el enriquecimiento falló o si falta el tipo de cambio FX. |
-| Value (EUR) | Valor actual de la posición en EUR. |
-| P&L % | Rentabilidad no realizada vs precio medio de compra. **Verde** si positivo, **rojo** si negativo. |
-| Price | Precio actual en la moneda original. |
-| Qty | Cantidad de títulos. |
-| Weight | Peso de la posición en el portfolio (%). |
-| Type | ETF o STOCK. |
-| Avg Buy | Precio medio de compra. |
-| RSI | RSI de 14 periodos. |
-| Momentum | Score de momentum (0.20×30d + 0.30×90d + 0.50×1Y). |
-| Buy Priority | Score de prioridad de compra (0–1, solo si pasa los quality gates). |
+| Columna | Descripción | Color |
+|---------|-------------|-------|
+| Name | Nombre del producto. Icono de alerta si enriquecimiento falló o falta FX. | — |
+| Value (EUR) | Valor actual de la posición en EUR. | — |
+| P&L % | Rentabilidad no realizada vs precio medio de compra. | Verde / Rojo |
+| Price | Precio actual en la moneda original. | — |
+| Qty | Cantidad de títulos. | — |
+| Weight | Peso de la posición en el portfolio (%). | — |
+| Type | ETF o STOCK. | — |
+| Avg Buy | Precio medio de compra. | — |
+| RSI | RSI de 14 periodos. | — |
+| Momentum | Score `0.20×30d + 0.30×90d + 0.50×1Y`. | Verde fuerte (>30) / Verde suave (0–30) / Rojo suave (−25–0) / Rojo fuerte (<−25, quality gate) |
+| Buy Priority | Score 0–1, `null` si falla quality gates. | Verde (≥0.6) / Ámbar (0.4–0.6) / Rojo (<0.4) |
 
 **Fila de detalle** (expandible al hacer clic en una fila): muestra ISIN, divisa, sector, 52w high/low, distancia al 52w high, rendimientos a 30d/90d/YTD/1Y, P/E ratio, value score, y la razón de bloqueo si `buy_priority_score` es null.
 
@@ -115,14 +115,18 @@ Al expandir muestra una **leyenda fija** que explica cada métrica antes de la t
 
 | Columna | Fórmula | Interpretación |
 |---------|---------|----------------|
-| **Absolute** | `retorno × peso` | Cuánto sumó o restó al rendimiento total de la cartera. Positivo = aportó, negativo = drenó. |
-| **Relative vs S&P 500** | `(retorno − retorno_S&P500) × peso` | Cuánto aportó en exceso del benchmark. Puede ser negativo aunque la posición haya ganado, si rindió menos que el índice. |
+| **Absolute** | `perf_ytd × peso` | Cuánto sumó o restó al rendimiento total de la cartera este año. Positivo = aportó, negativo = drenó. |
+| **Relative vs S&P 500** | `(perf_ytd − ref_ytd) × peso` | Cuánto aportó en exceso de la referencia histórica del S&P 500. Positivo = batió al mercado históricamente. |
 
-Los encabezados de columna tienen tooltip con la fórmula exacta al hacer hover.
+**Cómo se calcula `ref_ytd`** (benchmark de referencia):
+```
+ref_ytd = promedio_mensual(^GSPC, 6 años) × meses_transcurridos_en_el_año
+```
+No depende de los snapshots del usuario — usa datos reales de mercado. Se cachea 24 horas.
 
-Si los valores de Absolute y Relative son muy parecidos, indica que el benchmark rindió cerca de 0% en ese período (diferencia = `benchmark × peso`).
+Los encabezados de columna tienen tooltip con la fórmula al hacer hover.
 
-Requiere snapshots guardados con datos de benchmark para calcularse. Si no hay datos, muestra "No attribution data yet".
+Requiere posiciones enriquecidas con `perf_ytd`. Si no hay datos, muestra "No attribution data yet".
 
 ### Health Alerts
 Lista de alertas automáticas calculadas en cada enriquecimiento (por `health_checks.py`). Cada alerta tiene tipo, mensaje y severidad (`info` / `warn` / `critical`). Si no hay alertas, muestra "All systems healthy".

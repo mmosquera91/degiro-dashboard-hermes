@@ -137,9 +137,15 @@ If a pool has fewer than 4 positions, the ranking is not meaningful — all posi
 
 **Attribution** — how much each position contributed to portfolio returns:
 - `absolute_contribution = position_return × weight` — how much the position added or subtracted from total return
-- `relative_contribution = (position_return − benchmark_return) × weight` — excess contribution vs S&P 500; negative even if the position gained if it underperformed the index
+- `relative_contribution = (position_return − benchmark_return) × weight` — excess contribution vs a historically-grounded S&P 500 reference
 
-If both values are nearly identical, it means `benchmark_return ≈ 0` for that period (the difference equals `benchmark × weight`).
+The benchmark reference is **not** derived from snapshots. It is computed as:
+
+```
+ref_ytd = avg_monthly_return(^GSPC, 6 years) × months_elapsed_this_year
+```
+
+This gives a fair YTD comparison: a position with positive relative contribution outperformed what the S&P 500 historically delivers in the same number of months. Cached 24 hours.
 
 **Benchmark** — S&P 500 (`^GSPC`), indexed to 100 at the date of your first snapshot. Portfolio line uses Time-Weighted Return (TWR) so deposits/withdrawals don't inflate returns. Each snapshot records `total_invested`, `unrealized_pl_total`, and `benchmark_return_pct`.
 
@@ -412,7 +418,7 @@ brokr/
 
 **Bloque P (2026-06-03)** — Watchlist / candidate universe: track non-owned ISINs scored in the same pool as holdings. Bug fixes: US/GB ISINs now resolve (listing currency derived from the ISIN country prefix instead of always EUR); enrichment no longer crashes on non-owned, zero-quantity entries (FX loop tolerates missing `unrealized_pl`/`current_value`); numeric watchlist columns aligned. Compose now bind-mounts the whole `./data` dir so `watchlist.json` and `symbol_overrides.json` survive container recreation — not just snapshots.
 
-**Bloque Q (2026-06-12)** — UI polish: positions table now scrolls internally (sticky headers always visible on long lists); P&L% column colored green/red; Attribution Analysis gets a persistent legend explaining Absolute vs Relative contributions in plain language, with formula tooltips on column headers. KPI grid reduced from 6 to 5 cards (Realized P&L removed). CSS specificity fix for `td.pl-positive/pl-negative` overriding `.positions-table td` color.
+**Bloque Q (2026-06-12)** — UI polish: positions table scrolls internally (sticky headers); P&L% column green/red; Momentum 4-tier color scale anchored to quality-gate boundary (−25); Buy Priority amber/green/red scale; default sort by name A→Z. Attribution Relative column now uses a 6-year S&P 500 monthly average YTD reference instead of snapshot-derived value (`fetch_sp500_ytd_reference`). KPI grid reduced from 6 to 5 cards. CSS specificity fix for `td.pl-*` color classes. Docker dev compose fixed to mount `/opt/degiro_dashboard/data` (was `./data`).
 
 ---
 

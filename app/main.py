@@ -55,7 +55,7 @@ from .universe import score_universe
 from . import watchlist_store
 from .context_builder import build_hermes_context
 from .health_checks import compute_health_alerts
-from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, SNAPSHOT_DIR
+from .snapshots import save_snapshot, load_snapshots, load_latest_snapshot, fetch_benchmark_series, compute_attribution, fetch_sp500_ytd_reference, SNAPSHOT_DIR
 from .rate_limiter import check_rate_limit
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -1410,8 +1410,8 @@ async def get_benchmark():
             "message": "No portfolio loaded",
         }
 
-    # Compute attribution using current benchmark return (from last snapshot)
-    latest_benchmark_return = snapshots[-1].get("benchmark_return_pct", 0) if snapshots else 0
+    # Compute attribution using S&P 500 YTD reference derived from 6-year monthly average
+    latest_benchmark_return = fetch_sp500_ytd_reference(years=6)
     attribution = compute_attribution(portfolio.get("positions", []), latest_benchmark_return)
 
     # Populate cache (series + attribution only; snapshots always served fresh)

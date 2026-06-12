@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from .snapshots import load_snapshots, fetch_benchmark_series, compute_attribution
+from .snapshots import load_snapshots, fetch_benchmark_series, compute_attribution, fetch_sp500_ytd_reference
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +68,10 @@ def build_hermes_context(portfolio: dict) -> dict:
             "latest_benchmark_return_pct": latest_benchmark_return_pct,
         }
 
-    # Compute attribution if portfolio is available
+    # Compute attribution using S&P 500 YTD reference derived from 6-year monthly average
     attribution = []
-    if positions and snapshots:
-        latest_benchmark_return = snapshots[-1].get("benchmark_return_pct", 0)
+    if positions:
+        latest_benchmark_return = fetch_sp500_ytd_reference(years=6)
         attribution = compute_attribution(positions, latest_benchmark_return)
 
     json_context["benchmark"] = benchmark_data
