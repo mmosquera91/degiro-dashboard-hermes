@@ -891,21 +891,27 @@
     }).join("");
 
     container.innerHTML = `
+      <div class="attribution-legend">
+        <div class="attribution-legend-item">
+          <span class="attribution-legend-label">Absolute</span>
+          <span class="attribution-legend-desc">Cuánto aportó esta posición al rendimiento total de la cartera. <em>retorno × peso</em>. Positivo = sumó, negativo = restó.</span>
+        </div>
+        <div class="attribution-legend-item">
+          <span class="attribution-legend-label">Relative</span>
+          <span class="attribution-legend-desc">Cuánto aportó <em>en exceso</em> del benchmark (S&amp;P 500), ponderado por peso. Negativo aunque la posición gane si rindió menos que el índice.</span>
+        </div>
+      </div>
       <table class="attribution-table">
         <thead>
           <tr>
             <th class="col-name">Position</th>
             <th>Symbol</th>
-            <th>Absolute Contribution</th>
-            <th>Relative Contribution</th>
+            <th title="retorno_posición × peso — cuánto sumó o restó al rendimiento total">Absolute ↕</th>
+            <th title="(retorno_posición − retorno_S&P500) × peso — exceso sobre benchmark">Relative vs S&P 500 ↕</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="attribution-note">
-        <strong>Absolute:</strong> position_return × weight |
-        <strong>Relative:</strong> (position_return − benchmark_return) × weight × direction
-      </p>
     `;
   }
 
