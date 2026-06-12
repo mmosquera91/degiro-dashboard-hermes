@@ -351,6 +351,27 @@ body.view-degiro .indexa-only { display: none !important; }
   color: var(--red);
 }
 
+.hhi-legend {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.hhi-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.hhi-dot.diversified  { background: var(--green); }
+.hhi-dot.concentrated { background: var(--gold); }
+.hhi-dot.high-risk    { background: var(--red); }
+
 /* ─── KPI GRID (Row 1) ─── */
 .kpi-grid {
   display: grid;
@@ -1510,6 +1531,10 @@ body.privacy-mode .private-value:active {
   background: rgba(239,68,68,0.12) !important;
   color: #ef4444 !important;
 }
+
+.hhi-dot.diversified  { background: #22c55e; }
+.hhi-dot.concentrated { background: var(--gold); }
+.hhi-dot.high-risk    { background: #ef4444; }
 
 /* ─── HERO ─── */
 /* removed */

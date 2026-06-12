@@ -945,7 +945,10 @@
           if (!confirm("Delete snapshot " + date + "?")) return;
           const r = await apiFetch("/api/snapshots/" + date, { method: "DELETE" });
           if (r.ok) renderSnapshotManager();
-          else ToastManager.show("Failed to delete snapshot", "error");
+          else {
+            const body = await r.json().catch(() => ({}));
+            ToastManager.show(body.detail || "Failed to delete snapshot", "error");
+          }
         });
       });
     } catch (e) {
@@ -1066,20 +1069,7 @@
       unrealSub.textContent = "—";
     }
 
-    // Card 5 — Realized P&L (derived: true_total_pl - unrealized_pl_total)
-    const realizedEl = $("#kpi-realized");
-    const realizedSub = $("#kpi-realized-sub");
-    if (d.true_total_pl != null && d.unrealized_pl_total != null) {
-      const realizedPl = d.true_total_pl - d.unrealized_pl_total;
-      realizedEl.textContent = fmtEur(realizedPl);
-      setSignClass(realizedEl, realizedPl);
-      realizedSub.textContent = "closed trades";
-    } else {
-      realizedEl.textContent = "—";
-      realizedSub.textContent = "no deposit data";
-    }
-
-    // Card 6 — Positions
+    // Card 5 — Positions
     const etfCount = positions.filter(p => p.asset_type === "ETF").length;
     const stockCount = positions.filter(p => p.asset_type === "STOCK").length;
     $("#kpi-positions").textContent = d.num_positions || 0;
