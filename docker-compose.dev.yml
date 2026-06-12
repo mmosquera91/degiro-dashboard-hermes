@@ -16,7 +16,7 @@ services:
     volumes:
       # Mount the whole data dir so watchlist.json / symbol_overrides.json
       # survive container recreation — not just snapshots.
-      - ./data:/data
+      - /opt/degiro_dashboard/data:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8000/health'); raise SystemExit(0 if r.status_code == 200 else 1)"]
       interval: 30s
